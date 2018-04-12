@@ -1,0 +1,199 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Note;
+import de.elo.ix.client.NoteC;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how an annotation is added to a document
+ * 
+ * The document object is here has been created and checked in ELO already.
+ * The document must be a graphic/raster document to allow annotations to be displayed.
+ * Various annotations are created for the sord.
+ * The annotations are checked in which assigns them to the sord.
+ * The annotations which can be deleted are deleted.
+ * 
+ * NOTE:  stamp annotattions (type TYPE_ANNOTATION_STAMP) cannot be modified or
+ * deleted once checked-in! 
+ */
+
+
+public class AddAnnotationToDocument {
+    
+    private final static String IX_URL = "http://localhost:8084/ix/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    private static NoteC NOTE;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            addDocAnnotation();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    
+    public static void addDocAnnotation() throws RemoteException {
+        
+        
+        // A raster tiff/jpeg document already archived in ELO is used to demonstrate how 
+        // annotations are attached to documents. The tiff document has objId = 2080
+        // 5 annotations will be created, one each for the available types
+        
+        String docId = "2080";
+        Note[] annotations = new Note[5];
+        
+        // Create AnnotationTextFormat -  this is the text determining which font is used for an annotation text.
+        // It must make up the first 46 characters of the text supplied for the annotation.
+        AnnotationTextFormat atf = new AnnotationTextFormat('8', "-20", "FF0000", '4', "Arial");
+        String atfText = atf.makeFontText();
+        
+        // Type TYPE_ANNOTATION_STAMP
+        annotations[0] = ix.ix().createNote(docId);
+        // Assign data to note
+        annotations[0].setDesc(atfText + "STAMP TEXT");
+        annotations[0].setType(NOTE.getTYPE_ANNOTATION_STAMP());
+        annotations[0].setXPos(0);
+        annotations[0].setYPos(0);
+        annotations[0].setHeight(100);
+        annotations[0].setWidth(100);
+        annotations[0].setPageNo(1);
+        
+        // Create type TYPE_ANNOTATION_NOTE_WITHFONT 
+        annotations[1] = ix.ix().createNote(docId);
+        //Assign data to note
+        annotations[1].setDesc(atfText + "NOTE TEXT");
+        annotations[1].setType(NOTE.getTYPE_ANNOTATION_NOTE_WITHFONT());
+        annotations[1].setXPos(100);
+        annotations[1].setYPos(100);
+        annotations[1].setHeight(100);
+        annotations[1].setWidth(100);
+        annotations[1].setPageNo(1);
+        
+        // Create type TYPE_ANNOTATION_HOLLOWRECTANGLE 
+        annotations[2] = ix.ix().createNote(docId);
+        //Assign data to note
+        annotations[2].setDesc(atfText + "HOLLOW RECTANGLE TEXT");
+        annotations[2].setType(NOTE.getTYPE_ANNOTATION_HOLLOWRECTANGLE());
+        annotations[2].setXPos(200);
+        annotations[2].setYPos(200);
+        annotations[2].setHeight(100);
+        annotations[2].setWidth(100);
+        annotations[2].setPageNo(1);
+
+        // Create type TYPE_ANNOTATION_FILLEDRECTANGLE 
+        annotations[3] = ix.ix().createNote(docId);
+        //Assign data to note
+        annotations[3].setDesc("FILLED RECTANGLE TEXT");
+        annotations[3].setType(NOTE.getTYPE_ANNOTATION_FILLEDRECTANGLE());
+        annotations[3].setXPos(0);
+        annotations[3].setYPos(300);
+        annotations[3].setHeight(100);
+        annotations[3].setWidth(100);
+        annotations[3].setPageNo(1);
+
+        // Create type TYPE_ANNOTATION_MARKER 
+        annotations[4] = ix.ix().createNote(docId);
+        //Assign data to note
+        annotations[4].setDesc("MARKER TEXT");
+        annotations[4].setType(NOTE.getTYPE_ANNOTATION_MARKER());
+        annotations[4].setXPos(400);
+        annotations[4].setYPos(400);
+        annotations[4].setHeight(100);
+        annotations[4].setWidth(500);
+        annotations[4].setPageNo(1);
+
+
+        // Checkin notes
+        ix.ix().checkinNotes(docId, annotations, NOTE.getMbAll(), LOCK.getYES());
+        
+        //checkout notes, list notes and then delete notes
+        Note[] notes = ix.ix().checkoutNotes(docId, null, NOTE.getMbAll(), LOCK.getYES());
+        
+        System.out.println("All deleted annotations:");
+        for (int j = 0; j < notes.length; j++){
+            if (notes[j].isDeleted() == true){
+                System.out.println("   Note id = " + notes[j].getId() + ", type " + notes[j].getType() + ", is deleted.");
+            }
+        }
+        System.out.println("All non-deleted annotations:");
+        for (int i = 0; i < notes.length; i++){
+            if (notes[i].isDeleted() == false){
+                System.out.println("   Note id = " + notes[i].getId() + ", type " + notes[i].getType() + " not deleted.");      
+            }
+        }
+         
+        boolean deleteNotes = true;
+        System.out.println("All active annotations:");
+        for (int i = 0; i < notes.length; i++){
+            if (notes[i].isDeleted() == false){
+                // Delete note
+                if (notes[i].getType() == NOTE.getTYPE_STAMP() || 
+                    notes[i].getType() == NOTE.getTYPE_ANNOTATION_STAMP()){
+                    // Cannot delete stamp type notes or annotations!
+                } else{
+                    if (deleteNotes == true){
+                        String[] delNotes = new String[] {notes[i].getGuid()};
+                        ix.ix().deleteNotes(delNotes, LOCK.getYES());
+                        System.out.println("  Deleted note with id + " + notes[i].getId());
+                    }
+                    
+                }
+                
+            }
+        }
+        
+        // checkin notes - getMbOnlyLock must be used as stamp type nodes or annotations 
+        // cannot be deleted or altered.
+        ix.ix().checkinNotes(docId, notes, NOTE.getMbOnlyLock(), LOCK.getYES());
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        LOCK = CONS.getLOCK();
+        NOTE = CONS.getNOTE();
+    }
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

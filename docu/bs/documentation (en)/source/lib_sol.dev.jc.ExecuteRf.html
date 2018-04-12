@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+importPackage(Packages.de.elo.ix.client);
+
+<span id='sol-dev-jc-ExecuteRf'>/**
+</span> * Tool to execute registered functions.
+ *
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ *
+ */
+sol.define(&quot;sol.dev.jc.ExecuteRf&quot;, {
+  singleton: true,
+  
+<span id='sol-dev-jc-ExecuteRf-property-dialog'>  /**
+</span>   * @private
+   * @property {de.elo.client.scripting.dialog.GridDialog} dialog
+   */
+   
+<span id='sol-dev-jc-ExecuteRf-property-rfName'>  /**
+</span>   * @private
+   * @property {de.elo.client.scripting.dialog.TextField} rfName
+   */
+   
+<span id='sol-dev-jc-ExecuteRf-property-rfParams'>  /**
+</span>   * @private
+   * @property {de.elo.client.scripting.dialog.TextArea} rfParams
+   */
+  
+<span id='sol-dev-jc-ExecuteRf-method-execute'>  /**
+</span>   * Excecuted from button event
+   */
+  execute: function () {
+    var me = this,
+        rfName, rfParams, result;
+    
+    rfName = archive.getUserOption(&quot;EloJ.S.Script.sol.dev.jc.ExecuteRf.rfName&quot;, &quot;&quot;);
+    rfParams = archive.getUserOption(&quot;EloJ.S.Script.sol.dev.jc.ExecuteRf.rfParams&quot;, &quot;&quot;);
+    
+    if (me.showDlg(rfName, rfParams)) {
+      archive.setUserOption(&quot;EloJ.S.Script.sol.dev.jc.ExecuteRf.rfName&quot;, me.rfName.text);
+      archive.setUserOption(&quot;EloJ.S.Script.sol.dev.jc.ExecuteRf.rfParams&quot;, me.rfParams.text);
+      
+      result = sol.common.IxUtils.execute(me.rfName.text, me.getParamsAsObject());
+      if (result) {
+        //resultStr = JSON.stringify(result, null, 2);
+        //resultStr = resultStr.replace(/(?:\r\n|\r|\n)/g, &#39;&lt;br/&gt;&#39;);
+        //workspace.showInfoBox(me.getText(&quot;sol.dev.jc.ExecuteRf.resultTitle&quot;), resultStr);
+        me.showResponseDlg(result);
+      }
+    }
+    
+  },
+
+<span id='sol-dev-jc-ExecuteRf-method-showDlg'>  /**
+</span>   * @private
+   * @param {String} rfName
+   * @param {String} rfParams
+   * @return {Object}
+   */
+  showDlg: function (rfName, rfParams) {
+    var me = this,
+        panel;
+    
+    me.dialog = workspace.createGridDialog(me.getText(&quot;sol.dev.jc.ExecuteRf.dialogTitle&quot;), 10, 12);
+    me.dialog.dialogId = &quot;sol.dev.jc.ExecuteRf.dialog&quot;;
+    
+    panel = me.dialog.gridPanel;
+    
+    panel.addLabel(1, 2, 3, me.getText(&quot;sol.dev.jc.ExecuteRf.labelName&quot;));
+    panel.addLabel(1, 4, 3, me.getText(&quot;sol.dev.jc.ExecuteRf.labelParam&quot;));
+    me.rfName = panel.addTextField(4, 2, 7);
+    me.rfParams = panel.addTextArea(4, 4, 7, 8);
+    
+    panel.setGrowing(null, [4]);
+    
+    me.rfName.text = rfName;
+    me.rfParams.text = rfParams;
+    
+    me.rfName.addChangeEvent(&quot;solDevJcExecuteInputChanged&quot;);
+    me.rfParams.addChangeEvent(&quot;solDevJcExecuteInputChanged&quot;);
+    
+    me.checkInput();
+    
+    return me.dialog.show();
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-showResponseDlg'>  /**
+</span>   * @private
+   * @param {Object} response
+   */
+  showResponseDlg: function (response) {
+    var me = this,
+        dlg = workspace.createGridDialog(me.getText(&quot;sol.dev.jc.ExecuteRf.resultTitle&quot;), 10, 12),
+        responseStr = JSON.stringify(response, null, 2),
+        textarea;
+    
+    dlg.dialogId = &quot;sol.dev.jc.ExecuteRf.response&quot;;
+    dlg.gridPanel.setGrowing([1], [1]);
+    textarea = dlg.gridPanel.addTextArea(1, 1, 10, 12);
+    textarea.text = responseStr;
+    textarea.setEditable(false);
+    
+    dlg.show();
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-getText'>  /**
+</span>   * @private
+   * @param {String} key
+   * @return {String}
+   */
+  getText: function (key) {
+    return utils.getText(&quot;sol.dev.client&quot;, key);
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-getParamsAsObject'>  /**
+</span>   * @private
+   * @return {Object}
+   */
+  getParamsAsObject: function () {
+    var me = this;
+    
+    if (!me.rfParams.text || (me.rfParams.text.trim().length() &lt;= 0)) {
+      return {};
+    }
+    
+    try {
+      return JSON.parse(String(me.rfParams.text));
+    } catch (ex) {
+      
+    }
+    return null;
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-checkInput'>  /**
+</span>   * @private
+   */
+  checkInput: function () {
+    var me = this,
+        validName = me.checkRfName(),
+        validParams = me.checkRfParams();
+    
+    if (validName &amp;&amp; validParams) {
+      me.dialog.setStatusNormal(&quot;&quot;);
+    } else if (!validName) {
+      me.dialog.setStatusRed(me.getText(&quot;sol.dev.jc.ExecuteRf.notEmptyName&quot;));
+    } else if (!validParams) {
+      me.dialog.setStatusRed(me.getText(&quot;sol.dev.jc.ExecuteRf.notValidParams&quot;));
+    }
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-checkRfName'>  /**
+</span>   * @private
+   * @return {Boolean}
+   */
+  checkRfName: function () {
+    var me = this;
+    return (me.rfName.text &amp;&amp; (me.rfName.text.trim().length() &gt; 0));
+  },
+  
+<span id='sol-dev-jc-ExecuteRf-method-checkRfParams'>  /**
+</span>   * @private
+   * @return {Boolean}
+   */
+  checkRfParams: function () {
+    var me = this,
+        obj = me.getParamsAsObject();
+    
+    return !!obj;
+  }
+  
+});
+
+<span id='sol-dev-jc-ExecuteRf-method-solDevJcExecuteInputChanged'>/**
+</span> * @private
+ * @member sol.dev.jc.ExecuteRf
+ */
+function solDevJcExecuteInputChanged() {
+  sol.dev.jc.ExecuteRf.checkInput();
+}
+</pre>
+</body>
+</html>

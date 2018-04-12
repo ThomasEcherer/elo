@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.RestoreAcl&quot; });
+
+<span id='sol-common-ix-functions-RestoreAcl'>/**
+</span> * Restore ACL from whole folder structure.
+ *
+ * The ACL will be restored from a map field. The ACL can e.g. be saved to a map field by the {@link sol.common.ix.functions.RemoveAcl RemoveAcl} function.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration has to be applied to the comments field.
+ *
+ *     {
+ *       &quot;mapKey&quot;: &quot;REMOVED_ACL&quot;,
+ *       &quot;recursive&quot;: true
+ *     }
+ *
+ * The recursive flag is optional and the default will be `false`.
+ *
+ * # As IX function call
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_RestoreAcl&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       mapKey: &quot;REMOVED_ACL&quot;
+ *     });
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.RestoreAcl&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-RestoreAcl-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;mapKey&quot;],
+</span>
+<span id='sol-common-ix-functions-RestoreAcl-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * ObjectId of folder structure
+   */
+
+<span id='sol-common-ix-functions-RestoreAcl-cfg-mapKey'>  /**
+</span>   * @cfg {String} mapKey (required)
+   * Name of Mapfield which contains the ACL string
+   */
+
+<span id='sol-common-ix-functions-RestoreAcl-cfg-recursive'>  /** @cfg {Boolean} [recursive=false] (optional) */
+</span>
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.recursive = config.recursive || false;
+  },
+
+<span id='sol-common-ix-functions-RestoreAcl-method-process'>  /**
+</span>   * Restores the ACL to whole folder structure.
+   */
+  process: function () {
+    var me = this;
+
+    sol.common.AclUtils.restoreRights(me.objId, { recursive: me.recursive, asAdmin: me.asAdmin, storeAcl: { type: &quot;MAP&quot;, key: me.mapKey } });
+  }
+
+});
+
+
+<span id='sol-common-ix-functions-RestoreAcl-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.RestoreAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_RestoreAcl&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;mapKey&quot;);
+  params.objId = wFDiagram.objId;
+
+  if (params.asAdmin) {
+    sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RestoreAcl&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_RestoreAcl&quot;);
+}
+
+<span id='sol-common-ix-functions-RestoreAcl-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.RestoreAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_RestoreAcl&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;mapKey&quot;);
+  params.objId = wFDiagram.objId;
+
+  if (params.asAdmin) {
+    sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RestoreAcl&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_RestoreAcl&quot;);
+}
+
+<span id='sol-common-ix-functions-RestoreAcl-static-method-RF_sol_function_RestoreAcl'>/**
+</span> * @member sol.common.ix.functions.RestoreAcl
+ * @method RF_sol_function_RestoreAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_RestoreAcl(ec, args) {
+  logger.enter(&quot;RF_sol_function_RestoreAcl&quot;, args);
+  var params, module;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;objId&quot;, &quot;mapKey&quot;);
+  if (params.asAdmin) {
+    sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RestoreAcl&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_RestoreAcl&quot;);
+}</pre>
+</body>
+</html>

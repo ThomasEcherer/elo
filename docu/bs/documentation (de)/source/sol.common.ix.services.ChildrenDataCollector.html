@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.UserProfile.js
+//@include lib_sol.common.Locale.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ChildrenDataCollector&quot; });
+
+<span id='sol-common-ix-services-ChildrenDataCollector'>/**
+</span> * Collects all child sords for a given parent in an optimized way.
+ *
+ * This should be used by dashboards if a larger amount of Sords should be retrieved. In addition information of
+ * required keyword forms and the user locale is returned.
+ *
+ * Please gather information carefully. Only the required objKeys and sordKeys should be collected by this service due
+ * to performance improvements. e.g.
+ *
+ * Collecting 10,000 invoices for the invoice dashboard takes ~15s and creates ~80MB of traffic using the IX JS-API since
+ * deserializing objects might be expensive. Since only a view information is required this service brings down
+ * the execution time to ~5-6s and reduces data traffic to ~6MB. This is done by creating a minimized json-data structure
+ * with the help of a string builder.
+ *
+ * # Example
+ *
+ * By default StatisticSord formatter is used for generating objects that are optimized for statistical
+ * operations. Refer to sol.common.ObjectFormatter.StatisticSord for more information.
+ *
+ *     var result = sol.common.IxUtils.execute(&quot;RF_sol_common_services_ChildrenDataCollector&quot;, {
+ *       parentId: &#39;1213&#39;,
+ *       objKeys: [&quot;INVOICE_DATE&quot;, &quot;INVOICE_AMOUNT&quot;]
+ *     });
+ *
+ * # Result
+ *
+ *     {
+ *       version: &#39;1&#39;,
+ *       formatter: &#39;sol.common.ObjectFormatter.StatisticSord&#39;,
+ *       locale: {
+ *         language: &#39;de&#39;,
+ *         dateFormat: &#39;dd.MM.yyyy&#39;,
+ *         decimalSeperator: &#39;,&#39;,
+ *         groupingSeperator: &#39;.&#39;
+ *       },
+ *       sords: [{
+ *        id: &#39;5669&#39;,
+ *        name: &#39;Invoice 123&#39;,
+ *        O_INVOICE_DATE: &#39;20151202&#39;
+ *       }, {
+ *         // more sords ...
+ *       }],
+ *       docMasks: {
+ *         &#39;Incoming Invoice&#39;: {
+ *           fields: {
+ *             INVOICE_DATE: { name: &#39;Invoice Date&#39;, type: &#39;text&#39; }
+ *           }
+ *         }
+ *       }
+ *     }
+ */
+sol.define(&quot;sol.common.ix.services.ChildrenDataCollector&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-property-collectorVersion'>  collectorVersion: &quot;1.00.000&quot;,
+</span>
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-maskName'>  /**
+</span>   * @cfg {String} maskName
+   * Restricts search results to a given keywording mask
+   */
+  maskName: null,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-parentId'>  /**
+</span>   * @cfg {String} parentId
+   * id of the parent element (guid, objId or archivepath)
+   */
+  parentId: null,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-endLevel'>  /**
+</span>   * @cfg {int} endLevel
+   * Search child objects up to this level below parentId.
+   *
+   * Please note that recursively collecting child nodes is expensive and should be handled with care.
+   *
+   * A value of 0 or 1 means, that only the sub entries directly under the parent are included.
+   * Set this value to -1, to search over all levels.
+   * In this case the level is internally constrained to 32 to avoid an endless loop,
+   * if the tree under the parent contains recursive references.
+   */
+  endLevel: 1,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-mainParent'>  /**
+</span>   * @cfg {Boolean} [mainParent=false]
+   * Return no references
+   */
+  mainParent: false,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-formatter'>  /**
+</span>   * @cfg {Class} formatter (required)
+   * Sord object formatter implementation.
+   *
+   * e.g. `sol.common.ObjectFormatter.StatisticSord` or `sol.common.ObjectFormatter.TemplateSord`
+   */
+  formatter: &quot;sol.common.ObjectFormatter.StatisticSord&quot;,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-sordKeys'>  /**
+</span>   * @cfg {Array} sordKeys
+   * List of required sord keys.
+   *
+   * This only returns the given sord keys. This is required in order to limit traffic for not required keys.
+   *
+   *     sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;name&quot;, &quot;desc&quot;],
+   */
+  sordKeys: [&quot;id&quot;, &quot;name&quot;],
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-objKeys'>  /**
+</span>   * @cfg {Array} objKeys
+   * List of required objKeys.
+   *
+   * This only returns the given objKeys. This is required in order to limit traffic for not required keys.
+   *
+   *     objKeys: [&quot;INVOICE_DATE&quot;, &quot;INVOICE_AMOUNT&quot;],
+   */
+  objKeys: [],
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-filter'>  /**
+</span>   * @cfg {Array} filter
+   * List of metadata that limit search results.
+   *
+   * This limits search results to a given list of metadata. This list is passed as an FindByIndex ObjKey-Array while
+   * collecting search results.
+   *
+   *     filter: [{ key: &#39;INVOICE_DATE&#39;, val: &#39;x*&#39; }],
+   *
+   */
+  filter: [],
+
+<span id='sol-common-ix-services-ChildrenDataCollector-cfg-returnDataDefinition'>  /**
+</span>   * @cfg {Boolean} [returnDataDefinition=false]
+   * If `true`, the service returns the data definition for the object, which is necessary for the convertion to XML.
+   */
+  returnDataDefinition: false,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-property-dataDefinition'>  /**
+</span>   * @property {Object} dataDefinition for xml transformation
+   * This contains the data definition for the result if json objects should be transformed to XML.
+   */
+  dataDefinition: {
+    rootElementName: &quot;data&quot;,
+    dataProperties: [&quot;sord&quot;, &quot;sords&quot;],
+    arrayElementTagNames: { sords: &quot;sord&quot; }
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-property-maxFind'>  /**
+</span>   * @property {Number} maxFind
+   * Amount of sords that is collected in one step.
+   * This is used by the FindFirstSords, FindNextSords function calls.
+   */
+  maxFind: 1000,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-property-totalCount'>  /**
+</span>   * @property {Number} totalCount
+   * The search is terminated if this number of objects is found. If the number of results should not be constrained,
+   * set this value to 232-1 = 2147483647 (maximum value of a positive 32bit integer minus 1).
+   *
+   * Please note that collecting huge amounts of data might lead to performance issues.
+   */
+  totalCount: 10000,
+
+<span id='sol-common-ix-services-ChildrenDataCollector-property-sordKeyMap'>  sordKeyMap: {
+</span>    id: { elementSelector: ObjDataC.mbId },
+    maskName: { elementSelector: ObjDataC.mbMask },
+    guid: { elementSelector: ObjDataC.mbGuid },
+    name: { elementSelector: ObjDataC.mbName },
+    IDateIso: { elementSelector: ObjDataC.mbIDate },
+    XDateIso: { elementSelector: ObjDataC.mbXDate },
+    desc: { elementSelector: SordC.mbDesc }
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.maskName = config.maskName || me.maskName;
+    me.parentId = config.parentId || me.parentId;
+    me.formatter = config.formatter || me.formatter;
+    me.sordKeys = config.sordKeys || me.sordKeys;
+    me.objKeys = config.objKeys || me.objKeys;
+    me.ec = config.ec || me.ec;
+    me.endLevel = config.endLevel || me.endLevel;
+    me.returnDataDefinition = config.returnDataDefinition || me.returnDataDefinition;
+    me.filter = config.filter || me.filter;
+
+    me.objKeyMap = {};
+    me.jsonData = [];
+    me.docMasks = {};
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-execute'>  /**
+</span>   * Starts the collection of the desired data
+   * @return {Array}
+   */
+  execute: function () {
+    var me = this;
+    me.rfUtils = sol.common.ix.RfUtils;
+    me.computeSordElementSelector();
+    me.getTypeConstants();
+
+    // add data collector version and formatting information
+    me.jsonData.push(&quot;{&quot;);
+    me.jsonData.push(&#39;&quot;version&quot;:&#39; + JSON.stringify(me.collectorVersion) + &quot;,&quot;);
+    me.jsonData.push(&#39;&quot;formatter&quot;:&#39; + JSON.stringify(me.formatter) + &quot;,&quot;);
+    if (me.returnDataDefinition === true) {
+      me.jsonData.push(&#39;&quot;dataDefinition&quot;:&#39; + JSON.stringify(me.dataDefinition) + &quot;,&quot;);
+    }
+
+    // add locale information
+    me.jsonData.push(&#39;&quot;locale&quot;:&#39;);
+    me.addLocale();
+
+    // add current sord
+    me.collectSord();
+
+    // add child sords
+    me.jsonData.push(&quot;,&quot;);
+    me.jsonData.push(&#39;&quot;sords&quot;:&#39;);
+    me.collectChildren();
+
+    // add doc masks information
+    me.jsonData.push(&quot;,&quot;);
+    me.jsonData.push(&#39;&quot;docMasks&quot;:&#39;);
+    me.jsonData.push(JSON.stringify(me.docMasks));
+
+    me.jsonData.push(&quot;}&quot;);
+
+    return me.jsonData.join(&quot;&quot;);
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-computeSordElementSelector'>  /**
+</span>   * @private
+   *
+   * Computes a SordZ selector for information that is required.
+   */
+  computeSordElementSelector: function () {
+    var me = this,
+        sordKey, elementSelector, i, objKeyName;
+    me.sordZ = new SordZ(ObjDataC.mbMask);
+    if (me.sordKeys) {
+      me.sordKeys.forEach(function (key) {
+        sordKey = me.sordKeyMap[key];
+        if (sordKey) {
+          elementSelector = sordKey.elementSelector;
+        }
+        if (elementSelector) {
+          me.sordZ.add(elementSelector);
+        }
+      });
+    }
+    if (me.objKeys) {
+      me.sordZ.add(SordC.mbObjKeys);
+      for (i = 0; i &lt; me.objKeys.length; i++) {
+        objKeyName = me.objKeys[i];
+        me.objKeyMap[objKeyName] = true;
+      }
+    }
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-collectSord'>  /**
+</span>   * @private
+   */
+  collectSord: function () {
+    var me = this,
+        sord,
+        formatter = me.getSordFormatter(),
+        editInfoZ = new EditInfoZ();
+
+    if (!me.parentId) {
+      return;
+    }
+    editInfoZ.sordZ = me.sordZ;
+    sord = ixConnect.ix().checkoutSord(me.parentId, editInfoZ, LockC.NO).sord;
+    if (!me.docMasks[sord.maskName]) {
+      me.addDocMaskData(sord.maskName);
+    }
+    me.jsonData.push(&quot;,&quot;);
+    me.jsonData.push(&#39;&quot;sord&quot;:&#39;);
+    me.jsonData.push(formatter.buildJson(sord, me.docMasks[sord.maskName]));
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-collectChildren'>  /**
+</span>   * @private
+   */
+  collectChildren: function () {
+    logger.enter(&quot;collectChildren&quot;);
+    var me = this,
+        i, filter, objKey, idx, length,
+        formatter = me.getSordFormatter(),
+        jsonData = [],
+        findInfo = new FindInfo(),
+        objKeyFilters = [],
+        findResult;
+
+    if (me.parentId) {
+      findInfo.findChildren = new FindChildren();
+      findInfo.findChildren.parentId = me.parentId;
+      findInfo.findChildren.endLevel = me.endLevel;
+      findInfo.findChildren.mainParent = me.mainParent;
+    }
+
+    // apply optional mask filter
+    if (me.maskName) {
+      if (!findInfo.findByIndex) {
+        findInfo.findByIndex = new FindByIndex();
+      }
+      findInfo.findByIndex.maskId = me.maskName;
+    }
+
+    // apply filter
+    if (me.filter &amp;&amp; me.filter.length &gt; 0) {
+      if (!findInfo.findByIndex) {
+        findInfo.findByIndex = new FindByIndex();
+      }
+      for (i = 0; i &lt; me.filter.length; i++) {
+        filter = me.filter[i],
+        objKey = new ObjKey();
+        objKey.name = filter.key;
+        objKey.data = [filter.val];
+        logger.info(&quot;applied filter:&quot;, objKey);
+        objKeyFilters.push(objKey);
+      }
+      findInfo.findByIndex.objKeys = objKeyFilters;
+    }
+
+    // apply find options
+    findInfo.findOptions = new FindOptions();
+    findInfo.findOptions.totalCount = me.totalCount;
+
+    try {
+      idx = 0;
+      findResult = ixConnect.ix().findFirstSords(findInfo, me.maxFind, me.sordZ);
+      while (true) {
+        for (i = 0, length = findResult.sords.length; i &lt; length; i++) {
+          if (!me.docMasks[findResult.sords[i].maskName]) {
+            me.addDocMaskData(findResult.sords[i].maskName);
+          }
+          jsonData.push(formatter.buildJson(findResult.sords[i], me.docMasks[findResult.sords[i].maskName]));
+        }
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.sords.length;
+        findResult = ixConnect.ix().findNextSords(findResult.searchId, idx, me.maxFind, me.sordZ);
+      }
+    } finally {
+      if (findResult) {
+        ixConnect.ix().findClose(findResult.searchId);
+      }
+    }
+
+    me.jsonData.push(&quot;[&quot;);
+    me.jsonData.push(jsonData.join(&quot;,&quot;));
+    me.jsonData.push(&quot;]&quot;);
+    logger.exit(&quot;collectChildren&quot;);
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-getSordFormatter'>  /**
+</span>   * @private
+   * @return {Object}
+   */
+  getSordFormatter: function () {
+    var me = this;
+    return sol.create(me.formatter, {
+      config: {
+        objKeys: me.objKeys,
+        sordKeys: me.sordKeys
+      }
+    });
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-addLocale'>  /**
+</span>   * @private
+   */
+  addLocale: function () {
+    var me = this;
+    me.userFormats = sol.create(&quot;sol.common.Locale&quot;, { ec: me.ec });
+    me.userFormats.read();
+
+    me.jsonData.push(&#39;{&quot;language&quot;: &quot;&#39;);
+    me.jsonData.push(me.userFormats.language);
+    me.jsonData.push(&#39;&quot;, &quot;dateFormat&quot;: &quot;&#39;);
+    me.jsonData.push(me.userFormats.dateFormat);
+    me.jsonData.push(&#39;&quot;, &quot;decimalSeparator&quot;: &quot;&#39;);
+    me.jsonData.push(me.userFormats.decimalSeparator);
+    me.jsonData.push(&#39;&quot;, &quot;groupingSeparator&quot;: &quot;&#39;);
+    me.jsonData.push(me.userFormats.groupingSeparator);
+    me.jsonData.push(&#39;&quot;}&#39;);
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-addDocMaskData'>  /**
+</span>   * @private
+   * Adds document mask data
+   * @param {String} maskName
+   * @return {Object}
+   */
+  addDocMaskData: function (maskName) {
+    var me = this;
+    if (!me.docMasks[maskName]) {
+      me.docMasks[maskName] = me.buildDocMaskData(maskName);
+    }
+    return me.docMasks[maskName];
+  },
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-buildDocMaskData'>  /**
+</span>   * @private
+   * Builds the document mask data
+   * @param {String} docMaskName Document mask name
+   * @return {Object}
+   */
+  buildDocMaskData: function (docMaskName) {
+    var me = this,
+        docMask, docMaskData;
+
+    docMask = sol.common.SordUtils.getDocMask(docMaskName, me.ec.ci.language);
+    docMaskData = { fields: {} };
+    docMask.lines.forEach(function (docMaskLine) {
+      if (me.objKeyMap[docMaskLine.key]) {
+        docMaskData.fields[docMaskLine.key] = { name: String(docMaskLine.name), type: me.docMaskLineTypes[docMaskLine.type] };
+      }
+    });
+    return docMaskData;
+  },
+
+
+<span id='sol-common-ix-services-ChildrenDataCollector-method-getTypeConstants'>  /**
+</span>   * @private
+   */
+  getTypeConstants: function () {
+    var me = this,
+        i, field, docMaskLineC, fields;
+    me.docMaskLineTypes = {};
+    docMaskLineC = new DocMaskLineC();
+    fields = docMaskLineC.class.declaredFields;
+    for (i = 0; i &lt; fields.length; i++) {
+      field = fields[i];
+      field.accessible = true;
+      if (field.name.startsWith(&quot;TYPE_&quot;)) {
+        me.docMaskLineTypes[String(field.getInt(docMaskLineC))] = String(field.name.substring(5));
+      }
+    }
+  }
+
+});
+
+<span id='sol-common-ix-services-ChildrenDataCollector-static-method-RF_sol_common_services_ChildrenDataCollector'>/**
+</span> * @member sol.common.ix.services.ChildrenDataCollector
+ * @method RF_sol_common_services_ChildrenDataCollector
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_services_ChildrenDataCollector(ec, configAny) {
+  var jsonDataCollector, ecLang, ixConnectLang, result;
+
+  ecLang = String(ec.ci.language);
+  ixConnectLang = String(ixConnect.loginResult.clientInfo.language);
+  config = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny),
+  config.ec = ec;
+
+  log.info(&quot;ec.ci.language=&quot; + ecLang);
+  log.info(&quot;ixConnect.loginResult.clientInfo.language=&quot; + ixConnectLang);
+
+  jsonDataCollector = sol.create(&quot;sol.common.ix.services.ChildrenDataCollector&quot;, config);
+  result = jsonDataCollector.execute();
+  return result;
+}
+
+</pre>
+</body>
+</html>

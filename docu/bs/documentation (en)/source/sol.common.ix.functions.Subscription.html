@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.ix.SubscriptionUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Subscription&quot; });
+<span id='sol-common-ix-functions-Subscription'>/**
+</span> * Provides functions for subscriptions.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ * # As IX function call
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_Subscribe&quot;, {
+ *       objId: &quot;4711&quot;
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.ix.SubscriptionUtils
+ */
+sol.define(&quot;sol.common.ix.functions.Subscription&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Subscription-cfg-objId'>  /**
+</span>   * @cfg {String} objId Either `objId` or `feedGuid` has to be defined.
+   */
+
+<span id='sol-common-ix-functions-Subscription-cfg-feedGuid'>  /**
+</span>   * @cfg {String} feedGuid Either `objId` or `feedGuid` has to be defined.
+   */
+
+<span id='sol-common-ix-functions-Subscription-cfg-subscribe'>  /**
+</span>   * @cfg {Boolean} [subscribe=false] If `true` the user will subscribe to the element, if `false` the user will unsubscribe.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-Subscription-method-process'>  /**
+</span>   * Manages the subscription.
+   */
+  process: function () {
+    var me = this;
+
+    if (!me.objId &amp;&amp; !me.feedGuid) {
+      throw &quot;IllegalStataException: either &#39;objId&#39; or &#39;feedGuid&#39; has to be defined&quot;;
+    }
+
+    if (me.subscribe === true) {
+      me.feedGuid ? sol.common.ix.SubscriptionUtils.subscribe(me.feedGuid) : sol.common.ix.SubscriptionUtils.subscribeToElement(me.objId);
+    } else {
+      me.feedGuid ? sol.common.ix.SubscriptionUtils.unsubscribe(me.feedGuid) : sol.common.ix.SubscriptionUtils.unsubscribeFromElement(me.objId);
+    }
+  }
+
+});
+
+
+<span id='sol-common-ix-functions-Subscription-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Subscription
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_Subscription&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Subscription&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Subscription&quot;);
+}
+
+<span id='sol-common-ix-functions-Subscription-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Subscription
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_Subscription&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Subscription&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_Subscription&quot;);
+}
+
+<span id='sol-common-ix-functions-Subscription-static-method-RF_sol_function_Subscription'>/**
+</span> * @member sol.common.ix.functions.Subscription
+ * @method RF_sol_function_Subscription
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Subscription(ec, args) {
+  var params, module;
+
+  logger.enter(&quot;RF_sol_function_Subscription&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args);
+
+  module = sol.create(&quot;sol.common.ix.functions.Subscription&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_Subscription&quot;);
+
+  return &quot;{}&quot;; // return empty JSON to avoid errors with older WF client libs
+}
+
+</pre>
+</body>
+</html>

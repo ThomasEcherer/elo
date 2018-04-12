@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-HttpUtils'>/**
+</span> * HTTP request utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloas
+ * @eloix
+ * @elojc
+ *
+ * @requires sol.common.WfUtils
+ * @requires sol.common.AsUtils
+ */
+sol.define(&quot;sol.common.HttpUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-HttpUtils-method-sendRequest'>  /**
+</span>   * Sends a HTTP request.
+   *
+   * Example:
+   *
+   *     var responseObj = sol.common.HttpUtils.sendRequest({
+   *       url: &quot;{{eloWfBaseUrl}}/apps/rest/cmd/app/deploy&quot;,
+   *       method: &quot;post&quot;,
+   *       connectTimeout: 10000,
+   *       readTimeout: 60000,
+   *       contentType: &quot;application/json;charset=UTF-8&quot;,
+   *       params: { &quot;Key2&quot;: &quot;Value2&quot; }
+   *       addTicket: true,
+   *       cookies: { &quot;Key1&quot;: &quot;Value1&quot; },
+   *       addCookieTicket: true
+   *     });
+   *
+   *    var responseObj = sol.common.HttpUtils.sendRequest({
+   *       url: &quot;https://pcweiler&quot;
+   *       trustAllHosts: true,
+   *       trustAllCerts: true
+   *    });
+   *
+   * URL placeholders:
+   *
+   *     {{eloWfBaseUrl}} ELOwf base URL
+   *     {{eloAsBaseUrl}} ELOas base URL
+   *     {{ticket}} ELO authorization ticket
+   *
+   * Response object:
+   *
+   *     {
+   *       &quot;responseCode&quot;: 200,
+   *       &quot;responseOk&quot;: true,
+   *       &quot;content&quot;: &quot;&quot;,
+   *       &quot;errorMessage&quot;: &quot;&quot;
+   *     }
+   *
+   * @param {Object} config HTTP request configuration object
+   * @param {String} config.url URL
+   * @param {String} config.method Request method, e.g. `get`, `post` or `put`
+   * @param {String} config.connectTimeout Connect timeout
+   * @param {String} config.readTimeout Read timeout
+   * @param {String} config.contentType Content type
+   * @param {String} config.user User name
+   * @param {String} config.password Password
+   * @param {String} [config.authType=Basic] Authentification type
+   * @param {Object} config.params Map of key-value pairs which will be submitted as HTTP parameters
+   * @param {String} config.addTicket. If true the ELO authorization ticket will be added as HTTP parameter
+   * @param {Object} config.cookies Map of key-value pairs which will be added as cookies
+   * @param {Object} config.data Data
+   * @param {Object} config.dataObj Data object
+   * @param {String} config.addCookieTicket. If true the ELO authorization ticket will be added as cookie
+   * @return {java.net.HttpURLConnection} httpConn. HTTP connection
+   * @return {Object} HTTP response object
+   */
+  sendRequest: function (config) {
+    var me = this,
+        result;
+
+    if ((config.method == &quot;post&quot;) || (config.method == &quot;put&quot;)) {
+      if (config.dataObj) {
+        config.contentType = &quot;application/json;charset=UTF-8&quot;,
+        config.data = JSON.stringify(config.dataObj);
+      }
+      result = me.sendPost(config.url, config.data, config);
+    } else {
+      result = me.sendGet(config.url, config);
+    }
+    return result;
+  },
+
+<span id='sol-common-HttpUtils-method-sendGet'>  /**
+</span>   * Sends a HTTP-GET request
+   * @private
+   * @param {String} url URL
+   * @param {Object} config HTTP request configuration object
+   * @return {Object} Response object
+   */
+  sendGet: function (url, config) {
+    var me = this,
+        urlConn, resultObj;
+
+    resultObj = me.buildResultObj(url);
+
+    try {
+      urlConn = me.prepareRequest(url, config);
+      urlConn.requestMethod = &quot;GET&quot;;
+      urlConn.connect();
+      me.readResponse(urlConn, resultObj);
+      urlConn.disconnect();
+    } catch (ex) {
+      resultObj.errorMessage = ex;
+    }
+    return resultObj;
+  },
+
+<span id='sol-common-HttpUtils-method-sendPost'>  /**
+</span>   * Sends a HTTP-POST request
+   * @private
+   * @param {String} url URL
+   * @param {String} data Data
+   * @param {Object} config HTTP request configuration object
+   * @return {Object} Response object
+   */
+  sendPost: function (url, data, config) {
+    var me = this,
+        urlConn, encodedData, outputStream, resultObj;
+
+    resultObj = me.buildResultObj(url);
+
+    try {
+      urlConn = me.prepareRequest(url, config);
+      data = data || &quot;&quot;;
+      encodedData = java.net.URLEncoder.encode(data, &quot;UTF-8&quot;);
+      urlConn.doOutput = true;
+      urlConn.requestMethod = config.method.toUpperCase();
+      urlConn.connect();
+      outputStream = urlConn.outputStream;
+      outputStream.write(encodedData.bytes);
+      outputStream.close();
+      me.readResponse(urlConn, resultObj);
+      urlConn.disconnect();
+    } catch (ex) {
+      resultObj.errorMessage = ex;
+    }
+    return resultObj;
+  },
+
+<span id='sol-common-HttpUtils-method-prepareRequest'>  /**
+</span>   * @private
+   * Prepares a HTTP request
+   * @param {String} urlString URL
+   * @param {Object} config HTTP request configuration object
+   * @return {java.net.HttpURLConnection}
+   */
+  prepareRequest: function (urlString, config) {
+    var me = this,
+        cookiesArr = [],
+        url, urlObj, urlConn, userpass, basicAuth, key, trustManager, sslContext;
+
+
+    url = urlString;
+    if (config.resolve) {
+      url = me.resolveUrl(urlString, config);
+    }
+    urlObj = new java.net.URL(url);
+    urlConn = urlObj.openConnection();
+
+    urlConn.connectTimeout = config.connectTimeout || 10000;
+    urlConn.readTimeout = config.readTimeout || 60000;
+
+    if (config.contentType) {
+      urlConn.setRequestProperty(&quot;Content-Type&quot;, config.contentType);
+    }
+    if (config.user) {
+      if (config.authType == &quot;NTLM&quot;) {
+        java.net.Authenticator.default = new JavaAdapter(java.net.Authenticator, {
+          getPasswordAuthentication: function () {
+            return new java.net.PasswordAuthentication(config.user, java.lang.String(config.password).toCharArray());
+          }
+        });
+      } else {
+        userpass = java.lang.String(config.user + &quot;:&quot; + config.password);
+        basicAuth = &quot;Basic &quot; + javax.xml.bind.DatatypeConverter.printBase64Binary(userpass.getBytes());
+        urlConn.setRequestProperty(&quot;Authorization&quot;, basicAuth);
+      }
+    }
+    if (config.addCookieTicket) {
+      config.cookies = config.cookies || {};
+      config.cookies.ticket = ixConnect.loginResult.clientInfo.ticket;
+    }
+
+    if (config.cookies) {
+      for (key in config.cookies) {
+        cookiesArr.push(key + &quot;=&quot; + config.cookies[key]);
+      }
+      urlConn.setRequestProperty(&quot;Cookie&quot;, cookiesArr.join(&quot;; &quot;));
+    }
+
+    // Avoid SSL exception:
+    //   javax.net.ssl.SSLHandshakeException: java.security.cert.CertificateException: No name matching &lt;hostname&gt; found
+    if (urlConn.defaultHostnameVerifier &amp;&amp; config.trustAllHosts) {
+      urlConn.hostnameVerifier = new javax.net.ssl.HostnameVerifier({
+        verify: function (hostname, session) {
+          return true;
+        }
+      });
+    }
+
+    // Avoid SSL exception:
+    //   javax.net.ssl.SSLHandshakeException: sun.security.validator.ValidatorException: PKIX path building failed:
+    //   sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+    if (urlConn.defaultSSLSocketFactory &amp;&amp; config.trustAllCerts) {
+      trustManager = new javax.net.ssl.X509TrustManager({
+        checkClientTrusted: function (chain, authType) {
+        },
+
+        checkServerTrusted: function (chain, authType) {
+        },
+
+        getAcceptedIssuers: function () {
+          return null;
+        }
+      });
+
+      sslContext = javax.net.ssl.SSLContext.getInstance(&quot;SSL&quot;);
+      sslContext.init(null, [trustManager], new java.security.SecureRandom());
+      urlConn.SSLSocketFactory = sslContext.socketFactory;
+    }
+
+    return urlConn;
+  },
+
+<span id='sol-common-HttpUtils-method-getPasswordAuthentication'>  /**
+</span>   * @private
+   * @return {javax.mail.PasswordAuthentication}
+   */
+  getPasswordAuthentication: function () {
+    var me = this,
+        authenticator;
+
+    authenticator = new javax.mail.PasswordAuthentication(me.user, me.password);
+    return authenticator;
+  },
+
+<span id='sol-common-HttpUtils-method-resolveUrl'>  /**
+</span>   * Resolve URL
+   *
+   * @private
+   * @param {String} url URL
+   * @param {Object} config HTTP request configuration object
+   * @return {String} URL
+   */
+  resolveUrl: function (url, config) {
+    var ticket, wfBaseUrl, asBaseUrl, key,
+        paramArr = [];
+
+    ticket = ixConnect.loginResult.clientInfo.ticket;
+    url = String(url);
+
+    if (url.indexOf(&quot;{{eloWfBaseUrl}}&quot;) &gt; -1) {
+      wfBaseUrl = sol.common.WfUtils.getWfBaseUrl();
+      url = url.replace(&quot;{{eloWfBaseUrl}}&quot;, wfBaseUrl);
+    }
+    if (url.indexOf(&quot;{{eloAsBaseUrl}}&quot;) &gt; -1) {
+      asBaseUrl = sol.common.AsUtils.getAsBaseUrl();
+      url = url.replace(&quot;{{eloAsBaseUrl}}&quot;, asBaseUrl);
+    }
+
+    if (config) {
+      if (config.params) {
+        for (key in config.params) {
+          paramArr.push(encodeURI(key) + &quot;=&quot; + encodeURI(config.params[key]));
+        }
+      }
+      if (config.addTicket) {
+        paramArr.push(&quot;ticket=&quot; + ticket);
+      }
+    }
+
+    if (paramArr.length &gt; 0) {
+      url += &quot;?&quot; + paramArr.join(&quot;&amp;&quot;);
+    }
+    url = url.replace(&quot;{{ticket}}&quot;, ticket);
+    return url;
+  },
+
+<span id='sol-common-HttpUtils-method-buildResultObj'>  /**
+</span>   * @private
+   * Builds a response object
+   * @param {String} url URL
+   * @return {Object} Response object
+   */
+  buildResultObj: function (url) {
+    var resultObj;
+    url += &quot;&quot;;
+    resultObj = { url: url, responseOk: false };
+    return resultObj;
+  },
+
+<span id='sol-common-HttpUtils-method-readResponse'>  /**
+</span>   * @private
+   * Read HTTP response
+   * @param {java.net.HttpURLConnection} urlConn HTTP connection
+   * @param {Object} resultObj Result object
+   */
+  readResponse: function (urlConn, resultObj) {
+    var me = this;
+
+    resultObj.responseCode = urlConn.responseCode;
+    if (urlConn.responseCode == java.net.HttpURLConnection.HTTP_OK) {
+      resultObj.responseOk = true;
+      resultObj.content = me.inputStreamToString(urlConn.inputStream);
+    } else {
+      resultObj.responseOk = false;
+      resultObj.content = me.inputStreamToString(urlConn.errorStream);
+      resultObj.errorMessage = &quot;HTTP status code &quot; + resultObj.responseCode;
+    }
+  },
+
+<span id='sol-common-HttpUtils-method-inputStreamToString'>  /**
+</span>   * @private
+   * Converts the content of an input stream into a string
+   * @param {java.io.InputStream} inputStream Input Stream
+   * @return {String} Content as string
+   */
+  inputStreamToString: function (inputStream) {
+    if (!inputStream) {
+      return &quot;&quot;;
+    }
+    var content = String(Packages.org.apache.commons.io.IOUtils.toString(inputStream, &quot;UTF-8&quot;));
+    inputStream.close();
+    return content;
+  },
+
+<span id='sol-common-HttpUtils-method-encodeBase64'>  /**
+</span>   * Returns a Base64 encoded string
+   * @param {String} str String
+   * @return {String} Base64 encoded string
+   */
+  encodeBase64: function (str) {
+    var me = this,
+        srcBytes, base64Bytes, base64String;
+    if (!str) {
+      throw &quot;String is empty&quot;;
+    }
+    srcBytes = me.convertStringToByteArray(str);
+    base64Bytes = Packages.org.apache.commons.codec.binary.Base64.encodeBase64(srcBytes);
+    base64String = me.convertByteArrayToString(base64Bytes);
+    return base64String;
+  },
+
+<span id='sol-common-HttpUtils-method-convertStringToByteArray'>  /**
+</span>   * @private
+   * Converts a string to a byte array
+   * @param {String} str String
+   * @return {Byte[]}
+   */
+  convertStringToByteArray: function (str) {
+    var bytes;
+    if (!str) {
+      throw &quot;String is empty&quot;;
+    }
+    bytes = java.lang.String(str).getBytes(&quot;UTF-8&quot;);
+    return bytes;
+  },
+
+<span id='sol-common-HttpUtils-method-convertByteArrayToString'>  /**
+</span>   * @private
+   * Converts a byte array to a string
+   * @param {Byte[]} bytes
+   * @return {String}
+   */
+  convertByteArrayToString: function (bytes) {
+    var javaString, str;
+    if (!bytes) {
+      throw &quot;Bytes are empty&quot;;
+    }
+    javaString = new java.lang.String(bytes, &quot;UTF-8&quot;);
+    str = String(javaString);
+    return str;
+  }
+});
+</pre>
+</body>
+</html>

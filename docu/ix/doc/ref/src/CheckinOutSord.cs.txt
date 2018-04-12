@@ -1,0 +1,117 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Example shows the usage of checkinSord/checkoutSord.
+	/// </summary>
+	public class CheckinOutSord
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+		
+				// Create a root folder based on keywording form "Email".
+				// Parent is the "imaginary" archive entry with object ID = 1.
+				String parentId = "1"; 
+				String maskId = "email";   
+				IndexServer.EditInfo editInfo = ix.createSord(ci, parentId, maskId, CONST.EDIT_INFO.mbAll);
+				
+				// Hint: Supply the constant CONST.EDIT_INFO.mbAll to get not only the Sord object data
+				//       but the storage mask data too.
+				
+				Logger.instance().log("prepared sord with GUID=" + editInfo.sord.guid);
+
+				IndexServer.DocMask mask = editInfo.mask;
+				IndexServer.Sord sord = editInfo.sord;
+
+				// Set display name
+				sord.name = "C# sord";
+
+				// Set some index attributes
+				for (int i = 0; i < mask.lines.Length; i++) 
+				{
+					IndexServer.DocMaskLine dml = mask.lines[i];
+					if (dml.name.Equals("From") ||
+						dml.key.Equals("ELOOUTL1")) // this line is just to make it work with all languages 
+					{
+						sord.objKeys[i].data = new String[] {"f.fritz@d-online.de"};
+					} 
+					else if (dml.name.Equals("To") ||
+							 dml.key.Equals("ELOOUTL2")) // this line is just to make it work with all languages 
+					{
+						sord.objKeys[i].data = new String[] {"g.gustav@d-online.de"};
+					}
+				}
+
+				// CHECKIN
+				int objId = ix.checkinSord(ci, sord, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("Created sord successfully, objId=" + objId);
+
+				// CHECKOUT
+				String strObjId = (String)Convert.ChangeType(objId, typeof(String));
+				editInfo = ix.checkoutSord(ci, strObjId, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO);
+				sord = editInfo.sord;
+				Logger.instance().log("Checkout sord successfully, GUID=" + sord.guid);
+				Logger.instance().log("name=" + sord.name);
+				for (int i = 0; i < sord.objKeys.Length; i++) 
+				{
+					IndexServer.ObjKey okey = sord.objKeys[i];
+					if (okey.data.Length != 0) 
+					{
+						Logger.instance().log("okey, goup-name=" + okey.name + ", data=" + okey.data[0]);
+					}
+				}
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-ix-SubscriptionUtils'>/**
+</span> * Subscription utilities
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ */
+sol.define(&quot;sol.common.ix.SubscriptionUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-ix-SubscriptionUtils-method-getFeedGuid'>  /**
+</span>   * Retrieve the feed guid of an element
+   * @param {String} objId
+   * @return {String}
+   */
+  getFeedGuid: function (objId) {
+    var fai, fr, feed;
+
+    fai = FindActionsInfo();
+    fai.objId = objId;
+    fr = ixConnect.feedService.findFirstActions(fai, 1, ActionC.mbMin);
+
+    feed = (fr &amp;&amp; fr.actions &amp;&amp; fr.actions.length &gt; 0) ? fr.feeds.get(fr.actions[0].feedGuid) : null;
+
+    return (feed) ? feed.guid : null;
+  },
+
+<span id='sol-common-ix-SubscriptionUtils-method-hasSubscription'>  /**
+</span>   * Checks, if the user has subscribed to an elements feed.
+   * @param {String} objId
+   * @return {Boolean}
+   */
+  hasSubscription: function (objId) {
+    var fai, fr, feed;
+
+    fai = FindActionsInfo();
+    fai.objId = objId;
+    fai.findSubscriptions = true;
+    fr = ixConnect.feedService.findFirstActions(fai, 1, ActionC.mbMin);
+
+    return fr &amp;&amp; fr.subscriptions &amp;&amp; (fr.subscriptions.size() &gt; 0);
+  },
+
+<span id='sol-common-ix-SubscriptionUtils-method-subscribe'>  /**
+</span>   * Subscribe to a feed.
+   * @param {String} feedGuid
+   */
+  subscribe: function (feedGuid) {
+    var subscription;
+    subscription = ixConnect.ix().createSubscription(feedGuid);
+    ixConnect.ix().checkinSubscription(subscription, SubscriptionC.mbAll);
+  },
+
+<span id='sol-common-ix-SubscriptionUtils-method-subscribeToElement'>  /**
+</span>   * Subscribe to an elements feed.
+   * @param {String} objId
+   */
+  subscribeToElement: function (objId) {
+    var me = this;
+    me.subscribe(me.getFeedGuid(objId));
+  },
+
+<span id='sol-common-ix-SubscriptionUtils-method-unsubscribe'>  /**
+</span>   * Unsubscribe from a feed.
+   * @param {String} feedGuid
+   */
+  unsubscribe: function (feedGuid) {
+    var subscription;
+    subscription = ixConnect.ix().createSubscription(feedGuid);
+    ixConnect.ix().deleteSubscription(subscription);
+  },
+
+<span id='sol-common-ix-SubscriptionUtils-method-unsubscribeFromElement'>  /**
+</span>   * Unsubscribe from an elements feed.
+   * @param {String} objId
+   */
+  unsubscribeFromElement: function (objId) {
+    var me = this;
+    me.unsubscribe(me.getFeedGuid(objId));
+  }
+
+});
+</pre>
+</body>
+</html>

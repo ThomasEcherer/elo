@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common_fx-ix-FxUtils'>/**
+</span> * Contains functions for loading exchange rates and converting amounts.
+ *
+ * Exchange rates refer to EUR as base currency.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ */
+sol.define(&quot;sol.common_fx.ix.FxUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common_fx-ix-FxUtils-property-logger'>  /**
+</span>   * @private
+   * @property logger
+   */
+
+  initialize: function () {
+    this.logger = sol.create(&quot;sol.Logger&quot;, { scope: this.$className });
+  },
+
+<span id='sol-common_fx-ix-FxUtils-property-configuration'>  /**
+</span>   * @private
+   */
+  configuration: {
+    baseCurrency: &quot;EUR&quot;,
+    serviceUrl: &quot;http://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml&quot;,
+    regex: /&lt;Cube currency=&#39;(.*?)&#39; rate=&#39;(.*?)&#39;\/&gt;/g,
+    timeRegex: /&lt;Cube time=&#39;(.*?)&#39;&gt;/, // optional, fall back is the date of execution
+    timeFormat: &quot;yyyy-MM-dd&quot;, // required only if &#39;timeRegex&#39; is defined, format see java.text.SimpleDateFormat
+    updateStatement: &quot;UPDATE sol_common_fx SET currency_exchange_rate=?,time=? WHERE currency_code=?&quot;,
+    selectStatement: &quot;SELECT currency_code, currency_exchange_rate FROM sol_common_fx WHERE currency_code=?&quot;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-loadExchangeRates'>  /**
+</span>   * Loads the exchange rates from an externel service.
+   *
+   * Result object:
+   *
+   *     {
+   *       &quot;USD&quot;: &quot;1.1389&quot;,
+   *       &quot;JPY&quot;: &quot;136.33&quot;,
+   *       &quot;BGN&quot;: &quot;1.9558&quot;,
+   *       ...
+   *     }
+   *
+   * @param {Boolean} persist (optional) If `true`, the database will be updated
+   * @return {Object} The exchange rates
+   */
+  loadExchangeRates: function (persist) {
+    var me = this,
+        currencies, serviceUrl, currencyRegex, response, time, matches, code, rate;
+
+    currencies = {
+      EUR: &quot;1&quot;
+    };
+
+    serviceUrl = me.configuration.serviceUrl;
+    currencyRegex = me.configuration.regex;
+    response = me.getExchangeRates(serviceUrl);
+    time = me.parseDate(response);
+
+    if (response &amp;&amp; (response.length &gt; 0)) {
+      while (matches = currencyRegex.exec(response)) {
+        code = matches[1];
+        rate = matches[2];
+
+        currencies[code] = rate;
+      }
+    } else {
+      throw &quot;empty response from &#39;&quot; + serviceUrl + &quot;&#39;&quot;;
+    }
+
+    currencies = me.convertLocalCurrency(currencies);
+
+    if ((typeof persist !== &quot;undefined&quot;) &amp;&amp; (persist === true)) {
+      sol.common_fx.ix.FxUtils.updateExchangeRates(currencies, time);
+    }
+
+    return currencies;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-convertLocalCurrency'>  /**
+</span>   * Converts the currencies to another local currency
+   * @param {Object} currencies Currencies
+   * @return {Object} Converted currencies
+   */
+  convertLocalCurrency: function (currencies) {
+    var fxConfig, currency, localCurrencyRate, localCurrency, localCurrencyDecimalRate,
+        rate, rateDecimal, newRateDecimal, newRate, precision;
+
+    fxConfig = sol.create(&quot;sol.common.Config&quot;, { compose: &quot;/common_fx/Configuration/fx.config&quot; }).config;
+    localCurrency = fxConfig.localCurrency || &quot;EUR&quot;;
+    precision = fxConfig.precision || 7;
+
+    if (localCurrency == &quot;EUR&quot;) {
+      return currencies;
+    }
+
+    localCurrencyRate = currencies[localCurrency];
+    localCurrencyDecimalRate = new Decimal(localCurrencyRate);
+
+    for (currency in currencies) {
+      rate = currencies[currency];
+      rateDecimal = new Decimal(rate);
+      newRateDecimal = rateDecimal.dividedBy(localCurrencyDecimalRate);
+      newRate = newRateDecimal.toPrecision(precision).toString();
+      currencies[currency] = newRate;
+    }
+
+    return currencies;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-convertAmount'>  /**
+</span>   * Converts an amount from one currency to another.
+   *
+   * Because all exchange rates refer to EUR the conversion has up to two steps: FROM_CURRENCY -&gt; EUR ( -&gt; TO_CURRENCY)
+   *
+   * Result object:
+   *
+   *     {
+   *       amount: &quot;47.11&quot;,
+   *       from: &quot;USD&quot;,
+   *       to: &quot;EUR&quot;,
+   *       result: &quot;42.06&quot;
+   *     }
+   *
+   * @param {String} amount
+   * @param {String} from The currency of the amount
+   * @param {String} to The currency in which the amount should be converted. If undfined &#39;baseCurrency&#39; will be used (see {@link #configuration baseCurrency})
+   * @return {Object}
+   */
+  convertAmount: function (amount, from, to) {
+    var me = this,
+        result;
+
+    amount = amount || 0;
+
+    if (!from) {
+      throw &quot;invalid arguments: from can not be undefined&quot;;
+    }
+
+    result = { amount: amount, from: from };
+    result.to = to || me.configuration.baseCurrency;
+
+    me.logger.info([&quot;convert amount : {0} from &#39;{1}&#39; to &#39;{2}&#39;&quot;, result.amount, result.from, result.to]);
+
+    result.result = parseFloat(result.amount) / me.getExchangeRateForCurrency(result.from);
+
+    if (result.to !== &quot;EUR&quot;) {
+      result.result = parseFloat(result.result) * me.getExchangeRateForCurrency(result.to);
+    }
+
+    me.logger.info([&quot;conversion result : {0} {1}&quot;, result.result, result.to]);
+
+    return result;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-getExchangeRates'>  /**
+</span>   * @private
+   * Retrieves the exchange rates from an externel service.
+   * @param {String} url The service URL
+   * @return {String} The service response
+   */
+  getExchangeRates: function (url) {
+    var responseObj;
+
+    responseObj = sol.common.HttpUtils.sendRequest({ url: url });
+
+    return responseObj.content;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-parseDate'>  /**
+</span>   * @private
+   * Parses the request date from a text using a regular expression (see {@link #configuration timeRegex}).
+   *
+   * @param {String} text
+   * @return {String} ISO date
+   */
+  parseDate: function (text) {
+    var me = this,
+        sdf = new Packages.java.text.SimpleDateFormat(me.configuration.timeFormat),
+        date = new Date(),
+        timeMatch;
+
+    timeMatch = me.configuration.timeRegex.exec(text);
+    if (timeMatch &amp;&amp; timeMatch.length == 2) {
+      date = sdf.parse(timeMatch[1]);
+    }
+
+    return ixConnect.dateToIso(date) + &quot;&quot;;
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-updateExchangeRates'>  /**
+</span>   * @private
+   * Writes updated exchange rates to the database.
+   * @param {Object} currencies Currencies
+   * @param {String} time Time
+   */
+  updateExchangeRates: function (currencies, time) {
+    var me = this,
+        rows = [],
+        currency, dbConnection, rowCount;
+
+    for (currency in currencies) {
+      rows.push([currencies[currency], time, currency]);
+    }
+
+    dbConnection = new Packages.de.elo.ix.jscript.DBConnection(),
+    rowCount = dbConnection.update(me.configuration.updateStatement, rows);
+
+    me.logger.info([&quot;updated exchange rates; updated rows: {0}&quot;, rowCount]);
+  },
+
+<span id='sol-common_fx-ix-FxUtils-method-getExchangeRateForCurrency'>  /**
+</span>   * @private
+   * Retrives the exchange rate for one currency from the database.
+   * @param {String} currencyCode
+   * @return {Number} The exchange rate
+   */
+  getExchangeRateForCurrency: function (currencyCode) {
+    var me = this,
+        dbConnection, ret;
+    if (!currencyCode) {
+      throw &quot;no source currency defined&quot;;
+    }
+
+    dbConnection = new Packages.de.elo.ix.jscript.DBConnection(),
+    ret = dbConnection.query(me.configuration.selectStatement, [currencyCode]);
+
+    if (!ret || ret.length &lt; 1) {
+      throw &quot;no exchange rate found for &#39;&quot; + currencyCode + &quot;&#39;&quot;;
+    }
+
+    return parseFloat(ret[0][1]);
+  }
+});
+</pre>
+</body>
+</html>

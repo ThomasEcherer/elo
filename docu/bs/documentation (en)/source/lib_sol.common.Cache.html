@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-Cache'>/**
+</span> * A threadsafe cache implementation.
+ *
+ * The cache holds key-value pairs.
+ * Keys should be strings, whereas values could be arbitary objects.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ *
+ */
+sol.define(&quot;sol.common.Cache&quot;, {
+
+<span id='sol-common-Cache-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.cache = new java.util.concurrent.ConcurrentHashMap(8, 0.9, 1);
+  },
+
+<span id='sol-common-Cache-method-put'>  /**
+</span>   * Inserts the specified key-value pair into the cache.
+   * @param {String} key
+   * @param {Object} value
+   * @return {Object} The previous value associated with the key, or null if there was no mapping before
+   */
+  put: function (key, value) {
+    var me = this;
+    return me.cache.put(key, value);
+  },
+
+<span id='sol-common-Cache-method-putAll'>  /**
+</span>   * Inserts all key-value pairs specified by an object into the cache. Existing mappings will be replaced.
+   * @param {Object} data Property names will be used as keys and the associated values as values.
+   */
+  putAll: function (data) {
+    var me = this;
+    me.cache.putAll(data);
+  },
+
+<span id='sol-common-Cache-method-containsKey'>  /**
+</span>   * Tests if the specified object is a key in the cache.
+   * @param {String} key
+   * @return {Boolean}
+   */
+  containsKey: function (key) {
+    var me = this;
+    return me.cache.containsKey(key);
+  },
+
+<span id='sol-common-Cache-method-get'>  /**
+</span>   * Returns the value for the specified key from the cache, or null if the chache contains no mapping for the key.
+   * @param {String} key
+   * @return {Object}
+   */
+  get: function (key) {
+    var me = this;
+    return me.cache.get(key);
+  },
+
+<span id='sol-common-Cache-method-keys'>  /**
+</span>   * Returns an enumeration of all keys in the cache.
+   * @return {Object} An `java.util.Enumeration` of all keys
+   */
+  keys: function () {
+    var me = this;
+    return me.cache.keys();
+  },
+
+<span id='sol-common-Cache-method-values'>  /**
+</span>   * Returns a collection view of the values contained in the cache.
+   * @return {Object} An `java.util.Collection` of all values
+   */
+  values: function () {
+    var me = this;
+    return me.cache.values();
+  },
+
+<span id='sol-common-Cache-method-elements'>  /**
+</span>   * Returns an enumeration of the values in the cache.
+   * @return {Object} An `java.util.Enumeration` of all values
+   */
+  elements: function () {
+    var me = this;
+    return me.cache.elements();
+  },
+
+<span id='sol-common-Cache-method-remove'>  /**
+</span>   * Removes the key (and its corresponding value) from the cache.
+   * @param {String} key
+   * @return {Object} The previous value associated with the key, or null if there was no value for the key
+   */
+  remove: function (key) {
+    var me = this;
+    return me.cache.remove(key);
+  },
+
+<span id='sol-common-Cache-method-size'>  /**
+</span>   * Returns the number of key-value pairs in the cache.
+   * @return {Number}
+   */
+  size: function () {
+    var me = this;
+    return me.cache.size();
+  },
+
+<span id='sol-common-Cache-method-isEmpty'>  /**
+</span>   * Returns `true` if the chache contains no key-value pairs.
+   * @return {Boolean}
+   */
+  isEmpty: function () {
+    var me = this;
+    return me.cache.isEmpty();
+  },
+
+<span id='sol-common-Cache-method-clear'>  /**
+</span>   * Removes all of the mappings from the cache.
+   */
+  clear: function () {
+    var me = this;
+    me.cache.clear();
+  }
+
+});
+</pre>
+</body>
+</html>

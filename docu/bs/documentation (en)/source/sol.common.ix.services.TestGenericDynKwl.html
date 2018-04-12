@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.de.elo.ix.scripting);
+
+//@include lib_Class.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+//@include lib_sol.common.ix.GenericDynKwl.js
+
+
+<span id='sol-common-ix-services-TestGenericDynKwl'>/**
+</span> *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ * @requires sol.common.ix.ServiceBase
+ *
+ */
+sol.define(&quot;sol.common.ix.services.TestGenericDynKwl&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-TestGenericDynKwl-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-TestGenericDynKwl-method-test'>  test: function () {
+</span>    var me = this,
+        result = {},
+        resultData = [],
+        provider, sord, objKeys, inputFieldName;
+
+    try {
+      provider = sol.create(&quot;sol.common.ix.GenericDynKwl&quot;, me.providerConfig).getProvider();
+
+      sord = ixConnect.ix().createSord(&quot;0&quot;, &quot;0&quot;, SordC.mbAllIndex);
+      objKeys = me.buildFilter();
+
+      if (me.providerConfig &amp;&amp; me.providerConfig.input) {
+        inputFieldName = (me.providerConfig &amp;&amp; me.providerConfig.input) ? me.providerConfig.input.name : &quot;&quot;;
+        objKeys.push(me.createObjKey(inputFieldName, me.providerConfig.input.value));
+      }
+
+      sord.objKeys = objKeys;
+
+      provider.open(me.ec, sord, inputFieldName);
+
+      if (provider.getMessage()) {
+        result.message = provider.getMessage();
+        return result;
+      }
+
+      while (provider.hasMoreRows()) {
+        resultData.push(provider.getNextRow());
+      }
+
+      result.data = resultData;
+
+    } catch (ex) {
+      result.error = String(ex);
+    } finally {
+      if (provider &amp;&amp; (sol.common.ObjectUtils.isFunction(provider.close))) {
+        provider.close();
+      }
+    }
+
+    return result;
+
+  },
+
+<span id='sol-common-ix-services-TestGenericDynKwl-method-buildFilter'>  buildFilter: function () {
+</span>    var me = this,
+        objKeys = [];
+    if (me.providerConfig &amp;&amp; me.providerConfig.filter &amp;&amp; (me.providerConfig.filter.length &gt; 0)) {
+      me.providerConfig.filter.forEach(function (param) {
+        if (param.name &amp;&amp; param.value) {
+          objKeys.push(me.createObjKey(param.name, param.value));
+        }
+      });
+    }
+    return objKeys;
+  },
+
+<span id='sol-common-ix-services-TestGenericDynKwl-method-createObjKey'>  createObjKey: function (name, value) {
+</span>    var objKey = new ObjKey();
+    objKey.name = name;
+    objKey.data = [value];
+    return objKey;
+  }
+
+});
+
+
+<span id='sol-common-ix-services-TestGenericDynKwl-static-method-RF_sol_service_TestGenericDynKwl'>/**
+</span> * @member sol.common.ix.services.TestGenericDynKwl
+ * @method RF_sol_service_TestGenericDynKwl
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_service_TestGenericDynKwl(ec, args) {
+  var params = {},
+      service;
+
+  params.providerConfig = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args);
+  params.ec = ec;
+
+  sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+
+  service = sol.create(&quot;sol.common.ix.services.TestGenericDynKwl&quot;, params);
+
+  return sol.common.ix.RfUtils.stringify(service.test());
+}
+
+</pre>
+</body>
+</html>

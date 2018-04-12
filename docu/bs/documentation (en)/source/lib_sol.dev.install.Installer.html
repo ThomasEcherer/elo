@@ -1,0 +1,3308 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(java.io);
+importPackage(Packages.de.elo.client.scripting.constants);
+
+//@include lib_Class.js
+
+<span id='sol-dev-install-MultiProperties'>/**
+</span> * Library functions for ELO solution package installation
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @elojc
+ * @eloas
+ *
+ * @requires moment
+ * @requires handlebars
+ * @requires sol.common.Config
+ * @requires sol.common.Template
+ * @requires sol.common.IxUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.AsyncUtils
+ * @requires sol.common.FileUtils
+ * @requires sol.common.ZipUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.AsUtils
+ * @requires sol.common.HttpUtils
+ * @requires sol.common.UserUtils
+ * @requires sol.common.SordTypeUtils
+ * @requires sol.common.ExceptionUtils
+ * @requires sol.common.UserProfile
+ * @requires sol.common.TranslateTerms
+  */
+sol.define(&quot;sol.dev.install.MultiProperties&quot;, {
+
+<span id='sol-dev-install-MultiProperties-cfg-filePath'>  /**
+</span>   * @cfg {String} filePath
+   * FilePath
+   */
+
+<span id='sol-dev-install-MultiProperties-cfg-language'>  /**
+</span>   * @cfg {String} language
+   * Language
+   */
+
+  initialize: function (params) {
+    var me = this;
+
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [params]);
+
+    if (!me.filePath) {
+      throw &quot;Properties file path is empty&quot;;
+    }
+    me.file = new File(me.filePath);
+
+    me.language = me.language || ixConnect.loginResult.clientInfo.language;
+
+    me.defaultProps = me.readProps();
+    if (!me.defaultProps) {
+      throw &quot;Can&#39;t load properties: &quot; + me.filePath;
+    }
+
+    me.langProps = me.readProps(me.language);
+  },
+
+<span id='sol-dev-install-MultiProperties-method-getText'>  /**
+</span>   * Returns the localized text
+   * @param {String} key Key
+   * @param {String} language Language
+   * @return {String} Text
+   */
+  getText: function (key) {
+    var me = this,
+        value;
+    if (!key) {
+      throw &quot;Key is empty&quot;;
+    }
+
+    if (me.langProps) {
+      value = me.langProps.getProperty(key);
+    }
+    if (!value) {
+      value = me.defaultProps.getProperty(key);
+    }
+    return value ? String(value) : String(key);
+  },
+
+<span id='sol-dev-install-MultiProperties-method-readProps'>  /**
+</span>   * @private
+   * Reads a properties file
+   * @param {String} language Language
+   * @return {java.util.Properties}
+   */
+  readProps: function (language) {
+    var me = this,
+        props, filePathWithoutExtension, path, extension,
+        file, fileInputStream;
+
+    props = new java.util.Properties();
+
+    path = me.filePath;
+
+    if (language) {
+      language = String(language).toUpperCase();
+      extension = sol.common.FileUtils.getExtension(me.file);
+      filePathWithoutExtension = sol.common.FileUtils.removeExtension(me.file);
+      path = filePathWithoutExtension + &quot;_&quot; + language + &quot;.&quot; + extension;
+    }
+    file = new File(path);
+    if (file.exists()) {
+      fileInputStream = new java.io.FileInputStream(path);
+      props.load(fileInputStream);
+      return props;
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.RepoDataUtils&quot;, {
+  singleton: true,
+
+<span id='sol-dev-install-MultiProperties-method-exportInfoToObject'>  /**
+</span>   * Converts the export info to Object
+   * @param {String} exportInfo Export info
+   * @return {Object} Result
+   *
+   * Example:
+   *
+   */
+  exportInfoToObject: function (exportInfo) {
+    var me = this,
+        raw, result, keys, i, j, key, docMaskInfo, maskElements, docMaskName,
+        headingKeys, headings, lineExists, docMaskResult;
+
+    result = {
+      docMasks: {
+      }
+    };
+
+    if (!exportInfo) {
+      throw &quot;Export info is empty&quot;;
+    }
+    raw = sol.common.StringUtils.parseIniString(exportInfo);
+    keys = Object.keys(raw.MASKS);
+    for (i = 0; i &lt; keys.length; i++) {
+      key = keys[i];
+      docMaskInfo = raw[&quot;MASK&quot; + key];
+      maskElements = me.splitExportInfoLine(docMaskInfo.MaskElms);
+      docMaskName = maskElements[6];
+      headings = me.splitExportInfoLine(maskElements[11], { separator: &quot;|&quot; });
+      headingKeys = me.splitExportInfoLine(docMaskInfo.MaskTextTK, { separator: &quot;|&quot; });
+
+      docMaskResult = {
+        id: maskElements[0],
+        maskAcl: maskElements[1],
+        storageId: maskElements[2],
+        colorId: maskElements[3],
+        flags: maskElements[4],
+        name: docMaskName,
+        nameKey: docMaskInfo.MaskNameTK || &quot;&quot;,
+        filingDefinition: maskElements[7],
+        barcode: maskElements[8],
+        docAcl: maskElements[10],
+        headings: headings,
+        headingKeys: headingKeys,
+        lifetime: maskElements[12],
+        timestamp: maskElements[13],
+        defaultFlowName: maskElements[14],
+        checkInFlowName: maskElements[15],
+        guid: docMaskInfo.MaskGuid || &quot;&quot;,
+        lines: {}
+      };
+
+      j = 0;
+      do {
+        lineExists = me.analyzeExportDocLine(docMaskInfo, j, docMaskResult);
+        j++;
+      } while (lineExists &amp;&amp; (j &lt;= DocMaskLineC.MAX_ID_DOCMASK_LINE));
+
+      result.docMasks[docMaskName] = docMaskResult;
+    }
+
+    return result;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-splitExportInfoLine'>  /**
+</span>   * @private
+   * @param {String} exportInfoString
+   * @param {Object} params Parameters
+   * @param {String} params.separator Separator
+   * @return {Array}
+   */
+  splitExportInfoLine: function (exportInfoString, params) {
+    var arr;
+
+    params = params || {};
+    params.separator = params.separator || &quot;,&quot;;
+
+    arr = exportInfoString.split(params.separator);
+
+    arr = arr.map(function (value) {
+      return sol.common.StringUtils.removeQuotes(value);
+    });
+
+    return arr;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-analyzeExportDocLine'>  /**
+</span>   * @private
+   * @param {Object} docMaskInfo
+   * @param {Number} lineIndex
+   * @param {Object} docMaskResult
+   * @return {Boolean} lineExists
+   */
+  analyzeExportDocLine: function (docMaskInfo, lineIndex, docMaskResult) {
+    var me = this,
+        posLines = [],
+        linePositions = [],
+        lineInfo, j, posLine, positionString, positions, propCount, startPropIndex,
+        lineInfoElements, lineKey, lineFlags, lineObj;
+
+    for (j = 0; j &lt; 100; j++) {
+      posLine = docMaskInfo[&quot;MaskPosInfo&quot; + j];
+      if (!posLine) {
+        break;
+      }
+      posLines.push(posLine);
+    }
+    positionString = posLines.join(&quot;&quot;);
+    if (positionString) {
+      positionString = positionString.substr(1);
+      positions = positionString.split(&quot;,&quot;);
+
+      propCount = 6;
+      startPropIndex = (lineIndex * propCount);
+      linePositions = positions.slice(startPropIndex, startPropIndex + propCount);
+    } else {
+      linePositions = [0, 0, 0, 0, 0];
+    }
+
+    lineInfo = docMaskInfo[&quot;MaskLine&quot; + lineIndex];
+
+    if (!lineInfo) {
+      return false;
+    }
+    lineInfoElements = me.splitExportInfoLine(lineInfo);
+    lineKey = lineInfoElements[6];
+    lineFlags = parseInt(lineInfoElements[7], 10);
+
+    lineObj = {
+      id: lineInfoElements[1],
+      rawDataType: parseInt(lineInfoElements[2], 10),
+      minLen: lineInfoElements[3],
+      maxLen: lineInfoElements[4],
+      name: lineInfoElements[5],
+      nameKey: docMaskInfo[&quot;LineNameTK&quot; + lineIndex] || &quot;&quot;,
+      key: lineKey,
+
+      onlyKeywordListData: ((lineFlags &amp; 1) == 1),
+      prefixAsterix: ((lineFlags &amp; 2) == 2),
+      postfixAsterix: ((lineFlags &amp; 4) == 4),
+      nextTab: ((lineFlags &amp; 8) == 8),
+      hidden: ((lineFlags &amp; 0x10) == 0x10),
+      readOnly: ((lineFlags &amp; 0x20) == 0x20),
+      important: ((lineFlags &amp; 0x40) == 0x40),
+      displayOnCheckIn: ((lineFlags &amp; 0x80) == 0x80),
+      translateKeywordList: ((lineFlags &amp; 0x100) == 0x100),
+      disableF7Search: ((lineFlags &amp; 0x200) == 0x200),
+      inheritToChildren: ((lineFlags &amp; 0x400) == 0x400),
+      notTokenized: ((lineFlags &amp; 0x800) == 0x800),
+      inheritFromParent: ((lineFlags &amp; 0x1000) == 0x1000),
+      excludeFromISearch: ((lineFlags &amp; 0x2000) == 0x2000),
+      valueArray: ((lineFlags &amp; 0x4000) == 0x4000),
+      required: ((lineFlags &amp; 0x8000) == 0x8000),
+
+      acl: lineInfoElements[8],
+      quickInfo: lineInfoElements[9] || &quot;&quot;,
+      quickInfoKey: docMaskInfo[&quot;LineCommentTK&quot; + lineIndex] || &quot;&quot;,
+      externalData: lineInfoElements[10],
+      defaultValue: lineInfoElements[11],
+      tabIndex: lineInfoElements[12],
+      guid: lineInfo.MaskGuid,
+      script: docMaskInfo[&quot;serverScriptName&quot; + lineIndex] || &quot;&quot;,
+
+      labelCol: linePositions[0],
+      labelRow: linePositions[1],
+      editCol: linePositions[2],
+      editRow: linePositions[3],
+      editWidth: linePositions[4],
+      tabOrder: linePositions[5]
+    };
+
+    docMaskResult.lines[lineKey] = lineObj;
+
+    return true;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-compareExportData'>  /**
+</span>   * Compares the export data
+   * @param {Object} exportData Export data
+   * @return {Object} Difference
+   */
+  compareExportData: function (exportData) {
+    var me = this,
+        diffData = {
+          docMasks: [],
+          hints: []
+        },
+        maskName, docMaskData;
+
+    if (!exportData) {
+      throw &quot;Export data is empty&quot;;
+    }
+
+    for (maskName in exportData.docMasks) {
+      docMaskData = exportData.docMasks[maskName];
+      me.compareDocMask(maskName, docMaskData, diffData);
+    }
+
+    return diffData;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-compareDocMask'>  /**
+</span>   * @private
+   * Compares a document mask
+   * @param {String} maskName Mask name
+   * @param {Object} docMaskData Document mask data
+   * @param {Object} diffData data
+   */
+  compareDocMask: function (maskName, docMaskData, diffData) {
+    var me = this,
+        lines, lineKey, docMaskLine, line, docMask, docMaskDiffData, exceptionMessage;
+
+    try {
+      sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, false);
+      docMask = ixConnect.ix().checkoutDocMask(maskName, DocMaskC.mbAll, LockC.NO);
+    } catch (ex) {
+      exceptionMessage = sol.common.ExceptionUtils.parseException(ex);
+      diffData.hints.push(&quot;Can&#39;t read document mask &#39;&quot; + maskName + &quot;&#39;: &quot; + exceptionMessage);
+      return;
+    } finally {
+      sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, true);
+    }
+
+    for (lineKey in docMaskData.lines) {
+      line = docMaskData.lines[lineKey];
+
+      docMaskLine = me.getDocMaskLine(docMask, lineKey);
+
+      if (!docMaskLine &amp;&amp; (lineKey != &quot;_RESERVED&quot;)) {
+        lines = lines || [];
+        lines.push(line);
+      }
+    }
+
+    docMaskDiffData = {
+      key: maskName,
+      lines: lines
+    };
+    if (lines) {
+      diffData.docMasks.push(docMaskDiffData);
+    }
+  },
+
+<span id='sol-dev-install-MultiProperties-method-getDocMaskLine'>  /**
+</span>   * @private
+   * Returns the document mask line
+   * @param {de.elo.ix.client.DocMask} docMask Document mask
+   * @param {String} lineKey Line key
+   * @return {de.elo.ix.client.DocMaskLine} Document mask line
+   */
+  getDocMaskLine: function (docMask, lineKey) {
+    var i, docMaskLine;
+
+    for (i = 0; i &lt; docMask.lines.length; i++) {
+      docMaskLine = docMask.lines[i];
+      if (docMaskLine.key == lineKey) {
+        return docMaskLine;
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.InstallHandlerBase&quot;, {
+
+<span id='sol-dev-install-MultiProperties-cfg-payloadDirPath'>  /**
+</span>   * @cfg {String} payloadDirPath (required)
+   */
+
+<span id='sol-dev-install-MultiProperties-cfg-result'>  /**
+</span>   * @cfg {String} result (required)
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+
+    if (!me.config) {
+      throw &quot;Parameter &#39;config&#39; must be given&quot;;
+    }
+
+    if (!me.result) {
+      throw &quot;Parameter &#39;result&#39; must be given&quot;;
+    }
+  },
+
+<span id='sol-dev-install-MultiProperties-method-log'>  /**
+</span>   * Log
+   * @param {Object} message Message
+   * @param {String} message.text Message text
+   * @param {String} message.data Message data
+   */
+  log: function (message) {
+    var me = this;
+    me.prepareMessage(message);
+    me.logMessage(message);
+  },
+
+<span id='sol-dev-install-MultiProperties-method-prepareMessage'>  /**
+</span>   * Process message
+   * @param {Object} message Message
+   * @param {String} message.key Message key
+   * @param {String} message.data Message data
+   * @return {Object}
+   */
+  prepareMessage: function (message) {
+    var me = this,
+        args;
+
+    message = message || {};
+
+    if (message.key) {
+      message.text = me.getText(message.key);
+      delete message.key;
+    }
+    if (message.data) {
+      args = message.data || [];
+      args.unshift(message.text);
+      message.text = sol.common.StringUtils.format.apply(me, args);
+      delete message.data;
+    }
+
+    return message;
+  },
+
+  addIssue: function (issue) {
+    var me = this;
+
+    me.result.issues.items.push(issue);
+  },
+
+  processIssues: function () {
+    var me = this,
+        scriptDirPath, htmlTemplate, textTemplate, textContent, lines;
+
+    if (me.result.issues.items.length &gt; 0) {
+      me.result.issues.items.forEach(function (issue) {
+        me.prepareMessage(issue.title);
+        me.prepareMessage(issue.details);
+      });
+      me.result.issues.title = me.getText(&quot;sol.dev.install.title.issues&quot;);
+      me.result.issues.continueSetup = me.getText(&quot;sol.dev.install.text.continueSetup&quot;);
+
+      scriptDirPath = String(new File(me.payloadDirPath).parent);
+
+      textTemplate = sol.common.FileUtils.readFileToString(scriptDirPath + File.separator + &quot;issues_text_tpl.txt&quot;);
+      textContent = sol.create(&quot;sol.common.Template&quot;, { source: textTemplate }).apply(me.result.issues);
+
+      lines = sol.common.StringUtils.splitLines(textContent);
+      lines.forEach(function (line) {
+        me.logMessage({ text: line });
+      });
+
+      htmlTemplate = sol.common.FileUtils.readFileToString(scriptDirPath + File.separator + &quot;issues_html_tpl.txt&quot;);
+      me.result.issues.htmlContent = sol.create(&quot;sol.common.Template&quot;, { source: htmlTemplate }).apply(me.result.issues);
+
+      me.handleIssues();
+    }
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @abstract
+   * @param {Object} params Parameters
+   * @param {String} params.message Message
+   */
+  logMessage: function (params) {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.InstallHandlerBase.logMessage()&#39;&quot;;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-getText'>  /**
+</span>   * @abstract
+   * @param {String} key
+   */
+  getText: function (key) {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.InstallHandlerBase.getText()&#39;&quot;;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-getTempDir'>  /**
+</span>   * @abstract
+   * @param {String} key
+   */
+  getTempDir: function (key) {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.InstallHandlerBase.getTempDir()&#39;&quot;;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-handleIssues'>  /**
+</span>   * @abstract
+   */
+  handleIssues: function () {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.InstallHandlerBase.handleIssues()&#39;&quot;;
+  },
+
+  handleExportInfoDiffs: function () {
+    return true;
+  }
+});
+
+sol.define(&quot;sol.dev.install.JcHandler&quot;, {
+  extend: &quot;sol.dev.install.InstallHandlerBase&quot;,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallHandlerBase&quot;, &quot;initialize&quot;, [config]);
+    me.fileLogger = sol.create(&quot;sol.dev.install.FileLogger&quot;, {
+      tempDir: me.getTempDir(),
+      config: me.config
+    });
+
+    if (workspace.directories.payloadDir) {
+      me.payloadDirPath = String(workspace.directories.payloadDir.canonicalPath);
+    }
+  },
+
+  getTempDir: function () {
+    return workspace.directories.tempDir;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @private
+   * Writes a log message
+   * @param {Object} message Log message
+   * @param {String} message.text Messge text
+   * @param {Boolean} message.statusBar Write to status bar
+   */
+  logMessage: function (message) {
+    var me = this;
+
+    message = message || {};
+
+    me.fileLogger.log(message);
+    if (message.statusBar) {
+      workspace.setStatusMessage(message.text);
+    }
+  },
+
+  handleIssues: function () {
+    var me = this,
+        htmlDialogContentTempFilePath, htmlDialogContentUrl, dialogResult;
+
+    if (me.result.issues.htmlContent) {
+      htmlDialogContentTempFilePath = me.getTempDir().canonicalPath + File.separator + &quot;HtmlDialogContent_&quot; + java.lang.System.nanoTime() + &quot;.html&quot;;
+      sol.common.FileUtils.writeStringToFile(htmlDialogContentTempFilePath, me.result.issues.htmlContent, { bom: true });
+      htmlDialogContentUrl = sol.common.FileUtils.getUrlFromFilePath(htmlDialogContentTempFilePath);
+      dialogResult = me.showHtmlDialog({ title: me.getText(&quot;sol.dev.install.title.installer&quot;), url: htmlDialogContentUrl });
+      me.log({ text: &quot;dialogResult={0}&quot;, data: [dialogResult] });
+      me.result.canceled = !dialogResult;
+      if (!me.result.canceled) {
+        globalScope.runningSetup = me.config.install.setupName;
+      }
+    }
+  },
+
+  handleExportInfoDiffs: function () {
+    var me = this,
+        htmlDialogContentTempFilePath, htmlDialogContentUrl, dialogResult;
+
+    if (me.result.exportInfoDiffs.htmlContent) {
+      htmlDialogContentTempFilePath = me.getTempDir().canonicalPath + File.separator + &quot;HtmlDialogContent_&quot; + java.lang.System.nanoTime() + &quot;.html&quot;;
+      sol.common.FileUtils.writeStringToFile(htmlDialogContentTempFilePath, me.result.exportInfoDiffs.htmlContent, { bom: true });
+      htmlDialogContentUrl = sol.common.FileUtils.getUrlFromFilePath(htmlDialogContentTempFilePath);
+      dialogResult = me.showHtmlDialog({ title: me.getText(&quot;sol.dev.install.title.installer&quot;), url: htmlDialogContentUrl });
+      me.log({ text: &quot;dialogResult={0}&quot;, data: [dialogResult] });
+      return dialogResult;
+    }
+  },
+
+<span id='sol-dev-install-MultiProperties-method-showHtmlDialog'>  /**
+</span>   * Shows a HTML dialog
+   * @param {Object} params Parameter
+   * @param {String} params.title Title
+   * @param {String} params.url URL
+   * @return {Boolean}
+   */
+  showHtmlDialog: function (params) {
+    var appDialog, result;
+
+    params = params || {};
+    params.title = params.title || &quot;&quot;;
+    params.url = params.url || &quot;&quot;;
+    appDialog = workspace.createAppDialog(params.title);
+    appDialog.loadUrl(params.url);
+    result = appDialog.show();
+    return result;
+  },
+
+  finalize: function () {
+    var me = this,
+        message, messageDetails, content;
+
+    if (me.config.install.interactive == false) {
+      return;
+    }
+
+    if (me.result.canceled) {
+      message = me.result.canceledMessage || me.prepareMessage({ key: &quot;sol.dev.install.message.canceled&quot;, data: [me.config.install.setupName], statusBar: true });
+      me.logMessage(message);
+      content = &quot;&lt;h3&gt;&quot; + message.text + &quot;&lt;/h3&gt;&quot;;
+      workspace.showAlertBox(me.getText(&quot;sol.dev.install.title.installer&quot;), content);
+    } else {
+      message = me.prepareMessage({ key: &quot;sol.dev.install.message.finished&quot;, data: [me.config.install.setupName], statusBar: true });
+      me.log(message);
+      messageDetails = me.prepareMessage({ key: &quot;sol.dev.install.message.finishedDetails&quot; });
+      me.log(messageDetails);
+      content = &quot;&lt;h3&gt;&quot; + message.text + &quot;&lt;/h3&gt;&quot; + messageDetails.text;
+      workspace.showInfoBox(me.getText(&quot;sol.dev.install.title.installer&quot;), content);
+      globalScope.runningSetup = &quot;&quot;;
+    }
+
+    me.fileLogger.finalize();
+
+    try {
+      Packages.de.elo.client.ioutil.Installer.message = message.text;
+    } catch (ignore) {
+      // ignore
+    }
+
+    if (me.debug || me.result.canceled) {
+      Packages.java.awt.Desktop.getDesktop().open(me.fileLogger.logFile);
+    }
+  },
+
+<span id='sol-dev-install-MultiProperties-method-getText'>  /**
+</span>   * Helper function that returns the localized text of a resource file
+   * @param {String} key Key of the text.
+   * @return {String} Localized text.
+   */
+  getText: function (key) {
+    return String(utils.getText(&quot;sol.dev.install&quot;, key));
+  }
+});
+
+sol.define(&quot;sol.dev.install.AsHandler&quot;, {
+  extend: &quot;sol.dev.install.InstallHandlerBase&quot;,
+
+  initialize: function (config) {
+    var me = this,
+        scriptDirPath;
+
+    me.$super(&quot;sol.dev.install.InstallHandlerBase&quot;, &quot;initialize&quot;, [config]);
+    me.fileLogger = sol.create(&quot;sol.dev.install.FileLogger&quot;, {
+      tempDir: me.getTempDir(),
+      config: me.config
+    });
+
+    me.payloadDirPath = String(Packages.de.elo.mover.main.helper.ScriptHelper.getPayloadDirPath());
+    scriptDirPath = String(new File(me.payloadDirPath).parent);
+
+    me.props = sol.create(&quot;sol.dev.install.MultiProperties&quot;, { filePath: scriptDirPath + File.separator + &quot;text_sol.dev.install.properties&quot;, language: &quot;en&quot; });
+  },
+
+  getTempDir: function () {
+    var tempDirPath, tempDir;
+    tempDirPath = sol.common.FileUtils.getTempDirPath();
+    tempDir = new File(tempDirPath);
+    return tempDir;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @private
+   * Writes a log message
+   * @param {Object} message Log message
+   * @param {String} message.text Messge text
+   * @param {Boolean} message.statusBar Write to status bar
+   */
+  logMessage: function (message) {
+    var me = this;
+
+    message = message || {};
+
+    me.fileLogger.log(message);
+    if (message &amp;&amp; message.text) {
+      log.info(message.text);
+    }
+  },
+
+  finalize: function () {
+    var me = this,
+        message;
+
+    message = me.prepareMessage({ key: &quot;sol.dev.install.message.finished&quot;, data: [me.config.install.setupName] });
+    me.log(message);
+
+    me.fileLogger.finalize();
+
+    if (typeof installResult != &quot;undefined&quot;) {
+      installResult.httpStatus = &quot;200&quot;;
+      installResult.contentType = &quot;application/json&quot;;
+      installResult.httpContent = JSON.stringify(me.result);
+    }
+  },
+
+  handleIssues: function () {
+    var me = this;
+    if (me.result.fatal) {
+      me.result.canceled = true;
+    }
+  },
+
+  getText: function (key) {
+    var me = this;
+    return me.props.getText(key);
+  }
+});
+
+sol.define(&quot;sol.dev.install.IxHandler&quot;, {
+  extend: &quot;sol.dev.install.InstallHandlerBase&quot;,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallHandlerBase&quot;, &quot;initialize&quot;, [config]);
+    me.stringLogger = sol.create(&quot;sol.dev.install.StringLogger&quot;, { config: me.config });
+    sol.common.TranslateTerms.require(&quot;sol.dev.install&quot;);
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @private
+   * Writes a log message
+   * @param {Object} message Log message
+   * @param {String} message.text Messge text
+   */
+  logMessage: function (message) {
+    var me = this;
+
+    message = message || {};
+
+    me.stringLogger.log(message);
+  },
+
+  finalize: function () {
+    var me = this,
+        message;
+
+    message = me.prepareMessage({ key: &quot;sol.dev.install.message.finished&quot;, data: [me.config.install.setupName] });
+    me.logMessage(message);
+
+    me.stringLogger.finalize();
+  },
+
+  handleIssues: function () {
+    var me = this;
+    if (me.result.fatal) {
+      me.result.canceled = true;
+    }
+  },
+
+  getText: function (key) {
+    return sol.common.TranslateTerms.translate(key);
+  }
+});
+
+sol.define(&quot;sol.dev.install.ShHandler&quot;, {
+  extend: &quot;sol.dev.install.InstallHandlerBase&quot;,
+
+  initialize: function (config) {
+    var me = this,
+        scriptDirPath;
+
+    me.$super(&quot;sol.dev.install.InstallHandlerBase&quot;, &quot;initialize&quot;, [config]);
+    me.fileLogger = sol.create(&quot;sol.dev.install.FileLogger&quot;, {
+      tempDir: me.getTempDir(),
+      config: me.config
+    });
+
+    me.payloadDirPath = __DIR__ + &quot;install.data&quot;;
+    scriptDirPath = String(new File(me.payloadDirPath).parent);
+
+    me.props = sol.create(&quot;sol.dev.install.MultiProperties&quot;, { filePath: scriptDirPath + File.separator + &quot;text_sol.dev.install.properties&quot;, language: &quot;en&quot; });
+  },
+
+  getTempDir: function () {
+    var tempDirPath, tempDir;
+    tempDirPath = sol.common.FileUtils.getTempDirPath();
+    tempDir = new File(tempDirPath);
+    return tempDir;
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @private
+   * Writes a log message
+   * @param {Object} message Log message
+   * @param {String} message.text Messge text
+   * @param {Boolean} message.statusBar Write to status bar
+   */
+  logMessage: function (message) {
+    var me = this;
+
+    message = message || {};
+
+    me.fileLogger.log(message);
+    if (message &amp;&amp; message.text) {
+      log.info(message.text);
+    }
+  },
+
+  finalize: function () {
+    var me = this,
+        message;
+
+    message = me.prepareMessage({ key: &quot;sol.dev.install.message.finished&quot;, data: [me.config.install.setupName] });
+    me.log(message);
+
+    me.fileLogger.finalize();
+
+    if (typeof installResult != &quot;undefined&quot;) {
+      installResult.httpStatus = &quot;200&quot;;
+      installResult.contentType = &quot;application/json&quot;;
+      installResult.httpContent = JSON.stringify(me.result);
+    }
+  },
+
+  handleIssues: function () {
+    var me = this;
+    if (me.result.fatal) {
+      me.result.canceled = true;
+    }
+  },
+
+  getText: function (key) {
+    var me = this;
+    return me.props.getText(key);
+  }
+});
+
+sol.define(&quot;sol.dev.install.TestHandler&quot;, {
+  extend: &quot;sol.dev.install.JcHandler&quot;,
+
+  initialize: function (config) {
+    var me = this,
+        scriptDirPath, scriptDir, payloadDir;
+
+    me.$super(&quot;sol.dev.install.InstallHandlerBase&quot;, &quot;initialize&quot;, [config]);
+
+    scriptDirPath = me.config.install.scriptDirPath || &quot;c:/temp/BsInstall&quot;;
+    me.payloadDirPath = scriptDirPath + File.separator + &quot;install.data&quot;;
+
+    scriptDir = new File(scriptDirPath);
+    payloadDir = new File(me.payloadDirPath);
+
+    sol.common.FileUtils.makeDirectories(payloadDir);
+    sol.common.FileUtils.deleteFiles({ dirPath: scriptDirPath });
+
+    me.fileLogger = sol.create(&quot;sol.dev.install.FileLogger&quot;, {
+      tempDir: scriptDir,
+      config: me.config
+    });
+
+    sol.common.FileUtils.downloadDocuments(&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/development/Package Installer&quot;, scriptDirPath);
+
+    me.props = sol.create(&quot;sol.dev.install.MultiProperties&quot;, { filePath: scriptDirPath + File.separator + &quot;text_sol.dev.install.properties&quot;, language: &quot;en&quot; });
+  },
+
+<span id='sol-dev-install-MultiProperties-method-logMessage'>  /**
+</span>   * @private
+   * Writes a log message
+   * @param {Object} message Log message
+   * @param {String} message.text Messge text
+   * @param {Boolean} message.statusBar Write to status bar
+   */
+  logMessage: function (message) {
+    var me = this;
+
+    message = message || {};
+
+    me.fileLogger.log(message);
+    if (message &amp;&amp; message.text) {
+      log.info(message.text);
+    }
+  },
+
+  finalize: function () {
+    var me = this,
+        message;
+
+    message = me.prepareMessage({ key: &quot;sol.dev.install.message.finished&quot;, data: [me.config.install.setupName] });
+    me.log(message);
+
+    me.fileLogger.finalize();
+  },
+
+  getText: function (key) {
+    var me = this;
+    return me.props.getText(key);
+  }
+});
+
+<span id='sol-dev-install-LoggerBase'>/**
+</span> * Logger base class
+ */
+sol.define(&quot;sol.dev.install.LoggerBase&quot;, {
+
+<span id='sol-dev-install-LoggerBase-method-initialize'>  initialize: function (params) {
+</span>    var me = this;
+
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [params]);
+
+    if (!me.config) {
+      throw &quot;Setup configuration is empty&quot;;
+    }
+
+    me.logFileName = &quot;log_install_&quot; + me.config.install.packageName + &quot;_&quot; + me.getCurrentTimeStamp(&quot;yyyyMMddHHmmss&quot;);
+  },
+
+<span id='sol-dev-install-LoggerBase-method-log'>  /**
+</span>   * @abstract
+   */
+  log: function () {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.LoggerBase.log()&#39;&quot;;
+  },
+
+<span id='sol-dev-install-LoggerBase-method-getCurrentTimeStamp'>  /**
+</span>   * @private
+   * Returns a time stamp of the current time
+   * @param {String} format Format of the timestamp.
+   * @return {String}
+   */
+  getCurrentTimeStamp: function (format) {
+    return String(new java.text.SimpleDateFormat(format).format(new java.util.Date()));
+  },
+
+<span id='sol-dev-install-LoggerBase-method-getLogFolderId'>  /**
+</span>   * @private
+   * Determinates the log folder ID
+   * @return {String} Log folder ID
+   */
+  getLogFolderId: function () {
+    var me = this,
+        logFolderId;
+
+    if (me.config.install.packageFolderId) {
+      me.logRepoFolderPath = &quot;ARCPATH[&quot; + me.config.install.packageFolderId + &quot;]:/.eloinst&quot;;
+    } else {
+      me.logRepoFolderPath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{packageFolderPath}}/.eloinst&quot;, me.config.base.repoPathParamObj);
+    }
+    logFolderId = sol.common.RepoUtils.getObjId(me.logRepoFolderPath);
+    return logFolderId;
+  },
+
+<span id='sol-dev-install-LoggerBase-method-finalize'>  /**
+</span>   * @abstract
+   */
+  finalize: function () {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.LoggerBase.execute()&#39;&quot;;
+  }
+});
+
+<span id='sol-dev-install-FileLogger'>/**
+</span> * File logger
+ */
+sol.define(&quot;sol.dev.install.FileLogger&quot;, {
+  extend: &quot;sol.dev.install.LoggerBase&quot;,
+
+<span id='sol-dev-install-FileLogger-cfg-tempDir'>  /**
+</span>   * @cfg {java.io.File} tempDir
+   * Temp directory
+   */
+
+  initialize: function (params) {
+    var me = this;
+
+    me.$super(&quot;sol.dev.install.LoggerBase&quot;, &quot;initialize&quot;, [params]);
+
+    if (!me.tempDir) {
+      throw &quot;Temp directory is empty&quot;;
+    }
+
+    me.logFile = new File(params.tempDir.canonicalPath + File.separator + me.logFileName + &quot;.txt&quot;);
+
+    me.writer = new PrintWriter(new FileWriter(me.logFile), true);
+  },
+
+<span id='sol-dev-install-FileLogger-method-log'>  /**
+</span>   * Writes a message into the log file
+   * @param {Object} message
+   */
+  log: function (message) {
+    var me = this,
+        line;
+
+    message = message || {};
+    line = me.getCurrentTimeStamp(&quot;yyyy-MM-dd HH:mm:ss.SSS&quot;) + &quot;: &quot; + message.text;
+    me.writer.println(line);
+  },
+
+<span id='sol-dev-install-FileLogger-method-finalize'>  /**
+</span>   * Finalize the log file
+   */
+  finalize: function () {
+    var me = this,
+        logFolderId;
+
+    me.writer.close();
+
+    logFolderId = me.getLogFolderId();
+    if (logFolderId) {
+      sol.common.RepoUtils.saveToRepo({ parentId: logFolderId, name: me.logFileName, file: me.logFile });
+    }
+  }
+});
+
+<span id='sol-dev-install-StringLogger'>/**
+</span> * String logger
+ */
+sol.define(&quot;sol.dev.install.StringLogger&quot;, {
+  extend: &quot;sol.dev.install.LoggerBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-initialize'>  initialize: function (params) {
+</span>    var me = this;
+
+    me.$super(&quot;sol.dev.install.LoggerBase&quot;, &quot;initialize&quot;, [params]);
+
+    me.lines = [];
+  },
+
+<span id='sol-dev-install-StringLogger-method-log'>  /**
+</span>   * Writes a message into the log file
+   * @param {Object} message
+   */
+  log: function (message) {
+    var me = this,
+        line;
+
+    message = message || {};
+    line = me.getCurrentTimeStamp(&quot;yyyy-MM-dd HH:mm:ss.SSS&quot;) + &quot;: &quot; + message.text;
+    me.lines.push(line);
+  },
+
+<span id='sol-dev-install-StringLogger-method-finalize'>  /**
+</span>   * Finalize the log file
+   */
+  finalize: function () {
+    var me = this,
+        logFolderId, content;
+
+    content = me.lines.join(&quot;\r\n&quot;);
+    log.debug(content);
+
+    logFolderId = me.getLogFolderId();
+    if (logFolderId) {
+      sol.common.RepoUtils.saveToRepo({
+        parentId: logFolderId,
+        name: me.logFileName,
+        extension: &quot;txt&quot;,
+        contentString: content,
+        withoutBom: true
+      });
+    }
+  }
+});
+
+
+var CURR_INST_FUNC;
+
+sol.define(&quot;sol.dev.install.InstallFunctionBase&quot;, {
+
+<span id='sol-dev-install-StringLogger-cfg-install'>  /**
+</span>   * @cfg {Object} install (required)
+   * Installation configuration
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-result'>  /**
+</span>   * @cfg {Object} result
+   * Output
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-srcDirPath'>  /**
+</span>   * @cfg {String} srcDirPath
+   * Path of the source directory. If the directory doesn&#39;t exist, then the step will be skipped.
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-handlers'>  /**
+</span>   * @cfg {Array} handlers
+   * Installation handlers, e.g. ´sol.dev.install.JcHandler´, ´sol.dev.install.AsHandler´, ´sol.dev.install.IxHandler´ or ´sol.dev.install.ShHandler´
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-config'>  /**
+</span>   * @cfg {Object} config (required)
+   * Configuration
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-config'>  /**
+</span>   * @cfg {Object} config.base
+   * Base configuration
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-config'>  /**
+</span>   * @cfg {Object} config.base.repoPathParamObj
+   * Object that contains data to resolve repository paths
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-config'>  /**
+</span>   * @cfg {Object} config.install Installation configuration
+   */
+
+<span id='sol-dev-install-StringLogger-cfg-config'>  /**
+</span>   * @cfg {Object} config.handler Install handler
+   */
+
+  pilcrow: &quot;\u00b6&quot;,
+
+  initialize: function (params) {
+
+    var me = this;
+    if (me.$className === &quot;sol.dev.install.InstallFunctionBase&quot;) {
+      throw &quot;Can&#39;t create instance of base class &#39;sol.dev.install.InstallFunctionBase&#39;&quot;;
+    }
+
+    if (!params.config) {
+      throw &quot;Configuration must be given&quot;;
+    }
+
+    if (!params.config.install) {
+      throw &quot;Parameter &#39;config.install&#39; must be given&quot;;
+    }
+
+    if (!params.config.base) {
+      throw &quot;Parameter &#39;config.base&#39; must be given&quot;;
+    }
+
+    if (!params.handler) {
+      throw &quot;Parameter &#39;handler&#39; must be given&quot;;
+    }
+
+    if (!params.result) {
+      throw &quot;Parameter &#39;result&#39; must be given&quot;;
+    }
+
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [params]);
+  },
+
+<span id='sol-dev-install-StringLogger-method-check'>  /**
+</span>   * Checks wether the function should run
+   * This function can be overwritten.
+   * @return {Boolean}
+   */
+  check: function () {
+    return true;
+  },
+
+<span id='sol-dev-install-StringLogger-method-process'>  /**
+</span>   * Processes the installation function
+   */
+  process: function () {
+    var me = this;
+
+    if (!me.check()) {
+      return;
+    }
+
+    if (me.srcDirPath) {
+      if (sol.common.FileUtils.exists(me.srcDirPath)) {
+        me.srcDir = new File(me.srcDirPath);
+      } else {
+        return;
+      }
+    }
+
+    if (me.handlers &amp;&amp; (me.handlers.indexOf(me.handler.$className) &lt; 0)) {
+      me.handler.log({ text: &quot;Installation function &#39;&quot; + me.$className + &quot;&#39; skipped.&quot; });
+      return;
+    }
+    me.execute();
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * @abstract
+   */
+  execute: function () {
+    throw &quot;Can&#39;t call abstract method &#39;sol.dev.install.InstallFunctionBase.execute()&#39;&quot;;
+  }
+});
+
+sol.define(&quot;sol.dev.install.mixin.InstallUtils&quot;, {
+  mixin: true,
+
+<span id='sol-dev-install-StringLogger-method-sendHttpRequest'>  /**
+</span>   * Sends a HTTP requests
+   * @param {String} description
+   * @param {String} url
+   * @param {Boolean} post
+   */
+  sendHttpRequest: function (description, url, post) {
+    var me = this,
+        responseObj, logStr,
+        httpRequest = {};
+
+    httpRequest.url = sol.common.HttpUtils.resolveUrl(url);
+    me.handler.log({ text: description + &quot;: &quot; + httpRequest.url, statusBar: true });
+    httpRequest.resolve = false;
+    httpRequest.connectTimeout = 3000;
+    httpRequest.readTimeout = 10000;
+    httpRequest.trustAllHosts = true;
+    httpRequest.trustAllCerts = true;
+    if (post) {
+      httpRequest.method = &quot;post&quot;;
+      httpRequest.contentType = &quot;application/json;charset=UTF-8&quot;;
+      httpRequest.addCookieTicket = true;
+    }
+    responseObj = sol.common.HttpUtils.sendRequest(httpRequest);
+    if (responseObj.exception) {
+      logStr = &quot;exception=&quot; + responseObj.exception;
+    } else {
+      logStr = &quot;responseCode=&quot; + responseObj.responseCode + &quot;, ok=&quot; + responseObj.responseOk;
+    }
+    me.handler.log({ text: logStr });
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckRunningSetup&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  handlers: [&quot;sol.dev.install.JcHandler&quot;],
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks wether another installation is running
+   */
+  execute: function () {
+    var me = this;
+
+    if (globalScope.runningSetup) {
+      me.result.canceled = true;
+      me.result.canceledMessage = me.handler.prepareMessage({ key: &quot;sol.dev.install.message.setupAlreadyRunning&quot;, data: [me.config.install.setupName], statusBar: true });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckJcRequirements&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  handlers: [&quot;sol.dev.install.JcHandler&quot;],
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks the JC requirements of the installation
+   */
+  execute: function () {
+    var me = this,
+        requiredJavaClientVersion;
+
+    requiredJavaClientVersion = me.config.install.requiredJavaClientVersion || &quot;9.03.006&quot;;
+    me.handler.log({ text: &quot;ELO Java Client version: {0}&quot;, data: [String(workspace.clientVersion)] });
+    if (!sol.common.RepoUtils.checkVersion(workspace.clientVersion, requiredJavaClientVersion)) {
+      me.handler.addIssue({
+        title: [{ messageKey: &quot;sol.dev.install.msgHigherJcVersionRequired&quot;, data: [requiredJavaClientVersion] }]
+      });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckIxRequirements&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks the IX requirements of the installation
+   */
+  execute: function () {
+    var me = this,
+        requiredIxVersion, currentIxVersion;
+
+    try {
+      currentIxVersion = ixConnect.version;
+    } catch (ex) {
+      me.handler.addIssue({
+        messages: [{ key: &quot;sol.dev.install.message.cannotDetectIxVersion&quot; }]
+      });
+      return;
+    }
+
+    requiredIxVersion = me.config.install.requiredIxVersion || &quot;9.00.050&quot;;
+    me.handler.log({ text: &quot;IX version: {0}&quot;, data: [String(ixConnect.version)] });
+    if (!sol.common.RepoUtils.checkVersion(currentIxVersion, requiredIxVersion)) {
+      me.handler.addIssue({
+        messages: [{ key: &quot;sol.dev.install.message.higherIxVersionRequired&quot;, data: [requiredIxVersion] }]
+      });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckPermissions&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks the rights
+   */
+  execute: function () {
+    var me = this,
+        permissions, missingPermissions;
+
+    permissions = [&quot;FLAG_ADMIN&quot;, &quot;FLAG_IMPORT&quot;];
+
+    missingPermissions = sol.common.UserUtils.checkCurrentPermissions(permissions);
+
+    if (missingPermissions &amp;&amp; (missingPermissions.length &gt; 0)) {
+      me.handler.addIssue({
+        title: { key: &quot;sol.dev.install.message.missingPermissions&quot; },
+        list: missingPermissions
+      });
+      me.result.fatal = true;
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckPackageAlreadyInstalled&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks wether the package is already installed
+   */
+  execute: function () {
+    var me = this,
+        path, exists;
+
+    path = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{packageFolderPath}}&quot;, me.config.base.repoPathParamObj);
+
+    exists = sol.common.RepoUtils.exists(path);
+    if (exists) {
+      me.handler.addIssue({
+        title: { key: &quot;sol.dev.install.message.packageAlreadyInstalled&quot;, data: [me.config.install.setupName] },
+        details: { key: &quot;sol.dev.install.message.packageAlreadyInstalledDetails&quot; }
+      });
+      me.result.undeploy = true;
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckDocMasksMustNotExist&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.docMasksMustNotExist;
+  },
+
+  execute: function () {
+    var me = this,
+        existingMaskNames = [],
+        i, maskName, exists, maskNamesExists;
+
+    for (i = 0; i &lt; me.config.install.docMasksMustNotExist.length; i++) {
+      maskName = me.config.install.docMasksMustNotExist[i];
+
+      exists = sol.common.SordUtils.docMaskExists(maskName);
+      if (exists) {
+        existingMaskNames.push(maskName);
+        maskNamesExists = true;
+      }
+    }
+
+    if (maskNamesExists) {
+      if (maskNamesExists) {
+        me.handler.addIssue({
+          title: { key: &quot;sol.dev.install.message.masksAlreadyExist&quot; },
+          list: existingMaskNames
+        });
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckRepoPathsMustNotExist&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.repoPathsMustNotExist;
+  },
+
+  execute: function () {
+    var me = this,
+        existingRepoPaths = [],
+        repoPathsExist = false,
+        i, repoPath, exists;
+
+
+    for (i = 0; i &lt; me.config.install.repoPathsMustNotExist.length; i++) {
+      repoPath = me.config.install.repoPathsMustNotExist[i];
+      repoPath = sol.common.RepoUtils.resolveSpecialFolder(repoPath, me.config.base.repoPathParamObj);
+      repoPath = sol.common.RepoUtils.normalizePath(repoPath, true);
+
+      exists = sol.common.RepoUtils.exists(repoPath);
+      if (exists) {
+        existingRepoPaths.push(repoPath);
+        repoPathsExist = true;
+      }
+    }
+
+    if (repoPathsExist) {
+      me.handler.addIssue({
+        title: { key: &quot;sol.dev.install.message.repoPathsAlreadyExist&quot;, list: existingRepoPaths }
+      });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckWfIsRunning&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks wether the ELOwf is running
+   */
+  execute: function () {
+    var me = this,
+        resultObj, url, errorMessage;
+
+    resultObj = sol.common.WfUtils.checkWfIsRunning();
+    if (!resultObj.isRunning) {
+      url = resultObj.url;
+      errorMessage = resultObj.errorMessage || &quot;&quot;;
+      me.handler.addIssue({
+        title: { key: &quot;sol.dev.install.message.wfNotRunning&quot; },
+        details: { key: &quot;sol.dev.install.message.wfUrl&quot;, data: [url, errorMessage] }
+      });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckAsLibs&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  libRepoPaths: [
+    &quot;{{{asBaseFolderPath}}}/JavaScript/ix: IndexServer Functions&quot;,
+    &quot;{{{asBaseFolderPath}}}/JavaScript/fu: File Utils&quot;
+  ],
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Checks wether the ELOas libraries are incorrect or outdated
+   */
+  execute: function () {
+    var me = this,
+        incorrectLibs = [],
+        i, libRepoPath, displayLibRepoPath, incorrect;
+
+    for (i = 0; i &lt; me.libRepoPaths.length; i++) {
+      libRepoPath = sol.common.RepoUtils.resolveSpecialFolder(me.libRepoPaths[i], me.config.base.repoPathParamObj);
+      incorrect = me.isLibIncorrect(libRepoPath);
+      if (incorrect) {
+        displayLibRepoPath = sol.common.StringUtils.replaceAll(libRepoPath, me.pilcrow, &quot;/&quot;);
+        incorrectLibs.push(displayLibRepoPath);
+      }
+    }
+
+    if (incorrectLibs.length &gt; 0) {
+      me.handler.addIssue({
+        title: { key: &quot;sol.dev.install.message.asLibsIncorrect&quot; },
+        list: incorrectLibs
+      });
+    }
+  },
+
+  isLibIncorrect: function (repoPath) {
+    var objId, sord, isFolder, content, remainder,
+        lastCurlyBracketPos, nextChar;
+
+    repoPath = sol.common.RepoUtils.resolveSpecialFolder(repoPath);
+    objId = sol.common.RepoUtils.getObjId(repoPath);
+    if (objId) {
+      sord = sol.common.RepoUtils.getSord(objId, { sordZ: SordC.mbLean });
+      isFolder = sol.common.SordUtils.isFolder(sord);
+      if (isFolder) {
+        return true;
+      }
+      try {
+        content = sol.common.RepoUtils.downloadToString(objId);
+      } catch (ex) {
+        return true;
+      }
+      lastCurlyBracketPos = content.lastIndexOf(&quot;}&quot;);
+      if (lastCurlyBracketPos &gt; -1) {
+        if (content.length &gt; (lastCurlyBracketPos + 1)) {
+          remainder = content.substr(lastCurlyBracketPos + 1).replace(/\s/g, &quot;&quot;);
+          nextChar = remainder.substr(0, 1);
+          if (nextChar == &quot;;&quot;) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ProcessIssues&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Process issues
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.processIssues();
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CheckDocMasks&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Check document masks
+   */
+  execute: function () {
+    var me = this,
+        exportInfo, exportData, exportDataString, diffData, diffDataString;
+
+    me.config.base.importZipFilePath = me.config.base.importZipFilePath || me.handler.payloadDirPath + File.separator + &quot;RepoData.zip&quot;;
+
+    if (me.config.install.expInfoPath) {
+      exportInfo = sol.common.FileUtils.readFileToString(me.config.install.expInfoPath, { encoding: &quot;UTF-16LE&quot; });
+    } else {
+      exportInfo = sol.common.ZipUtils.readFileInZipToString(me.config.base.importZipFilePath, &quot;/ExpInfo.ini&quot;, { encoding: &quot;UTF-16LE&quot; });
+    }
+    exportData = sol.dev.install.RepoDataUtils.exportInfoToObject(exportInfo);
+    me.handler.log({ text: &quot;Check document masks...&quot;, statusBar: true });
+    exportDataString = JSON.stringify(exportData);
+
+    me.handler.log({ text: &quot;Export info: {0}&quot;, data: [exportDataString] });
+
+    diffData = sol.dev.install.RepoDataUtils.compareExportData(exportData);
+
+    me.result.exportInfoDiffs = diffData;
+    diffDataString = JSON.stringify(diffData);
+
+    me.handler.log({ text: &quot;Differences to the export info file: {0}&quot;, data: [diffDataString] });
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.AdjustDocMasks&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Adjust document masks
+   */
+  execute: function () {
+    var me = this,
+        scriptDirPath, textTemplate, textContent, htmlTemplate, lines, applyDiff, i, j, docMaskData, lineData;
+
+    if (me.result.exportInfoDiffs &amp;&amp; (me.result.exportInfoDiffs.docMasks.length &gt; 0)) {
+      me.handler.log({ text: &quot;Adjust document masks...&quot;, statusBar: true });
+
+      me.result.exportInfoDiffs.docMaskDiffs = me.handler.getText(&quot;sol.dev.install.title.docMaskDiffs&quot;);
+      me.result.exportInfoDiffs.adjustDocMasks = me.handler.getText(&quot;sol.dev.install.text.adjustDocMasks&quot;);
+
+      for (i = 0; i &lt; me.result.exportInfoDiffs.docMasks.length; i++) {
+        docMaskData = me.result.exportInfoDiffs.docMasks[i];
+        docMaskData.keyText = me.handler.getText(&quot;sol.dev.install.text.docMask&quot;).replace(&quot;{0}&quot;, docMaskData.key);
+        for (j = 0; j &lt; docMaskData.lines.length; j++) {
+          lineData = docMaskData.lines[j];
+          lineData.keyText = me.handler.getText(&quot;sol.dev.install.text.field&quot;).replace(&quot;{0}&quot;, lineData.key);
+        }
+      }
+
+      scriptDirPath = String(new File(me.handler.payloadDirPath).parent);
+
+      textTemplate = sol.common.FileUtils.readFileToString(scriptDirPath + File.separator + &quot;exportInfoDiffs_text_tpl.txt&quot;);
+      textContent = sol.create(&quot;sol.common.Template&quot;, { source: textTemplate }).apply(me.result.exportInfoDiffs);
+
+      lines = sol.common.StringUtils.splitLines(textContent);
+      lines.forEach(function (line) {
+        me.handler.logMessage({ text: line });
+      });
+
+      htmlTemplate = sol.common.FileUtils.readFileToString(scriptDirPath + File.separator + &quot;exportInfoDiffs_html_tpl.txt&quot;);
+      me.result.exportInfoDiffs.htmlContent = sol.create(&quot;sol.common.Template&quot;, { source: htmlTemplate }).apply(me.result.exportInfoDiffs);
+
+      applyDiff = me.handler.handleExportInfoDiffs();
+      if (applyDiff) {
+        me.applyExportInfoDiffs(me.result.exportInfoDiffs);
+      }
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-applyExportInfoDiffs'>  /**
+</span>   * Applies the export info differences
+   * @param {Object} diffData Export info difference data
+   */
+  applyExportInfoDiffs: function (diffData) {
+    var me = this,
+        i, docMaskDiffData;
+
+    if (!diffData) {
+      throw &quot;Export info difference data is emtpy&quot;;
+    }
+
+    for (i = 0; i &lt; diffData.docMasks.length; i++) {
+      docMaskDiffData = diffData.docMasks[i];
+      me.updateDocMask(docMaskDiffData);
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-updateDocMask'>  /**
+</span>   * Updates a document mask
+   * @param {Object} docMaskDiffData Document mask difference data
+   */
+  updateDocMask: function (docMaskDiffData) {
+    var me = this,
+        docMask, i, lines, docMaskLine, docMaskLineData, docMaskLineDataString;
+
+    me.handler.log({ text: &quot;Update document mask &#39;{0}&#39;...&quot;, data: [docMaskDiffData.key], statusBar: true });
+
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, false);
+    docMask = ixConnect.ix().checkoutDocMask(docMaskDiffData.key, DocMaskC.mbAll, LockC.NO);
+
+    lines = Array.prototype.slice.call(docMask.lines);
+
+    for (i = 0; i &lt; docMaskDiffData.lines.length; i++) {
+      docMaskLineData = docMaskDiffData.lines[i];
+      docMaskLineDataString = JSON.stringify(docMaskLineData);
+
+      me.handler.log({ text: &quot;Create document mask line: docMask={0}, lineKey={1}, data={2}&quot;, data: [docMaskDiffData.key, docMaskLineData.key, docMaskLineDataString] });
+
+      docMaskLine = new DocMaskLine();
+      docMaskLine.id = -1;
+
+      docMaskLine.type = DocMaskLineC._TYPE_TYPE_ID + docMaskLineData.rawDataType;
+      docMaskLine.min = docMaskLineData.minLen;
+      docMaskLine.max = docMaskLineData.maxLen;
+      docMaskLine.name = docMaskLineData.name;
+      docMaskLine.nameTranslationKey = docMaskLineData.nameKey;
+      docMaskLine.key = docMaskLineData.key;
+
+      docMaskLine.onlyBuzzwords = docMaskLineData.onlyKeywordListData;
+      docMaskLine.prefixAsterix = docMaskLineData.prefixAsterix;
+      docMaskLine.postfixAsterix = docMaskLineData.postfixAsterix;
+      docMaskLine.nextTab = docMaskLineData.nextTab;
+      docMaskLine.hidden = docMaskLineData.hidden;
+      docMaskLine.readOnly = docMaskLineData.readOnly;
+      docMaskLine.important = docMaskLineData.important;
+      docMaskLine.version = docMaskLineData.displayOnCheckIn;
+      docMaskLine.translate = docMaskLineData.translateKeywordList;
+      docMaskLine.disableWordWheel = docMaskLineData.disableF7Search;
+      docMaskLine.inherit = docMaskLineData.inheritToChildren;
+      docMaskLine.notTokenized = docMaskLineData.notTokenized;
+      docMaskLine.inheritFromParent = docMaskLineData.inheritFromParent;
+
+      docMaskLine.acl = docMaskLineData.acl;
+      docMaskLine.comment = docMaskLineData.quickInfo;
+      docMaskLine.commentTranslationKey = docMaskLineData.quickInfoKey;
+      docMaskLine.externalData = docMaskLineData.externalData;
+      docMaskLine.defaultValue = docMaskLineData.defaultValue;
+      docMaskLine.tabIndex = docMaskLineData.tabIndex;
+      docMaskLine.serverScriptName = docMaskLineData.script;
+
+      if (sol.common.RepoUtils.checkVersion(ixConnect.clientVersion, &quot;9.00.039.001&quot;)) {
+        docMaskLine.valueArray = docMaskLineData.valueArray;
+      }
+
+      if (sol.common.RepoUtils.checkVersion(ixConnect.clientVersion, &quot;10.00.020.010&quot;)) {
+        docMaskLine.required = docMaskLineData.required;
+      }
+
+      if (sol.common.RepoUtils.checkVersion(ixConnect.clientVersion, &quot;10.00.020.023&quot;)) {
+        docMaskLine.excludeFromISearch = docMaskLineData.excludeFromISearch;
+      }
+
+      lines = me.storeDocMaskLine(lines, docMaskLine);
+    }
+
+    docMask.lines = lines;
+
+    me.handler.log({ text: &quot;Write document mask &#39;{0}&#39;&quot;, data: [docMaskDiffData.key] });
+
+    ixConnect.ix().checkinDocMask(docMask, DocMaskC.mbAll, LockC.NO);
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, true);
+  },
+
+  reservedKeys: [&quot;_RESERVED&quot;, &quot;RESERVED&quot;],
+
+<span id='sol-dev-install-StringLogger-method-storeDocMaskLine'>  /**
+</span>   * Stores a document mask line
+   * @param {de.elo.ix.client.DocMaskLine[]} lines Document mask lines
+   * @param {de.elo.ix.client.DocMaskLine} newLine Document mask line
+   * @return {Array} Document mask lines
+   */
+  storeDocMaskLine: function (lines, newLine) {
+    var me = this,
+        id, maxId = 0,
+        i, docMaskLine;
+
+    for (i = 0; i &lt; lines.length; i++) {
+      docMaskLine = lines[i];
+      id = parseInt(docMaskLine.id, 10);
+      if (id &gt; maxId) {
+        maxId = id;
+      }
+
+      if (me.reservedKeys.indexOf(docMaskLine.key) &gt; -1) {
+        newLine.id = docMaskLine.id;
+        lines[i] = newLine;
+        me.handler.log({ text: &quot;Reuse reserved line: line.id={0}, line.key={1}, newLine.key={2}&quot;, data: [docMaskLine.id, docMaskLine.key, newLine.key] });
+        return lines;
+      }
+    }
+    newLine.id = maxId + 1;
+    if (newLine.id &gt; DocMaskLineC.MAX_ID_DOCMASK_LINE) {
+      me.handler.log({ text: &quot;No more lines available: newLine.key={0}, newLine.id={1}&quot;, data: [newLine.key, newLine.id] });
+      return lines;
+    }
+
+    me.handler.log({ text: &quot;Append new line: newLine.key={0}, newLine.id={1}&quot;, data: [newLine.key, newLine.id] });
+    lines.push(newLine);
+    return lines;
+  }
+});
+
+sol.define(&quot;sol.dev.install.mixin.UndeployUtils&quot;, {
+  mixin: true,
+
+  deleteReferences: function (folderId) {
+    var me = this,
+        sordZ, sords, displayRepoPath;
+
+    sordZ = new SordZ(SordC.mbMin);
+    sordZ.add(SordC.mbRefPaths);
+
+    me.handler.log({ text: &quot;Delete references...&quot;, statusBar: true });
+
+    sords = sol.common.RepoUtils.findChildren(folderId, { includeFolders: true, includeDocuments: true, recursive: true, level: 20, sordZ: sordZ });
+    sords.forEach(function (sord) {
+      displayRepoPath = sol.common.SordUtils.getDisplayRepoPath(sord);
+      me.handler.log({ text: &quot;Delete references: {0}&quot;, data: [displayRepoPath], statusBar: true });
+      sol.common.RepoUtils.deleteAllReferences(sord);
+    });
+  },
+
+  renamePackage: function (packageFolderObjId) {
+    var me = this,
+        sord, oldName, newName, colorId;
+
+    if (!packageFolderObjId) {
+      throw &quot;Package folder object ID is emtpy&quot;;
+    }
+
+    sord = sol.common.RepoUtils.getSord(packageFolderObjId, { sordZ: SordC.mbMin });
+    oldName = sord.name;
+    newName = oldName + &quot; - undeployed - &quot; + me.config.base.timestamp;
+    if (oldName.indexOf(&quot;undeployed&quot;) &gt; -1) {
+      return;
+    }
+
+    me.handler.log({ text: &quot;Rename old package: {0} -&gt; {1}&quot;, data: [oldName, newName] });
+
+    sord.name = newName;
+    colorId = sol.common.RepoUtils.getColorId(&quot;sol.package.undeployed.warn&quot;);
+    if (colorId) {
+      sord.kind = colorId;
+    }
+    ixConnect.ix().checkinSord(sord, SordC.mbMin, LockC.NO);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.UndeployPackage&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.UndeployUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return (me.result.undeploy || me.config.install.undeploy);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Deletes the references
+   */
+  execute: function () {
+    var me = this,
+        packageFolderPath, packageFolderObjId;
+
+    packageFolderPath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{packageFolderPath}}&quot;, me.config.base.repoPathParamObj);
+
+    me.handler.log({ text: &quot;Undeploy package: {0}&quot;, data: [me.config.install.packageName], statusBar: true });
+
+    me.deleteReferences(packageFolderPath, me.config.install.packageName);
+
+    packageFolderObjId = me.config.install.packageFolderId || packageFolderPath;
+
+    me.renamePackage(packageFolderObjId);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.UndeployHotfix&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.UndeployUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return ((me.result.undeploy || me.config.install.undeploy) &amp;&amp; me.config.install.undeployHotfix);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Deletes the references
+   */
+  execute: function () {
+    var me = this,
+        hotfixFolderPath, hotfixSectionName, exists;
+
+    hotfixSectionName = me.config.install.hotfixSectionName || &quot;Business Solutions Hotfix&quot;;
+
+    me.handler.log({ text: &quot;Undeploy hotfix: {0}&quot;, data: [me.config.install.packageName], statusBar: true });
+
+    hotfixFolderPath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{administrationFolderPath}}&quot; + me.pilcrow + hotfixSectionName + me.pilcrow + me.config.install.packageName, me.config.base.repoPathParamObj);
+
+    exists = sol.common.RepoUtils.exists(hotfixFolderPath);
+    if (!exists) {
+      return;
+    }
+
+    me.deleteReferences(hotfixFolderPath, me.config.install.packageName);
+    me.renamePackage(hotfixFolderPath);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.DeployRenamePackage&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return (me.config.install.deploy);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Renames the existing package
+   */
+  execute: function () {
+    var me = this,
+        sord, oldName, newName;
+
+    if (!me.config.install.packageFolderId) {
+      throw &quot;Package folder ID is empty&quot;;
+    }
+
+    sord = sol.common.RepoUtils.getSord(me.config.install.packageFolderId, { sordZ: SordC.mbMin });
+    oldName = sord.name;
+    newName = me.config.install.packageName;
+
+    me.handler.log({ text: &quot;Rename  package: {0} -&gt; {1}&quot;, data: [oldName, newName] });
+    sord.name = newName;
+    sord.kind = 0;
+
+    ixConnect.ix().checkinSord(sord, SordC.mbMin, LockC.NO);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ReassignGuids&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  guids: [
+    &quot;(9FD1AC0B-8744-6326-2EFD-FCC6E32DE515)&quot;,
+    &quot;(F4CFD23F-5745-367A-FFA1-78E0C19116D8)&quot;,
+    &quot;(DFD14BA1-4AC0-36E3-89CE-3CF322E3D607)&quot;,
+    &quot;(B7E96A85-0C63-B6AD-42E5-BA9F0018F01F)&quot;,
+    &quot;(AD913CFE-BBF2-3D89-48C3-3F156D497BFD)&quot;
+  ],
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.reassignGuids;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Reassign GUIDs
+   */
+  execute: function () {
+    var me = this,
+        i, guid;
+
+    me.handler.log({ text: &quot;Reassign GUIDs...&quot;, statusBar: true });
+
+    for (i = 0; i &lt; me.guids.length; i++) {
+      guid = me.guids[i];
+      me.reassignGuid(guid);
+    }
+  },
+
+  reassignGuid: function (guid) {
+    var me = this,
+        sord, isDocument, parentSord, exceptionString;
+
+    try {
+      sord = sol.common.RepoUtils.getSord(guid, { sordZ: SordC.mbMin });
+    } catch (ex) {
+      return;
+    }
+    isDocument = sol.common.SordUtils.isDocument(sord);
+    if (!isDocument) {
+      return;
+    }
+
+    parentSord = sol.common.RepoUtils.getSord(sord.parentId, { sordZ: SordC.mbMin });
+    if (parentSord.name != &quot;Workflow Icons&quot;) {
+      return;
+    }
+
+    me.handler.log({ text: &quot;Reassign GUID: guid=&quot; + sord.guid + &quot;, name=&quot; + sord.name, statusBar: true });
+
+    if (!sord.deleted) {
+      me.handler.log({ text: &quot;Copy sord: guid=&quot; + sord.guid + &quot;, name=&quot; + sord.name });
+      sol.common.RepoUtils.copySords(sord.id, parentSord.id);
+    }
+
+    me.handler.log({ text: &quot;Delete finally: guid=&quot; + sord.guid + &quot;, name=&quot; + sord.name });
+    try {
+      sol.common.RepoUtils.deleteSord(sord.guid, { deleteFinally: true });
+    } catch (ex) {
+      exceptionString = sol.common.ExceptionUtils.parseException(ex);
+      me.handler.log({ text: &quot;Can&#39;t delete sord to reassign GUID: guid=&quot; + sord.guid + &quot;, name=&quot; + sord.name + &quot;, exception=&quot; + exceptionString });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ImportRepoData&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Imports the repository data
+   */
+  execute: function () {
+    var me = this;
+
+    me.config.base.importZipFilePath = me.config.base.importZipFilePath || me.handler.payloadDirPath + File.separator + &quot;RepoData.zip&quot;;
+
+    me.handler.log({ text: &quot;Import repository data: &quot; + me.config.base.importZipFilePath, statusBar: true });
+
+    if (me.config.install.importDestinationFolderPath) {
+      me.config.install.importDestinationFolderPath = sol.common.RepoUtils.resolveSpecialFolder(me.config.install.importDestinationFolderPath, me.config.base.repoPathParamObj);
+    } else {
+      me.config.install.importDestinationFolderPath = &quot;&quot;;
+    }
+
+    sol.common.WfUtils.setSessionOptionStartDocMaskWorkflows(false);
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, false);
+
+    sol.common.RepoUtils.importRepoData(new File(me.config.base.importZipFilePath), me.config.install.importDestinationFolderPath, ImportOptionsC.GUIDS_KEEP, ImportOptionsC.IMPORT_KEYWORDS);
+
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, true);
+    sol.common.WfUtils.setSessionOptionStartDocMaskWorkflows(true);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.AdjustDocMaskRights&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Imports the repository data
+   */
+  execute: function () {
+    var me = this,
+        docMaskNames, docMaskName, i, docMask, inheritAclItem;
+
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, false);
+    docMaskNames = sol.common.SordUtils.getDocMaskNames({ filters: { nameTranslationKeyPrefix: &quot;sol.&quot; } });
+
+    inheritAclItem = new AclItem();
+    inheritAclItem.type = AclItemC.TYPE_INHERIT;
+
+    for (i = 0; i &lt; docMaskNames.length; i++) {
+      docMaskName = docMaskNames[i];
+
+      docMask = ixConnect.ix().checkoutDocMask(docMaskName.id, DocMaskC.mbAll, LockC.NO);
+      if ((docMask.docAclItems.length == 1) &amp;&amp; (docMask.docAclItems[0].id == UserInfoC.ID_EVERYONE_GROUP)) {
+        docMask.docAclItems = [inheritAclItem];
+        me.handler.log({ text: &quot;Adjust document rights: docMaskName={0}, nameTranslationKey={1}&quot;, data: [docMask.name, docMask.nameTranslationKey] });
+        ixConnect.ix().checkinDocMask(docMask, DocMaskC.mbAll, LockC.NO);
+
+      }
+    }
+    sol.common.RepoUtils.setSessionOption(SessionOptionsC.TRANSLATE_TERMS, true);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.PrepareRepoPaths&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.repoPaths;
+  },
+
+  execute: function () {
+    var me = this,
+        path;
+    me.handler.log({ text: &quot;Prepare repository paths...&quot;, statusBar: true });
+    me.config.install.repoPaths.forEach(function (repoPathSet) {
+      path = sol.common.RepoUtils.resolveSpecialFolder(repoPathSet.path, me.config.base.repoPathParamObj);
+      me.handler.log({ text: &quot;Prepare repository path: path={0}, rights={1}&quot;, data: [path, JSON.stringify(repoPathSet.rightsConfig)] });
+      sol.common.RepoUtils.preparePath(path, { rightsConfig: repoPathSet.rightsConfig });
+    });
+  }
+});
+
+sol.define(&quot;sol.dev.install.mixin.RefUtils&quot;, {
+  mixin: true,
+
+  refPrioSectionOrder: [&quot;Business Solutions&quot;, &quot;Business Solutions Hotfix&quot;, &quot;Other&quot;, &quot;Business Solutions Custom&quot;, &quot;Original&quot;],
+
+<span id='sol-dev-install-StringLogger-method-refDocument'>  /**
+</span>   * Reference document
+   * @param {de.elo.ix.client.Sord} srcSord Source sord
+   * @param {String} dstFolderId Destination folder ID
+   */
+  refDocument: function (srcSord, dstFolderId) {
+    var me = this,
+        srcDisplayPath, srcObjId, dstFolderDisplayPath, name, dstDisplayPath,
+        dstChildEntry, srcSectionName, srcSectionPrio, dstSectionPrio;
+
+    me.refPrioSectionOrder = me.config.install.refPrioSectionOrder || me.refPrioSectionOrder;
+
+    me.dstFolderChildrenCache = me.dstFolderChildrenCache || {};
+    if (!me.dstFolderChildrenCache[dstFolderId]) {
+      me.addDstChildrenToCache(dstFolderId);
+    }
+
+    name = srcSord.name + &quot;&quot;;
+
+    me.displayPathCache = me.displayPathCache || {};
+    dstFolderDisplayPath = me.displayPathCache[dstFolderId];
+    if (!dstFolderDisplayPath) {
+      dstFolderDisplayPath = sol.common.RepoUtils.getPathFromObjId(dstFolderId);
+      me.displayPathCache[dstFolderId] = dstFolderDisplayPath;
+    }
+    srcObjId = srcSord.id + &quot;&quot;;
+    srcDisplayPath = me.displayPathCache[srcObjId];
+    if (!srcDisplayPath) {
+      srcDisplayPath = sol.common.SordUtils.getDisplayRepoPath(srcSord);
+      me.displayPathCache[srcObjId] = srcDisplayPath;
+    }
+
+    dstDisplayPath = dstFolderDisplayPath + &quot;/&quot; + name;
+
+    dstChildEntry = me.getDstChildEntryFromCache(dstFolderId, name);
+
+    if (dstChildEntry) {
+      srcSectionName = me.getSectionName(dstFolderId, srcSord);
+      srcSectionPrio = me.getSectionPrio(srcSectionName);
+      dstSectionPrio = me.getSectionPrio(dstChildEntry.srcSectionName);
+
+      me.handler.log({ text: &quot;Entry name already exists in the destination folder: &quot; + dstDisplayPath });
+
+      if (srcSectionPrio &lt;= dstSectionPrio) {
+        me.handler.log({ text: &quot;Source section priority &#39;&quot; + srcSectionName + &quot;&#39; &lt;= Destination section priority &#39;&quot; + dstChildEntry.srcSectionName + &quot;&#39; -&gt; Skip creating reference: &quot; + dstDisplayPath });
+        return;
+      } else {
+        if (dstChildEntry.parentId != dstFolderId) {
+          me.handler.log({ text: &quot;Source section priority &#39;&quot; + srcSectionName + &quot;&#39; &gt; Destination section priority &#39;&quot; + dstChildEntry.srcSectionName + &quot;&#39; -&gt; Delete existing reference: &quot; + dstDisplayPath });
+          ixConnect.ix().deleteSord(dstFolderId, dstChildEntry.objId, LockC.NO, new DeleteOptions());
+          me.markUnreferencedSrcSord(dstChildEntry.objId);
+        }
+      }
+    }
+
+    srcDisplayPath = sol.common.SordUtils.getDisplayRepoPath(srcSord);
+    me.handler.log({ text: &quot;Create reference: &quot; + srcDisplayPath + &quot; -&gt; &quot; + dstFolderDisplayPath, statusBar: true });
+    ixConnect.ix().refSord(&quot;&quot;, dstFolderId, srcSord.id, -1);
+    me.addDstChildToCache(dstFolderId, srcSord);
+  },
+
+<span id='sol-dev-install-StringLogger-method-addDstChildrenToCache'>  /**
+</span>   * Adds the destination children names to the cache
+   * @param {String} dstFolderId Destination folder ID
+   */
+  addDstChildrenToCache: function (dstFolderId) {
+    var me = this,
+        sordZ, children;
+
+    sordZ = new SordZ(SordC.mbMin);
+    sordZ.add(SordC.mbRefPaths);
+
+    children = sol.common.RepoUtils.findChildren(dstFolderId, { recursive: false, level: 1, includeDocuments: true, includeReferences: true, sordZ: sordZ });
+    children.forEach(function (child) {
+      me.addDstChildToCache(dstFolderId, child);
+    });
+  },
+
+<span id='sol-dev-install-StringLogger-method-addDstChildToCache'>  /**
+</span>   * Adds a destination child name to the cache
+   * @param {String} dstFolderId Destination folder ID
+   * @param {de.elo.ix.client.Sord} child Child
+   */
+  addDstChildToCache: function (dstFolderId, child) {
+    var me = this,
+        childName, srcSectionName, childObjId, childParentId;
+    childName = child.name + &quot;&quot;;
+    me.dstFolderChildrenCache = me.dstFolderChildrenCache || {};
+    me.dstFolderChildrenCache[dstFolderId] = me.dstFolderChildrenCache[dstFolderId] || {};
+    srcSectionName = me.getSectionName(dstFolderId, child);
+    childObjId = child.id + &quot;&quot;;
+    childParentId = child.parentId + &quot;&quot;;
+    me.dstFolderChildrenCache[dstFolderId][childName] = { objId: childObjId, srcSectionName: srcSectionName, parentId: childParentId };
+  },
+
+<span id='sol-dev-install-StringLogger-method-getSectionName'>  /**
+</span>   * Returns the package name
+   * @param {String} dstFolderId Destination folder ID
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @return {String} Package name
+   */
+  getSectionName: function (dstFolderId, sord) {
+    var me = this,
+        sectionNameIndex = 1,
+        sectionName = &quot;Other&quot;,
+        repoPathParts;
+
+    if (dstFolderId == sord.parentId) {
+      return &quot;Original&quot;;
+    }
+
+    if (!sord.refPaths || (sord.refPaths.length == 0)) {
+      me.handler.log({ text: &quot;Can&#39;t detect section name: Refpaths are empty: sord.id=&quot; + sord.id + &quot;, sord.name=&quot; + sord.name });
+      return sectionName;
+    }
+
+    if (!sord.refPaths[0].path || (sord.refPaths[0].path.length &lt;= sectionNameIndex)) {
+      return sectionName;
+    }
+
+    repoPathParts = sord.refPaths[0].path;
+    sectionName = repoPathParts[sectionNameIndex].name + &quot;&quot;;
+
+    sectionName = (me.refPrioSectionOrder.indexOf(sectionName) &gt; -1) ? sectionName : &quot;Other&quot;;
+
+    return sectionName;
+  },
+
+  getSectionPrio: function (sectionName) {
+    var me = this,
+        index;
+    index = me.refPrioSectionOrder.indexOf(sectionName);
+    return index;
+  },
+
+<span id='sol-dev-install-StringLogger-method-getDstChildEntryFromCache'>  /**
+</span>   * Checks whether the name exists in the destination child name cache
+   * @param {String} dstFolderId Destination folder ID
+   * @param {String} childName Destionation child name
+   * @return {Boolean}
+   */
+  getDstChildEntryFromCache: function (dstFolderId, childName) {
+    var me = this,
+        exists;
+    exists = (!!me.dstFolderChildrenCache &amp;&amp; !!me.dstFolderChildrenCache[dstFolderId] &amp;&amp; !!me.dstFolderChildrenCache[dstFolderId][childName]);
+    if (exists) {
+      return me.dstFolderChildrenCache[dstFolderId][childName];
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-markUnreferencedSrcSord'>  /**
+</span>   * Marks unreferenced source Sords
+   * @param {String} objId
+   */
+  markUnreferencedSrcSord: function (objId) {
+    var me = this,
+        srcSord;
+
+    srcSord = ixConnect.ix().checkoutSord(objId, new SordZ(SordC.mbRefPaths), LockC.NO);
+
+    if (srcSord.refPaths.length &gt; 1) {
+      return;
+    }
+
+    me.colorDisabled = me.colorDisabled || sol.common.RepoUtils.getColorId(&quot;sol.common.disabled&quot;);
+    srcSord.kind = me.colorDisabled;
+    ixConnect.ix().checkinSord(srcSord, new SordZ(ObjDataC.mbKind), LockC.NO);
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CreateChildrenReferences&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.RefUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.refChildren;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Creates references of documents which are located in specified folders
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.log({ text: &quot;Create children references...&quot;, statusBar: true });
+    me.config.install.refChildren.forEach(function (refChildrenEntry) {
+      me.processReferenceChildrenEntry(refChildrenEntry);
+    });
+  },
+
+<span id='sol-dev-install-StringLogger-method-processReferenceChildrenEntry'>  /**
+</span>   * @private
+   * * Processes the repository references of a single source folder
+   * @param {Object} refChildrenEntry
+   */
+  processReferenceChildrenEntry: function (refChildrenEntry) {
+    var me = this,
+        srcPath, startFolder, findConfig, children;
+    srcPath = sol.common.RepoUtils.resolveSpecialFolder(refChildrenEntry.source, me.config.base.repoPathParamObj);
+    srcPath = sol.common.RepoUtils.normalizePath(srcPath, true);
+    try {
+      startFolder = ixConnect.ix().checkoutSord(srcPath, EditInfoC.mbSord, LockC.NO).sord;
+    } catch (e) {
+      me.handler.log({ text: &quot;Source path not found: &quot; + srcPath, statusBar: true });
+      return;
+    }
+
+    if (refChildrenEntry.refFolders) {
+      findConfig = { recursive: false, level: 1, includeDocuments: false, includeFolders: true };
+    } else {
+      findConfig = { recursive: true, level: 10, includeDocuments: true, includeFolders: false };
+    }
+
+    children = sol.common.RepoUtils.findChildren(startFolder.id, findConfig);
+    children.forEach(function (child) {
+      if ((refChildrenEntry.exclude) &amp;&amp; (refChildrenEntry.exclude.indexOf(String(child.name)) &gt; -1)) {
+        return;
+      }
+      me.processReferenceChild(startFolder, child, refChildrenEntry);
+    });
+  },
+
+<span id='sol-dev-install-StringLogger-method-processReferenceChild'>  /**
+</span>   * @private
+   * Builds the destination repository paths of a reference and creates them
+   * @param {de.elo.ix.client.Sord} startFolder
+   * @param {de.elo.ix.client.Sord} child
+   * @param {Object} refChildrenEntry
+   */
+  processReferenceChild: function (startFolder, child, refChildrenEntry) {
+    var me = this,
+        i, j, dstFolderPathParts, dstFolderPath, childPathParts,
+        destinations, startFolderPathPartsLen, dstFolderId;
+    destinations = refChildrenEntry.destinations;
+    startFolderPathPartsLen = startFolder.refPaths[0].path.length;
+    for (i = 0; i &lt; destinations.length; i++) {
+      dstFolderPathParts = [sol.common.RepoUtils.resolveSpecialFolder(destinations[i], me.config.base.repoPathParamObj)];
+      childPathParts = child.refPaths[0].path;
+      if (!refChildrenEntry.ignoreSubfolders) {
+        for (j = startFolderPathPartsLen + 1; j &lt; childPathParts.length; j++) {
+          dstFolderPathParts.push(childPathParts[j].name);
+        }
+      }
+      dstFolderPath = dstFolderPathParts.join(me.pilcrow);
+
+      dstFolderId = sol.common.RepoUtils.preparePath(dstFolderPath);
+      me.refDocument(child, dstFolderId);
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CreateSingleReferences&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.RefUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.ref;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Creates references of defined documents and folders
+   */
+  execute: function () {
+    var me = this;
+    me.handler.log({ text: &quot;Create single references...&quot;, statusBar: true });
+    me.config.install.ref.forEach(function (refEntry) {
+      me.processRefEntry(refEntry);
+    });
+  },
+
+<span id='sol-dev-install-StringLogger-method-processRefEntry'>  /**
+</span>   * @private
+   * Processes the creation of a single reference
+   * @param {Object} refEntry
+   */
+  processRefEntry: function (refEntry) {
+    var me = this,
+        srcPath, srcObjId, sordZ, srcSord, dstFolderId;
+
+    srcPath = sol.common.RepoUtils.resolveSpecialFolder(refEntry.source, me.config.base.repoPathParamObj),
+    srcObjId = sol.common.RepoUtils.getObjId(srcPath);
+
+    if (!srcObjId) {
+      me.handler.log({ text: &quot;Source repository path not found: &quot; + srcPath, statusBar: true });
+      return;
+    }
+
+    sordZ = new SordZ(SordC.mbMin);
+    sordZ.add(SordC.mbRefPaths);
+    srcSord = ixConnect.ix().checkoutSord(srcObjId, sordZ, LockC.NO);
+
+    refEntry.destinations.forEach(function (destination) {
+      destination = sol.common.RepoUtils.resolveSpecialFolder(destination, me.config.base.repoPathParamObj);
+      dstFolderId = sol.common.RepoUtils.preparePath(destination);
+
+      me.refDocument(srcSord, dstFolderId);
+    });
+
+    me.markUnreferencedSrcSord(srcSord.id);
+  }
+});
+
+
+sol.define(&quot;sol.dev.install.functions.CreateUsers&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.users;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Creates new user
+   */
+  execute: function () {
+    var me = this;
+    me.handler.log({ text: &quot;Create users...&quot;, statusBar: true });
+    me.config.install.users.forEach(function (user) {
+      var result;
+      if (user.type) {
+        user.type = user.type.toLowerCase();
+      } else {
+        user.type = &quot;user&quot;;
+      }
+      result = sol.common.UserUtils.createUser(user.name, user);
+      if (result != undefined) {
+        me.handler.log({ text: &quot;User/Group &#39;&quot; + user.name + &quot;&#39; created.&quot;, statusBar: true });
+      }
+    });
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.AddMemberships&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.memberships;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Adds memberships to users or groups
+   */
+  execute: function () {
+    var me = this,
+        i, membership;
+    me.handler.log({ text: &quot;Add memberships...&quot;, statusBar: true });
+    for (i = 0; i &lt; me.config.install.memberships.length; i++) {
+      membership = me.config.install.memberships[i];
+      try {
+        sol.common.UserUtils.addUsersToGroups(membership.names, membership.memberOf);
+        me.handler.log({ text: &quot;Add users/groups &quot; + membership.names + &quot; added to group(s): &quot; + membership.memberOf, statusBar: true });
+      } catch (ex) {
+        me.handler.log({ text: &quot;Can&#39;t add users/groups &quot; + membership.names + &quot; to group(s): &quot; + membership.memberOf + &quot;: &quot; + ex, statusBar: true });
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CreateColors&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.colors;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Creates the specified colors
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.log({ text: &quot;Create colors...&quot;, statusBar: true });
+    sol.common.RepoUtils.addColors(me.config.install.colors);
+  }
+});
+
+sol.define(&quot;sol.dev.install.mixin.WorkflowUtils&quot;, {
+  mixin: true,
+
+  prepareWorkflowTemplates: function () {
+    var me = this,
+        workflowTemplateFiles, i, workflowTemplateFile, templateName;
+
+    me.workflowTemplatesDirPath = me.handler.payloadDirPath + File.separator + &quot;workflowTemplates&quot;;
+    me.workflowTemplatesDir = new File(me.workflowTemplatesDirPath);
+
+    me.workflowTemplateNames = me.config.build.workflowTemplates || [];
+
+    if (me.workflowTemplateNames.length == 0) {
+      workflowTemplateFiles = me.workflowTemplatesDir.listFiles();
+
+      if (workflowTemplateFiles) {
+        for (i = 0; i &lt; workflowTemplateFiles.length; i++) {
+          workflowTemplateFile = workflowTemplateFiles[i];
+          templateName = sol.common.FileUtils.removeExtension(workflowTemplateFile.name);
+          me.workflowTemplateNames.push(templateName);
+        }
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.RenameWorkflowTemplates&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.WorkflowUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.prepareWorkflowTemplates();
+  },
+
+  check: function () {
+    var me = this;
+
+    return (me.workflowTemplateNames.length &gt; 0);
+  },
+
+  workflowTimestampSeparator: &quot; | &quot;,
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Renames workflow templates
+   */
+  execute: function () {
+    var me = this,
+        result;
+
+    me.handler.log({ text: &quot;Rename existing workflow templates...&quot;, statusBar: true });
+
+    me.workflowTemplateNames.forEach(function (workflowTemplateName) {
+      var newWorkflowTemplateName;
+      newWorkflowTemplateName = workflowTemplateName + me.workflowTimestampSeparator + me.config.base.timestamp;
+      result = sol.common.WfUtils.renameWorkflowTemplate(workflowTemplateName, newWorkflowTemplateName);
+      if (result) {
+        me.handler.log({ text: &quot;Workflow template renamed: &#39;&quot; + workflowTemplateName + &quot;&#39; -&gt; &#39;&quot; + newWorkflowTemplateName + &quot;&#39;&quot;, statusBar: true });
+      }
+    });
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CreateWorkflowTemplates&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.WorkflowUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.prepareWorkflowTemplates();
+  },
+
+  check: function () {
+    var me = this;
+
+    return (me.workflowTemplateNames.length &gt; 0);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Creates workflow templates
+   */
+  execute: function () {
+    var me = this,
+        workflowTemplateName, i, workflowTemplatePath, workflowTemplateFile, workflowJsonContent, exceptionString;
+
+    me.handler.log({ text: &quot;Import workflow templates...&quot;, statusBar: true });
+
+    for (i = 0; i &lt; me.workflowTemplateNames.length; i++) {
+      try {
+        workflowTemplateName = me.workflowTemplateNames[i];
+        workflowTemplatePath = me.workflowTemplatesDirPath + File.separator + workflowTemplateName + &quot;.json&quot;;
+        workflowTemplateFile = new File(workflowTemplatePath);
+        workflowJsonContent = sol.common.FileUtils.readFileToString(workflowTemplatePath);
+        workflowTemplateName = sol.common.WfUtils.getWfNameFromJson(workflowJsonContent);
+        sol.common.WfUtils.importWorkflow(workflowTemplateName, workflowTemplateFile, { replaceSubTemplateNames: true });
+      } catch (ex) {
+        exceptionString = sol.common.ExceptionUtils.parseException(ex);
+        throw &quot;Can&#39;t import workflow &#39;&quot; + workflowTemplateName + &quot;&#39; :&quot; + exceptionString;
+      }
+      me.handler.log({ text: &quot;Workflow template &#39;&quot; + workflowTemplateName + &quot;&#39; imported.&quot;, statusBar: true });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.MergeWorkflowTemplates&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.WorkflowUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.prepareWorkflowTemplates();
+  },
+
+  check: function () {
+    var me = this,
+        currentIxVersion;
+
+    currentIxVersion = ixConnect.version;
+
+    if (!sol.common.RepoUtils.checkVersion(currentIxVersion, me.config.install.mergeWorkflowTemplatesStartingIxVersion)) {
+      return false;
+    }
+
+    return ((me.workflowTemplateNames.length &gt; 0) || !!me.config.install.mergeAdditionalWorkflowTemplates);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Merges workflow templates
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.log({ text: &quot;Merges workflow templates...&quot;, statusBar: true });
+
+    if (me.config.install.mergeAdditionalWorkflowTemplates &amp;&amp; (me.config.install.mergeAdditionalWorkflowTemplates.length &gt; 0)) {
+      me.workflowTemplateNames = me.workflowTemplateNames.concat(me.config.install.mergeAdditionalWorkflowTemplates);
+    }
+
+    me.workflowTemplateNames.forEach(function (workflowTemplateName) {
+      var mergedTemplateName;
+      mergedTemplateName = sol.common.WfUtils.mergeWorkflowTemplate(workflowTemplateName);
+      if (mergedTemplateName) {
+        me.handler.log({ text: &quot;Workflow template &#39;&quot; + mergedTemplateName + &quot;&#39; merged.&quot;, statusBar: true });
+      }
+    });
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.CreateSordTypes&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sordTypesDir = new File(me.handler.payloadDirPath + File.separator + &quot;Sord types&quot;);
+  },
+
+  check: function () {
+    var me = this;
+    return me.sordTypesDir.exists();
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * @private
+   * Creates sord types
+   */
+  execute: function () {
+    var me = this,
+        sordTypeDirs, i, sordTypeDir;
+
+    me.handler.log({ text: &quot;Create sord types...&quot;, statusBar: true });
+
+    sordTypeDirs = me.sordTypesDir.listFiles();
+    for (i = 0; i &lt; sordTypeDirs.length; i++) {
+      sordTypeDir = sordTypeDirs[i];
+      me.processCreateSordType(sordTypeDir);
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-processCreateSordType'>  /**
+</span>   * @private
+   * Processes the creation of a sord type
+   * @param {java.io.File} sordTypeDir
+   */
+  processCreateSordType: function (sordTypeDir) {
+    var me = this,
+        sordTypeDirPath,
+        configFilePath, config, result, exceptionString;
+
+    sordTypeDirPath = sordTypeDir.absolutePath;
+    configFilePath = sordTypeDirPath + File.separator + &quot;config.json&quot;;
+    config = sol.common.FileUtils.readConfig(configFilePath);
+
+    try {
+      result = sol.common.SordTypeUtils.createSordType(config.id, config.name, config.kind,
+        [
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Icon.ico&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Icon.bmp&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Icon.jpg&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Icon.png&quot;)
+        ],
+        [
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Disabled icon.ico&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Disabled icon.bmp&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Disabled icon.jpg&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Disabled icon.png&quot;)
+        ],
+        [
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Link icon.ico&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Link icon.bmp&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Link icon.jpg&quot;),
+          sol.common.FileUtils.loadToFileData(sordTypeDir + File.separator + &quot;Link icon.png&quot;)
+        ],
+        config.extensions);
+      if (result) {
+        me.handler.log({ text: &quot;Sord type &#39;&quot; + config.name + &quot;&#39; created.&quot;, statusBar: true });
+      }
+    } catch (ex) {
+      exceptionString = sol.common.ExceptionUtils.parseException(ex);
+      me.handler.log({ text: &quot;Can&#39;t create sord type: sordType=&quot; + config.name + &quot;, exception=&quot; + exceptionString });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.AssignSordTypes&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.setSordTypes;
+  },
+
+  execute: function () {
+    var me = this,
+        sordTypeSet, objId, i, exceptionString;
+
+    me.handler.log({ text: &quot;Set sord types...&quot;, statusBar: true });
+    for (i = 0; i &lt; me.config.install.setSordTypes.length; i++) {
+      sordTypeSet = me.config.install.setSordTypes[i];
+      try {
+        objId = sol.common.RepoUtils.resolveSpecialFolder(sordTypeSet.path, me.config.base.repoPathParamObj);
+        sol.common.SordTypeUtils.setSordType(objId, sordTypeSet.name);
+      } catch (ex) {
+        exceptionString = sol.common.ExceptionUtils.parseException(ex);
+        me.handler.log({ text: &quot;Can&#39;t set sord type: objId=&quot; + objId + &quot;, sordType=&quot; + sordTypeSet.name + &quot;, exception=&quot; + exceptionString });
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.DeleteObjects&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.deleteSords;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Delete sords
+   */
+  execute: function () {
+    var me = this,
+        i, repoPath, sord, displayRepoPath;
+
+    me.handler.log({ text: &quot;Delete objects...&quot;, statusBar: true });
+    for (i = 0; i &lt; me.config.install.deleteSords.length; i++) {
+      sord = me.config.install.deleteSords[i];
+      repoPath = sol.common.RepoUtils.resolveSpecialFolder(sord, me.config.base.repoPathParamObj);
+      repoPath = sol.common.RepoUtils.normalizePath(repoPath, true);
+      if (sol.common.RepoUtils.exists(repoPath)) {
+        displayRepoPath = sol.common.RepoUtils.getPathFromObjId(repoPath);
+        me.handler.log({ text: &quot;Delete object: &quot; + displayRepoPath, statusBar: true });
+        sol.common.RepoUtils.deleteSord(repoPath, { deleteFinally: true });
+      }
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.SetPreviewForms&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.previewForms;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Adds preview forms
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.log({ text: &quot;Set preview forms...&quot;, statusBar: true });
+    me.readPreviewForms();
+    me.config.install.previewForms.forEach(function (previewFormSet) {
+      me.processPreviewFormSet(previewFormSet);
+    });
+    me.writePreviewForms();
+  },
+
+  pilcrow: &quot;\u00b6&quot;,
+  maskFormsKey: &quot;ELOwf.maskforms&quot;,
+
+<span id='sol-dev-install-StringLogger-method-readPreviewForms'>  /**
+</span>   * @private
+   * Read preview forms
+   */
+  readPreviewForms: function () {
+    var me = this,
+        entries, value, entryParts, i, maskKey, form;
+
+    me.previewForms = {};
+    me.userProfile = sol.create(&quot;sol.common.UserProfile&quot;, { userId: UserProfileC.USERID_ALL });
+    value = me.userProfile.getOption(me.maskFormsKey);
+    entries = value.split(me.pilcrow);
+    for (i = 0; i &lt; entries.length; i++) {
+      entryParts = entries[i].split(&quot;:&quot;);
+      if ((entryParts.length &lt; 2) || (entryParts[0].length &lt; 2)) {
+        continue;
+      }
+      maskKey = entryParts[0];
+      form = entryParts[1];
+      if (maskKey.charAt(0) != &quot;(&quot;) {
+        maskKey = sol.common.SordUtils.getDocMaskGuid(maskKey);
+      }
+      me.previewForms[maskKey] = form;
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-processPreviewFormSet'>  /**
+</span>   * @private
+   * Processes the setting of a preview form
+   * @param {Object} previewFormSet
+   */
+  processPreviewFormSet: function (previewFormSet) {
+    var me = this,
+        maskGuid;
+
+    maskGuid = sol.common.SordUtils.getDocMaskGuid(previewFormSet.mask);
+
+    if (!maskGuid) {
+      me.handler.log({ text: &quot;Mask &#39;{0}&#39; not found.&quot;, data: [previewFormSet.mask] });
+      return;
+    }
+
+    me.previewForms[maskGuid] = previewFormSet.form;
+    me.handler.log({ text: &quot;Set preview form for mask &#39;{0}&#39; {1}: {2}&quot;, data: [previewFormSet.mask, maskGuid, previewFormSet.form] });
+  },
+
+  writePreviewForms: function () {
+    var me = this,
+        entries = [],
+        key, optValue;
+
+    for (key in me.previewForms) {
+      entries.push(key + &quot;:&quot; + me.previewForms[key]);
+    }
+
+    optValue = entries.join(me.pilcrow);
+    me.handler.log({ text: &quot;Write global profile option &#39;{0}&#39;: {1}&quot;, data: [me.maskFormsKey, optValue] });
+    me.userProfile.setOption(me.maskFormsKey, entries.join(me.pilcrow));
+    me.userProfile.write();
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.SetProfileOpts&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.profileOpts;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Adds preview forms
+   */
+  execute: function () {
+    var me = this;
+
+    me.handler.log({ text: &quot;Set profile options...&quot;, statusBar: true });
+
+    me.config.install.profileOpts.forEach(function (profileOptsEntry) {
+      me.processProfileOptsEntry(profileOptsEntry);
+    });
+  },
+
+  previewKey: &quot;EloJ.S.PreviewMappingModel&quot;,
+
+  MAXIMIZED_BOTH: &quot;6&quot;,
+
+<span id='sol-dev-install-StringLogger-method-processProfileOptsEntry'>  /**
+</span>   * @private
+   * Sets profile options
+   * @param {Object} profileOptsEntry Profile options entry
+   */
+  processProfileOptsEntry: function (profileOptsEntry) {
+    var me = this,
+        i = 0,
+        userProfile, extension, entry, option;
+
+    me.handler.log({ text: &quot;Set profile options for user &#39;{0}&#39;: {1}&quot;, data: [profileOptsEntry.user, JSON.stringify(profileOptsEntry)] });
+
+    userProfile = sol.create(&quot;sol.common.UserProfile&quot;, { userId: profileOptsEntry.user });
+
+    for (extension in profileOptsEntry.documentPreviews) {
+      entry = profileOptsEntry.documentPreviews[extension];
+      option = extension + &quot;:&quot; + entry.className + &quot;:&quot; + entry.confirm;
+      userProfile.setOption(me.previewKey + i, option);
+      i++;
+    }
+    userProfile.setOption(me.previewKey + i, &quot;#END#&quot;);
+
+    if (profileOptsEntry.skipTips) {
+      userProfile.setOption(&quot;EloJ.B.ShowDYK&quot;, &quot;false&quot;);
+    }
+
+    if (profileOptsEntry.maximized) {
+      userProfile.setOption(&quot;EloJ.S.DlgSize.Workspace.0&quot;, &quot;0,0,200,200,&quot; + me.MAXIMIZED_BOTH);
+    }
+
+    if (profileOptsEntry.entries) {
+      for (i = 0; i &lt; profileOptsEntry.entries.length; i++) {
+        entry = profileOptsEntry.entries[i];
+        userProfile.setOption(entry.key, entry.value);
+      }
+    }
+
+    userProfile.write();
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ShowAsConfigDialog&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  handlers: [&quot;sol.dev.install.JcHandler&quot;],
+
+  check: function () {
+    var me = this;
+    return (!!me.config.install.asConfigDialog &amp;&amp; !!me.config.install.asConfigDialog.configDestination);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Shows an dialog to configure the ELOas URL
+   */
+  execute: function () {
+    var me = this,
+        tries = 0,
+        maxTries = 4,
+        panel, asUrl, testAsUrl, match, httpResponse, port, result;
+
+    me.handler.log({ text: &quot;Configure ELOas...&quot;, statusBar: true });
+    asUrl = sol.common.AsUtils.guessAsBaseUrl();
+    testAsUrl = asUrl;
+    do {
+      tries++;
+      httpResponse = sol.common.AsUtils.testAsBaseUrl(testAsUrl);
+      me.handler.log({ text: &quot;Test ELOas URL: {0} -&gt; result: {1}&quot;, data: [testAsUrl, httpResponse.asUrlTestOk] });
+      if (httpResponse.asUrlTestOk == true) {
+        asUrl = testAsUrl;
+      } else {
+        match = testAsUrl.match(/(?:\:)(\d{2,5})/);
+        port = (match &amp;&amp; (match.length == 2)) ? (parseInt(match[1], 10) - 10) : 0;
+        testAsUrl = asUrl.replace(/(?:\:\d{2,5})/, &quot;:&quot; + port);
+      }
+    } while ((httpResponse.asUrlTestOk == false) &amp;&amp; port &amp;&amp; (tries &lt; maxTries));
+
+    me.dialog = workspace.createGridDialog(me.handler.getText(&quot;sol.dev.install.title.asConfig&quot;), 6, 3);
+    panel = me.dialog.gridPanel;
+    panel.addLabel(1, 1, 1, me.handler.getText(&quot;sol.dev.install.label.asUrl&quot;));
+    me.txtAsUrl = panel.addTextField(2, 1, 4);
+    me.txtAsUrl.text = asUrl;
+    panel.addButton(6, 1, 1, me.handler.getText(&quot;sol.dev.install.button.urlCheck&quot;), &quot;onAsUrlCheckButtonClicked&quot;);
+    me.checkAsBaseUrl();
+    result = me.dialog.show();
+    if (result) {
+      me.asUrl = me.txtAsUrl.text;
+      me.updateAsConfig();
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-checkAsBaseUrl'>  /**
+</span>   * @private
+   * Checks the ELOas URL
+   */
+  checkAsBaseUrl: function () {
+    var me = this,
+        httpResponse;
+    me.asUrl = me.txtAsUrl.text;
+    httpResponse = sol.common.AsUtils.testAsBaseUrl(me.asUrl);
+    if (httpResponse.asUrlTestOk == true) {
+      me.txtAsUrl.state = CONSTANTS.FIELD_STATE.CHECKED;
+      me.dialog.setStatusNormal(me.handler.getText(&quot;sol.dev.install.statusBar.asUrlOk&quot;));
+    } else {
+      me.txtAsUrl.state = CONSTANTS.FIELD_STATE.INVALID;
+      if (httpResponse.errorMessage &amp;&amp; httpResponse.errorMessage.message) {
+        me.dialog.setStatusRed(httpResponse.errorMessage.message);
+      } else {
+        me.dialog.setStatusRed(me.handler.getText(&quot;sol.dev.install.statusBar.httpStatusCode&quot;).replace(&quot;{0}&quot;, httpResponse.responseCode));
+      }
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-updateAsConfig'>  /**
+</span>   * Updates the ELOas configuration
+   */
+  updateAsConfig: function () {
+    var me = this,
+        asConfigObj, asConfigRepoPath, asConfig, objId;
+    me.handler.log({ text: &quot;ELOas URL: &quot; + me.asUrl, statusBar: true });
+    asConfigObj = sol.common.AsUtils.convertAsUrlToConfigObject(me.asUrl);
+    me.handler.log({ text: &quot;ELOas configuration: &quot; + JSON.stringify(asConfigObj) });
+    asConfigRepoPath = sol.common.RepoUtils.resolveSpecialFolder(me.config.install.asConfigDialog.configDestination, me.config.base.repoPathParamObj);
+    asConfigRepoPath = sol.common.RepoUtils.normalizePath(asConfigRepoPath, true);
+    objId = sol.common.RepoUtils.getObjId(asConfigRepoPath);
+    if (!objId) {
+      throw &quot;Configuration file &#39;as.config&#39; not found: &quot; + asConfigRepoPath;
+    }
+    asConfig = sol.create(&quot;sol.common.Config&quot;, { config: asConfigObj, objId: objId, writable: true });
+    asConfig.save();
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ReloadModules&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.InstallUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.reloads;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Reloads modules
+   */
+  execute: function () {
+    var me = this,
+        exceptionString;
+
+    if (me.config.install.reloads.ix) {
+      if (me.config.base.scriptEnvironment == &quot;SH&quot;) {
+        me.handler.log({ text: &quot;Skip IX reload: scriptEnvironment=&quot; + me.config.base.scriptEnvironment });
+      } else {
+        me.handler.log({ text: &quot;Reload ELOix...&quot;, statusBar: true });
+
+        try {
+          me.conn.ix().reload();
+        } catch (ex) {
+          exceptionString = sol.common.ExceptionUtils.parseException(ex);
+          me.handler.log({ text: &quot;Can&#39;t reload IX: exception=&quot; + exceptionString });
+        }
+      }
+    }
+
+    if (me.config.install.reloads.wfForms) {
+      me.sendHttpRequest(&quot;Reload ELOwf forms&quot;, &quot;{{eloWfBaseUrl}}/wf/edit.jsp?reload=1&amp;lang=en&amp;ticket={{ticket}}&quot;);
+    }
+
+    if (me.config.install.reloads.apps) {
+      me.sendHttpRequest(&quot;Reload ELOapps&quot;, &quot;{{eloWfBaseUrl}}/apps/rest/cmd/refresh/&quot;, true);
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.ExecuteRegisteredFunctions&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.executeRegisteredFunctions;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Executes registered functions
+   */
+  execute: function () {
+    var me = this,
+        funcCalls, i, funcCall, jsonParams, jsonResult;
+
+    if (me.config.install.executeRegisteredFunctions.reloadScripts) {
+      me.handler.log({ text: &quot;Reload IX scripts...&quot;, statusBar: true });
+      me.conn.ix().reloadScripts();
+    }
+
+    me.handler.log({ text: &quot;Execute registered functions...&quot;, statusBar: true });
+
+    funcCalls = me.config.install.executeRegisteredFunctions.funcCalls;
+
+    for (i = 0; i &lt; funcCalls.length; i++) {
+      funcCall = funcCalls[i];
+      jsonParams = JSON.stringify(funcCall.params);
+
+      me.handler.log({ text: &quot;Execute registered function &#39;{0}&#39;: params={1}&quot;, data: [funcCall.funcName, jsonParams] });
+
+      jsonResult = me.conn.ix().executeRegisteredFunctionString(funcCall.funcName, jsonParams);
+
+      me.handler.log({ text: &quot;result={0}&quot;, data: [jsonResult] });
+    }
+  }
+});
+
+sol.define(&quot;sol.dev.install.functions.InstallApps&quot;, {
+  extend: &quot;sol.dev.install.InstallFunctionBase&quot;,
+  mixins: [&quot;sol.dev.install.mixin.InstallUtils&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.dev.install.InstallFunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+  check: function () {
+    var me = this;
+    return !!me.config.install.instApps;
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Installs ELOapps and ELOapps modules
+   */
+  execute: function () {
+    var me = this,
+        modulesRootRepoPath, modulesRootFolderId, appsRootRepoPath, appsRootFolderId, moduleFolders, appFolders, manifest;
+
+    modulesRootRepoPath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{bsFolderPath}}/&quot; + me.config.install.packageName + &quot;/ELOapps/Modules&quot;, me.config.base.repoPathParamObj);
+    modulesRootFolderId = sol.common.RepoUtils.getObjId(modulesRootRepoPath);
+
+    if (modulesRootFolderId) {
+      moduleFolders = sol.common.RepoUtils.findChildren(modulesRootFolderId, { includeFolders: true, includeDocuments: false });
+      moduleFolders.forEach(function (folder) {
+        manifest = me.getManifestObj(folder.id);
+        if (manifest) {
+          me.sendHttpRequest(&quot;Install ELOapp module &#39;&quot; + manifest.id + &quot;&#39;&quot;, &quot;{{eloWfBaseUrl}}/apps/rest/cmd/module/deploy/?moduleId=&quot; + manifest.id, true);
+        } else {
+          me.handler.log({ text: &quot;Module manifest not found: {0}&quot;, data: [folder.name] });
+        }
+      });
+    }
+
+    appsRootRepoPath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{bsFolderPath}}/&quot; + me.config.install.packageName + &quot;/ELOapps/Apps&quot;, me.config.base.repoPathParamObj);
+    appsRootFolderId = sol.common.RepoUtils.getObjId(appsRootRepoPath);
+
+    if (appsRootFolderId) {
+      appFolders = sol.common.RepoUtils.findChildren(appsRootFolderId, { includeFolders: true, includeDocuments: false });
+      appFolders.forEach(function (folder) {
+        manifest = me.getManifestObj(folder.id);
+        if (manifest) {
+          me.sendHttpRequest(&quot;Install ELOapp &#39;&quot; + manifest.id + &quot;&#39;&quot;, &quot;{{eloWfBaseUrl}}/apps/rest/cmd/app/deploy/?namespace=&quot; + manifest.namespace + &quot;&amp;appId=&quot; + manifest.id, true);
+        } else {
+          me.handler.log({ text: &quot;App manifest not found: {0}&quot;, data: [folder.name] });
+        }
+      });
+    }
+  },
+
+<span id='sol-dev-install-StringLogger-method-getManifestObj'>  /**
+</span>   * @private
+   * Gets the content of the manifest file
+   * @param {String} folderId
+   * @return {String}
+   */
+  getManifestObj: function (folderId) {
+    var me = this,
+        content, manifestRepoPath, manifestObjId;
+    manifestRepoPath = &quot;ARCPATH[&quot; + folderId + &quot;]:/manifest&quot;;
+    manifestObjId = sol.common.RepoUtils.getObjId(manifestRepoPath);
+    if (!manifestObjId) {
+      me.handler.log({ text: &quot;Manifest file not found: &quot; + manifestRepoPath });
+      return;
+    }
+    content = sol.common.RepoUtils.downloadToString(manifestObjId) || &quot;{}&quot;;
+    return JSON.parse(content);
+  }
+});
+
+sol.define(&quot;sol.dev.install.Installer&quot;, {
+  singleton: true,
+
+  functions: {},
+
+  handlerClassNames: {
+    JC: &quot;sol.dev.install.JcHandler&quot;,
+    AS: &quot;sol.dev.install.AsHandler&quot;,
+    IX: &quot;sol.dev.install.IxHandler&quot;,
+    SH: &quot;sol.dev.install.ShHandler&quot;,
+    TEST: &quot;sol.dev.install.TestHandler&quot;
+  },
+
+  initialize: function (params) {
+    var me = this;
+
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckRunningSetup&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckJcRequirements&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckIxRequirements&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckPermissions&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckPackageAlreadyInstalled&quot;);
+
+    // me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckDocMasksMustNotExist&quot;); // CheckDocMasks
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckRepoPathsMustNotExist&quot;);
+
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckWfIsRunning&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckAsLibs&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ProcessIssues&quot;);
+
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CheckDocMasks&quot;); // AdjustDocMasks
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.AdjustDocMasks&quot;); // AdjustDocMasks
+
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.UndeployPackage&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.UndeployHotfix&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ReassignGuids&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateUsers&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.AddMemberships&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateColors&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.RenameWorkflowTemplates&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateWorkflowTemplates&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.MergeWorkflowTemplates&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ImportRepoData&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.AdjustDocMaskRights&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.PrepareRepoPaths&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateSordTypes&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.AssignSordTypes&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.DeleteObjects&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.SetPreviewForms&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.SetProfileOpts&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateChildrenReferences&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.CreateSingleReferences&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ShowAsConfigDialog&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ReloadModules&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.ExecuteRegisteredFunctions&quot;);
+    me.register(&quot;install&quot;, &quot;sol.dev.install.functions.InstallApps&quot;);
+
+    me.register(&quot;undeploy&quot;, &quot;sol.dev.install.functions.UndeployPackage&quot;);
+
+    me.register(&quot;deploy&quot;, &quot;sol.dev.install.functions.DeployRenamePackage&quot;);
+    me.register(&quot;deploy&quot;, &quot;sol.dev.install.functions.CreateChildrenReferences&quot;);
+    me.register(&quot;deploy&quot;, &quot;sol.dev.install.functions.CreateSingleReferences&quot;);
+
+    me.register(&quot;test&quot;, &quot;sol.dev.install.functions.CheckDocMasks&quot;);
+    me.register(&quot;test&quot;, &quot;sol.dev.install.functions.AdjustDocMasks&quot;);
+  },
+
+<span id='sol-dev-install-StringLogger-method-register'>  /**
+</span>   * Registers an installer function
+   * @param {String} procName Installation procedure name
+   * @param {String} funcName Function nameBlub
+   */
+  register: function (procName, funcName) {
+    var me = this;
+
+    if (!procName) {
+      throw &quot;Installation procedure name is empty&quot;;
+    }
+
+    if (!funcName) {
+      throw &quot;Function name is empty&quot;;
+    }
+
+    me.functions[procName] = me.functions[procName] || [];
+    me.functions[procName].push(funcName);
+  },
+
+<span id='sol-dev-install-StringLogger-method-execute'>  /**
+</span>   * Call installer functions
+   * @param {String} [procName=install] Installation procedure name
+   * @param {Object} installConfig Installation configuration
+   * @param {Object} result Output object
+   * @param {Object} buildConfig Build configuration
+   */
+  execute: function (procName, installConfig, result, buildConfig) {
+    var me = this,
+        config, i, handlerClassName, procFunctions, funcName, func, javaVersion,
+        scriptEnvironment, handler, connFact, timeoutSeconds,
+        installFuncParams, timestamp, exceptionString;
+
+    if (!installConfig) {
+      throw &quot;Configuration is empty&quot;;
+    }
+
+    buildConfig = buildConfig || {};
+
+    procName = procName || &quot;install&quot;;
+
+    result = result || {};
+    result.issues = { items: [] };
+
+    scriptEnvironment = (installConfig.test) ? &quot;TEST&quot; : sol.common.RepoUtils.detectScriptEnvironment();
+
+    timestamp = sol.common.DateUtils.format(new Date(), &quot;YYYY-MM-DD HH:mm&quot;);
+
+    config = {
+      install: installConfig,
+      build: buildConfig,
+      base: {
+        scriptEnvironment: scriptEnvironment,
+        repoPathParamObj: {
+          packageName: installConfig.packageName,
+          packageBaseFolderPath: installConfig.packageBaseFolderPath
+        },
+        timestamp: timestamp
+      }
+    };
+
+    installFuncParams = { config: config, result: result };
+
+    handlerClassName = me.handlerClassNames[scriptEnvironment];
+    handler = sol.create(handlerClassName, installFuncParams);
+
+    installFuncParams.handler = handler;
+
+    procFunctions = me.functions[procName];
+    if (!procFunctions) {
+      throw &quot;Installation procedure &#39;&quot; + procName + &quot;&#39; not found.&quot;;
+    }
+
+    javaVersion = sol.common.ExecUtils.getJavaVersion();
+
+    handler.log({ text: &quot;Start installation &#39;{0}&#39;&quot;, data: [config.install.setupName] });
+    handler.log({ text: &quot;Java version: {0}&quot;, data: [javaVersion] });
+    handler.log({ text: &quot;mode={0}&quot;, data: [procName] });
+    handler.log({ text: &quot;scriptEnvironment={0}&quot;, data: [scriptEnvironment] });
+
+    if (scriptEnvironment != &quot;IX&quot;) {
+
+      timeoutSeconds = 600;
+
+      handler.log({ text: &quot;Create connection with different timeout: timoutSeconds={0}&quot;, data: [timeoutSeconds] });
+
+      connFact = sol.common.RepoUtils.createConnFact(ixConnect.connProperties, ixConnect.sessionOptions, {
+        timeoutSeconds: timeoutSeconds
+      });
+      installFuncParams.conn = connFact.createFromTicket(ixConnect.loginResult.clientInfo);
+    } else {
+      installFuncParams.conn = ixConnect;
+    }
+
+    for (i = 0; i &lt; procFunctions.length; i++) {
+      funcName = procFunctions[i];
+      func = sol.create(funcName, installFuncParams);
+      CURR_INST_FUNC = func;
+      try {
+        func.process();
+      } catch (ex) {
+        exceptionString = sol.common.ExceptionUtils.parseException(ex);
+        handler.log({ text: &quot;Exception: funcName={0}, exception={1}&quot;, data: [funcName, exceptionString] });
+        if (globalScope &amp;&amp; globalScope.runningSetup) {
+          globalScope.runningSetup = false;
+        }
+        result.success = false;
+        handler.finalize();
+        throw ex;
+      }
+      if (result.canceled) {
+        break;
+      }
+      result.success = true;
+    }
+
+    installFuncParams.conn.close();
+    if (connFact) {
+      connFact.done();
+    }
+
+    handler.finalize();
+  }
+});</pre>
+</body>
+</html>

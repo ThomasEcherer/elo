@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-dev-jc-Deploy'>/**
+</span> * Deploys or undeploys a package
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ */
+sol.define(&quot;sol.dev.jc.Deploy&quot;, {
+
+<span id='sol-dev-jc-Deploy-property-solutionMask'>  solutionMask: &quot;ELO Business Solution&quot;,
+</span>
+<span id='sol-dev-jc-Deploy-method-execute'>  execute: function () {
+</span>    var me = this,
+        packageElements, packageElement, view, finishMessage;
+
+    me.mode = me.mode || &quot;undeploy&quot;;
+        
+    view = workspace.activeView;
+    if (!(view instanceof ArchiveViewAdapter)) {
+      return;
+    }
+    workspace.setWaitCursor();
+    packageElements = view.allSelected;
+    while (packageElements.hasMoreElements()) {
+      packageElement = packageElements.nextElement();
+      if (packageElement.docMaskName != me.solutionMask) {
+        workspace.showAlertBox(&quot;Setup builder&quot;, &quot;&lt;h3&gt;Mask name of module &#39;&quot; + packageElement.name + &quot;&#39; must be &#39;&quot; + me.solutionMask + &quot;&#39;.&lt;/h3&gt;&quot;);
+        continue;
+      }
+      sol.common.IxUtils.execute(&quot;RF_sol_dev_function_Deploy&quot;, {
+        objId: packageElement.id,
+        mode: me.mode
+      });
+    }
+    view.refreshArchive();
+    workspace.setNormalCursor();
+    workspace.setStatusMessage(&quot;&quot;);
+
+    if (me.mode == &quot;deploy&quot;) {
+      finishMessage = &quot;Packages deployed.&quot;;
+    } else {
+      finishMessage = &quot;Package undeployed.&quot;;
+    }
+
+    workspace.setFeedbackMessage(finishMessage);
+  }
+});
+</pre>
+</body>
+</html>

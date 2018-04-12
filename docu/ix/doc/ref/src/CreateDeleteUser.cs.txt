@@ -1,0 +1,110 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// 1. Creates a group and a user who is a member of the group.
+	/// 2. Deletes the user and the group.
+	/// </summary>
+	public class CreateDeleteUser
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+				
+				// 1. Creates a user and a group.
+
+				// Lock user data.
+				// This is optional since checkinUsers and 
+				// deleteUsers check the lock too.
+				Logger.instance().log("lock user data...");
+				ix.checkoutUsers(ci, null, CONST.CHECKOUT_USERS.NOTHING, CONST.LOCK.YES);
+				Logger.instance().log("lock user data OK");
+				
+				// create group "C# Example Group"
+				Logger.instance().log("create group...");
+				IndexServer.UserInfo gi = ix.createUser(ci, null);
+				gi.type = CONST.USER_INFO.TYPE_GROUP;
+				gi.name = "C# Example Group";
+				gi.flags = CONST.ACCESS.FLAG_EDITSTRUCTURE|CONST.ACCESS.FLAG_EDITDOCS;
+				gi.id = ix.checkinUsers(ci, new IndexServer.UserInfo[] {gi}, 
+					                    CONST.CHECKIN_USERS.WRITE,
+										CONST.LOCK.NO)[0];
+				Logger.instance().log("create group OK, gi.id=" + gi.id);
+
+				// create user "C# Example User" with password "elo"
+				Logger.instance().log("create user...");
+				IndexServer.UserInfo ui = ix.createUser(ci, null);
+				ui.type = CONST.USER_INFO.TYPE_USER;
+				ui.name = "C# Example User";
+				ui.pwd = "elo";
+				ui.flags = CONST.ACCESS.FLAG_IMPORT;
+				ui.groupList = new int[] {gi.id};
+				ui.id = ix.checkinUsers(ci, new IndexServer.UserInfo[] {ui}, 
+					CONST.CHECKIN_USERS.WRITE,
+					CONST.LOCK.NO)[0];
+				Logger.instance().log("create user OK, ui.id=" + ui.id);
+
+				// 2. Deletes the user and the group
+				Logger.instance().log("delete users...");
+				ix.deleteUsers(ci, new String[] {gi.name, ui.name}, CONST.LOCK.NO);
+				Logger.instance().log("delete users OK");
+
+				// unlock user data 
+				Logger.instance().log("unlock user data...");
+				ix.checkinUsers(ci, null, CONST.CHECKIN_USERS.NOTHING, CONST.LOCK.YES);
+				Logger.instance().log("unlock user data OK");
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+
+		}
+	}
+}

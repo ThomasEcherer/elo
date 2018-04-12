@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace tfex
+<span id='tfex'>/**
+</span> * @class tfex
+ */
+var tfex = new Object();
+tfex = {
+  restrictSordsToGroup: null,
+  restrictSordsToMasks: new Object(),
+  addSordMaps: Boolean,
+  
+<span id='tfex-method-doExport'>  /**
+</span>   * Führt einen Export-Vorgang in der angegebenen Datei durch.
+   * 
+   * @param {Object} parts Export-Parts
+   * @param {String} fileName Dateiname
+   */
+  doExport: function(parts, fileName) {
+    var tempName = fileName + &quot;.$$$&quot;;
+    log.info(&quot;Start export to &quot; + tempName);
+    var zip = new ZipParts(tempName, ZipParts.ReadWrite.Write);
+    
+    try {
+      this.exportParts(parts, zip);
+      log.info(&quot;Export completed.&quot;);
+    } catch(e) {
+      log.error(&quot;Error writing transfer file: &quot; + e);
+      fileName = fileName + &quot;-ERROR-&quot; + fu.fileNameDate(new Date()) + &quot;.zip&quot;;
+    } finally {
+      try {
+        zip.close();
+      } catch(e) {
+        log.error(&quot;Error closing export file: &quot; + e);
+      }
+    }
+    
+    fu.rename(tempName, fileName, true);
+    log.info(&quot;Export file available: &quot; + fileName);
+  },
+  
+<span id='tfex-method-doWfExport'>  /**
+</span>   * Exportiert die angegebenen Workflow-Daten.
+   * 
+   * @param {Object} wfData Workflow-Daten
+   * @param {File} fileName Dateiname
+   * @param {Boolean} isReturn Skript vor dem zurückkehren
+   */
+  doWfExport: function(wfData, fileName, isReturn ) {
+    var restrictToGroup = wfData.restrictGroup;
+    var restrictToMasks = wfData.masks;
+    
+    var tempName = fileName + &quot;.$$$&quot;;
+    log.info(&quot;Start workflow export to &quot; + tempName + &quot;, restrict: &quot; + restrictToGroup);
+    
+    if (restrictToGroup == &quot;&quot;) {
+      restrictToGroup = null;
+    }
+    this.restrictSordsToGroup = restrictToGroup;
+    if (restrictToGroup) {
+      log.info(&quot;Restrict Sord export to Group: &quot; + restrictToGroup);
+    }
+    this.restrictSordsToMasks = restrictToMasks;
+    this.exportMode = wfData.exportMode;
+    
+    var zip = new ZipParts(tempName, ZipParts.ReadWrite.Write);
+    
+    try {
+      var scriptName = (isReturn) ? wfData.scriptBeforeReturn : wfData.scriptBeforeSend;
+      if (scriptName &amp;&amp; wftransport[scriptName]) {
+        wftransport[scriptName](wfData);
+      }
+      
+      part = JSON.stringify(wfData);
+      zip.addUtf8Part(part);
+      
+      var parts = '[{&quot;type&quot;: &quot;sord&quot;, &quot;guid&quot;: &quot;' + wfData.eloObjGuid +
+                  '&quot;, &quot;createPath&quot;: &quot;ARCPATH:' + wfData.destination + '&quot;}]';
+      this.exportParts(parts, zip);
+      log.info(&quot;Export completed.&quot;);
+    } catch(e) {
+      log.error(&quot;Error writing transfer file: &quot; + e);
+      fileName = fileName + &quot;-ERROR-&quot; + fu.fileNameDate(new Date()) + &quot;.zip&quot;;
+    } finally {
+      try {
+        zip.close();
+      } catch(e) {
+        log.error(&quot;Error closing export file: &quot; + e);
+      }
+    }
+    
+    this.restrictSordsToGroup = null;
+    fu.rename(tempName, fileName, true);
+    log.info(&quot;Wf-Export file available: &quot; + fileName);
+  },
+  
+<span id='tfex-method-exportParts'>  /**
+</span>   * Exportiert die Export-Teile in der angegebenen Datei.
+   * 
+   * @param {Object} parts Exportteile (Befehle)
+   * @param {File} zipFile ZIP-Datei
+   */
+  exportParts: function(parts, zipFile) {
+    var userTranslator = new TfUserIdTranslator();
+    var workflowTranslator = new TfWorkflowTranslator();
+    var keywordsProvider = new TfKeywordsProvider();
+    var guidProvider = new TfGuidProvider();
+    
+    var commands = JSON.parse(parts);
+    
+    for (var iCmd = 0; iCmd &lt; commands.length; iCmd++) {
+      var part;
+      var cmd = commands[iCmd];
+      var name = cmd.type;
+      if (name == &quot;marker&quot;) {
+        log.info(&quot;Export marker, filter: &quot; + cmd.filter);
+        var colorInfo = ixConnect.ix().checkoutColors(LockC.NO);
+        var jColorInfo = new TfColors(colorInfo);
+        part = JSON.stringify(jColorInfo);
+      } else if (name == &quot;sord&quot;) {
+        log.info(&quot;Export sord, guid: &quot; + cmd.guid);
+        if (!cmd.mode) {
+          cmd.mode = 2;
+        }
+        if (!cmd.levels) {
+          cmd.levels = 32;
+        }
+        cmd.rootNode = true;
+        this.exportSords(cmd, zipFile, userTranslator, guidProvider);
+        part = undefined;
+      } else if (name == &quot;user&quot;) {
+        log.info(&quot;Export user, guid: &quot; + cmd.guid);
+        var userInfo = ixConnect.ix().checkoutUsers([cmd.guid], CheckoutUsersC.BY_IDS_RAW, LockC.NO);
+        var profile = new UserProfile();
+        profile.excludeDefaultValues = true;
+        profile.excludeGroupValues = true;
+        profile.userId = userInfo[0].id
+        var userOptions = ixConnect.ix().checkoutUserProfile(profile, LockC.NO);
+        
+        var juser = new TfUser(userInfo[0], userTranslator);
+        juser.options = new TfUserOptions(userOptions.options);
+        
+        part = JSON.stringify(juser);
+      } else if (name == &quot;mask&quot;) {
+        log.info(&quot;Export mask, guid: &quot; + cmd.guid);
+        var mask = ixConnect.ix().checkoutDocMask(cmd.guid, DocMaskC.mbAll, LockC.NO);
+        var jmask = new TfMask(mask, workflowTranslator, keywordsProvider);
+        part = JSON.stringify(jmask);
+      } else if (name == &quot;wftemplate&quot;) {
+        log.info(&quot;Export workflow, guid: &quot; + cmd.guid);
+        var flow = ixConnect.ix().checkoutWorkflowTemplate(cmd.guid, null, WFDiagramC.mbAll, LockC.NO);
+        var jflow = new TfWorkflow(flow, userTranslator);
+        part = JSON.stringify(jflow);
+      } else if (name == &quot;keywords&quot;) {
+        log.info(&quot;Export keyword list, guid: &quot; + cmd.guid);
+        var jkeywords = new TfKeywords(cmd.guid, keywordsProvider);
+        part = JSON.stringify(jkeywords);
+      } else {
+        log.error(&quot;Unknown command: &quot; + name);
+        continue;
+      }
+
+      if (part) {
+        zipFile.addUtf8Part(part);
+      }
+    }
+  },
+  
+<span id='tfex-method-exportSords'>  /**
+</span>   * Exportiert die angegebenen Sord-Objekte.
+   * 
+   * @param {String} cmd Befehl
+   * @param {File} zipFile Zip-Datei
+   * @param {TfUserIdTranslator} userTranslator UserIdTranslator
+   * @param {TfGuidProvider} guidProvider GUID-Provider
+   */
+  exportSords: function(cmd, zipFile, userTranslator, guidProvider) {
+    if (cmd.levels &lt; 1) {
+      log.info(&quot;Too many nested levels. Recursion stopped.&quot;);
+      return;
+    }
+    
+    var pendingFile = null;
+    var editInfo = ixConnect.ix().checkoutDoc(cmd.guid, null, EditInfoC.mbAll, LockC.NO);
+    var sord = editInfo.sord;
+    guidProvider.addGuid(String(sord.id), String(sord.guid));
+    var found = true;
+    var part;
+    
+    // Sord Map Eintr�ge mitnehmen?
+    this.exportSordMaps = (cmd.mode &amp; 8) != 0;
+    cmd.mode &amp;= 7;
+    
+    if (this.restrictSordsToGroup) {
+      var aclItems = sord.aclItems;
+      found = false;
+      for (var i = 0; i &lt; aclItems.length; i++) {
+        var item = aclItems[i];
+        if ((item.name == this.restrictSordsToGroup) &amp;&amp; (!item.andGroups || (item.andGroups.length ==0))) {
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        log.info(&quot;Sord skipped (group): &quot; + sord.id + &quot;: &quot; + sord.name);
+        if (this.exportMode != &quot;partial&quot;) {
+          cmd.createPath = null;
+          return;
+        }
+      }
+    }
+    
+    if (this.restrictSordsToMasks &amp;&amp; (this.restrictSordsToMasks.length &gt; 0)) {
+      if (! this.restrictSordsToMasks[sord.maskName]) {
+        log.info(&quot;Sord skipped (mask): &quot; + sord.id + &quot;: &quot; + sord.name);
+        found = false;
+        if (this.exportMode != &quot;partial&quot;) {
+          cmd.createPath = null;
+          return;
+        }
+      }
+    }
+    
+    if (found) {
+      var jsord = new TfSord(sord, userTranslator, guidProvider);
+      if (editInfo.document &amp;&amp; editInfo.document.docs &amp;&amp; (editInfo.document.docs.length &gt; 0)) {
+        if (cmd.mode &lt; 2) {
+          log.debug(&quot;Mode 1: Do not export documents.&quot;);
+          return;
+        }
+        
+        pendingFile = editInfo.document.docs[0];
+        jsord.docExt = String(pendingFile.ext);
+      }
+      
+      if (cmd.createPath) {
+        jsord.createPath = cmd.createPath;
+        cmd.createPath = null;
+      }
+      jsord.rootNode = cmd.rootNode;
+      
+      part = JSON.stringify(jsord)
+      zipFile.addUtf8Part(part);
+      
+      if (pendingFile) {
+        // Dokument - Datei rausschreiben
+        var temp = File.createTempFile(&quot;docfile&quot;, &quot;.&quot; + pendingFile.ext);
+        log.debug(&quot;Temp file: &quot; + temp.getAbsolutePath());
+
+        ixConnect.download(pendingFile.url, temp);
+        pendingFile = null;
+        log.debug(&quot;Download done.&quot;);
+        
+        zipFile.addFilePart(temp);
+        log.debug(&quot;File part added.&quot;);
+        fu.deleteFile(temp);
+      }
+      
+      if (this.addSordMaps) {
+        var map = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD , sord.id, null, LockC.NO);
+        var jmap = new TfMapData(map, sord.guid);
+        part = JSON.stringify(jmap);
+        zipFile.addUtf8Part(part);
+      }
+    }
+    
+    if (sord.type &lt; 254){
+      // Ordner - Untereintr�ge rausschreiben
+      cmd.rootNode = false;
+      
+      var findInfo = new FindInfo();
+      var findChildren = new FindChildren();
+      findChildren.parentId = sord.id;
+      findInfo.findChildren = findChildren;
+      
+      var findResult = ixConnect.ix().findFirstSords(findInfo, 1000, SordC.mbMin);
+      ixConnect.ix().findClose(findResult.searchId);
+      
+      var sords = findResult.sords;
+      cmd.levels--;
+      for (var i = 0; i &lt; sords.length; i++) {
+        cmd.guid = String(sords[i].guid);
+        log.info(&quot;Export sord child, guid: &quot; + cmd.guid);
+        this.exportSords(cmd, zipFile, userTranslator, guidProvider);
+      }
+      cmd.levels++;
+    }
+  }
+}
+
+
+</pre>
+</body>
+</html>

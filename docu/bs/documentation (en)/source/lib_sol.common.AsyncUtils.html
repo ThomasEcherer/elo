@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-AsyncUtils'>/**
+</span> * Helper functions for asynchronous IX processing
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;sol.common.AsyncUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-AsyncUtils-method-waitForJob'>  /**
+</span>   * Wait until a background job is finished
+   * @param {String} jobId Job ID of the background job
+   * @param {config} config Configuration
+   * @param {de.elo.ix.client.IXConnection} config.connection Index server connection
+   * @param {Number} config.interval Interval in milliseconds
+   * @return {de.elo.ix.client.JobState}
+   */
+  waitForJob: function (jobId, config) {
+    var jobState, conn;
+    config = config || {};
+    conn = config.connection || ixConnect;
+    config.interval = config.interval || 200;
+    jobState = conn.ix().queryJobState(jobId, true, true, true);
+    while (jobState &amp;&amp; jobState.jobRunning) {
+      Packages.java.lang.Thread.sleep(config.interval);
+      jobState = conn.ix().queryJobState(jobId, true, true, true);
+    }
+    return jobState;
+  }
+});
+</pre>
+</body>
+</html>

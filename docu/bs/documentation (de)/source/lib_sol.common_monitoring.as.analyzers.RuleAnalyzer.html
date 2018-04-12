@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-analyzers-RuleAnalyzer'>/**
+</span> * Analyzes if a set of rules is applicable for an object.
+ *
+ * A rule should at least contain an `action`, which should be executed later if the rule applies to the analyzed object,
+ * and a `date` configuration (see {@link sol.common.SordUtils#getValue}) on which all checks will be performed.
+ *
+ * Additionally it can specify a `shift` and a `recur` attribute (for poosible configurations see {@link sol.common_monitoring.as.MonitorUtils#evalDateUnitConfig MonitorUtils}).
+ * While `shift` can be a positive or a negative value, `recure` has to be positive.
+ * Also optional is the `execution` attribute, which saves the last execution eiter to a map field or an index field. In case the rule is &#39;reoccuring&#39; it is mandatory,
+ * because the analyzer needs determine when the next reoccurrence should be.
+ *
+ * `date` only: the analyzer just checks, if the date is in the past
+ *
+ * `shift`: the analyzer checks, if the date plus/minus a value is already exceeded.
+ *
+ * `recur`: the analyzer checks, if the date (or the last execution) plus a value is exceeded.
+ *
+ * `shift` and `recur` can be combined.
+ *
+ * If `date` or `shift` rules hit, now next run will be calculated, if they miss, the analyzer determines the date for the next check.
+ * `recur` rules always calculate a next run date (no breaking condition so far).
+ *
+ * Each kind of rule returns it&#39;s specified action when it hits.
+ *
+ *     var analyzer = sol.create(&quot;sol.common_monitoring.as.analyzers.RuleAnalyzer&quot;, {
+ *       rules: [
+ *         ... rule objects ...
+ *       ]
+ *     });
+ *
+ * #Example rules:
+ *
+ * Starts a workflow (in the context of the user &quot;John Doe&quot;), if the date in the MY_DATE field is in the past:
+ *
+ *     {
+ *       action: { type: &quot;WORKFLOW&quot;, templateId: &quot;MyWorkflowTemplate&quot;, user: &quot;John Doe&quot; },
+ *       date: { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot; },
+ *     }
+ *
+ * Creates a reminder if the date in the MY_DATE field is less then two months in the future (date minus 2 month is before now) and saves the current date to a map field:
+ *
+ *     {
+ *       action: { type: &quot;REMINDER&quot;, user: &quot;Administrator&quot; },
+ *       date: { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot; },
+ *       shift: { value: -2, unit: &quot;M&quot; },
+ *       execution: { type: &quot;MAP&quot;, key: &quot;MY_DATE_EXECUTION&quot; }
+ *     }
+ *
+ * Starts a workflow, if the date from the map field (see execution - or if not already set, the `date` itself) plus the value from the MY_REOCCURRENCE field in days (&quot;D&quot;) is in the past,
+ * and saves the date of the last sheduled execution a map field (therefor all recurring events will be executed, even if several checks have been missed).
+ *
+ *     {
+ *       action: { type: &quot;WORKFLOW&quot;, templateId: &quot;MyWorkflowTemplate&quot; },
+ *       date: { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot; },
+ *       recur: { type: &quot;GRP&quot;, key: &quot;MY_REOCCURRENCE&quot;, unit: &quot;D&quot; },
+ *       execution: { type: &quot;MAP&quot;, key: &quot;MY_DATE_EXECUTION&quot; }
+ *     }
+ *
+ * @eloas
+ *
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.DateUtils
+ * @requires sol.common_monitoring.as.MonitorUtils
+ */
+sol.define(&quot;sol.common_monitoring.as.analyzers.RuleAnalyzer&quot;, {
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-cfg-requiredConfig'>  requiredConfig: [&quot;rules&quot;],
+</span>
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-cfg-rules'>  /**
+</span>   * @cfg {Object[]} rules
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me._todayIso = sol.common.DateUtils.dateToIso(new Date());
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-analyze'>  /**
+</span>   * Analyzes an object utilizing the set of rules set during initialization.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Object[]}
+   */
+  analyze: function (sord) {
+    var me = this,
+        results = [],
+        max = me.rules.length,
+        i, rule, result, hitCount, missCount;
+
+    me.logger.enter(&quot;analyze&quot;, { objId: sord.id, name: String(sord.name), rulesCount: me.rules.length });
+
+    for (i = 0; i &lt; max; i++) {
+      rule = me.rules[i];
+      result = me.analyzeRule(sord, rule);
+      if (result) {
+        results.push(result);
+      }
+    }
+
+    hitCount = me.countHits(results);
+    missCount = max - hitCount;
+
+    me.logger.exit(&quot;analyze&quot;, { hits: hitCount, misses: missCount, result: results });
+
+    return results;
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-analyzeRule'>  /**
+</span>   * @private
+   * Analyze an individual rule.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} rule
+   * @return {Object}
+   */
+  analyzeRule: function (sord, rule) {
+    var me = this,
+        isoDate = sol.common.SordUtils.getValue(sord, rule.date),
+        result = {},
+        sordFilingDate, lastExecution;
+
+    if (!isoDate) {
+      me.logger.debug([&quot;skip rule: date has no value&quot;, rule.date]);
+      return null;
+    }
+
+    sordFilingDate = sol.common.DateUtils.dateToIso(sol.common.DateUtils.isoToDate(sord.IDateIso), { startOfDay: true });
+    lastExecution = me.checkExecution(sord, rule.execution);
+
+    if (lastExecution &amp;&amp; !rule.recur) {
+      me.logger.debug([&quot;skip rule: was already executed (execution={0})&quot;, lastExecution]);
+      return null;
+    }
+
+    me.logger.debug(&quot;analyze rule: &quot; + sol.common.JsonUtils.stringifyAll(rule));
+
+    if (rule.shift) {
+      isoDate = me.shiftIso(sord, isoDate, rule.shift);
+    }
+
+    if (rule.recur) {
+      if (!rule.execution) {
+        throw &quot;reoccuring rules need to define an &#39;execution&#39; property&quot;;
+      }
+      if (lastExecution) {
+        isoDate = lastExecution;
+        do { // prevent useless reminders from before the element was in the repository
+          isoDate = me.shiftIso(sord, isoDate, rule.recur);
+        }
+        while (isoDate &lt; sordFilingDate);
+      }
+      result.nextRun = me.shiftIso(sord, isoDate, rule.recur);
+      lastExecution = isoDate;
+    }
+
+    me.logger.debug([&quot;check date: {0}&quot;, isoDate]);
+
+    if (isoDate &amp;&amp; (isoDate &lt;= me._todayIso)) {
+      me.updateExecution(sord, rule.execution, lastExecution);
+      if (isoDate &gt;= sordFilingDate) {
+        result.action = rule.action;
+        me.logger.debug(&quot;check was successful&quot;, rule);
+      } else {
+        me.logger.debug(&quot;skip action because date is before sord filing date&quot;);
+      }
+    } else {
+      result.nextRun = isoDate;
+      me.logger.debug(&quot;check was not successful&quot;, rule);
+    }
+
+    if (result.action) {
+      me.logger.debug([&quot;found action: {0}&quot;, sol.common.JsonUtils.stringifyAll(result.action)]);
+    }
+    if (result.nextRun) {
+      me.logger.debug([&quot;next run scheduled for &#39;{0}&#39;&quot;, result.nextRun]);
+    }
+
+    return result;
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-shiftIso'>  /**
+</span>   * @private
+   * Shifts an ISO date. Uses {@link sol.common.DateUtils DateUtils} and {@link sol.common_monitoring.as.MonitorUtils MonitorUtils} internally
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} isoDate
+   * @param {Object} params See {@link sol.common_monitoring.as.MonitorUtils#evalDateUnitConfig evalDateUnitConfig}
+   * @return {String}
+   */
+  shiftIso: function (sord, isoDate, params) {
+    var dateUtils = sol.common.DateUtils,
+        shiftCfg = sol.common_monitoring.as.MonitorUtils.evalDateUnitConfig(sord, params),
+        date = dateUtils.isoToDate(isoDate + &quot;&quot;);
+    date = dateUtils.shift(date, shiftCfg.value, { unit: shiftCfg.unit });
+    return dateUtils.dateToIso(date);
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-checkExecution'>  /**
+</span>   * @private
+   * Retrieves the value of an earlier execution depending on a given configuration.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} execution
+   * @return {String}
+   */
+  checkExecution: function (sord, execution) {
+    if (execution) {
+      return sol.common.SordUtils.getValue(sord, execution);
+    }
+    return null;
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-updateExecution'>  /**
+</span>   * @private
+   * Updates the value of the current execution depending on a given configuration.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} execution
+   * @param {String} date An ISO date to set according to `execution`
+   */
+  updateExecution: function (sord, execution, date) {
+    var me = this,
+        mapitems;
+    if (!execution) {
+      return;
+    }
+    execution.value = date || me._todayIso;
+    mapitems = sol.common.SordUtils.updateSord(sord, [execution]);
+    if (mapitems &amp;&amp; mapitems.length &gt; 0) {
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, sord.id, sord.id, mapitems, LockC.NO);
+    }
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RuleAnalyzer-method-countHits'>  /**
+</span>   * @private
+   * Counts the results, that where a hit. A hit is marked by a result, containing an action.
+   * @param {Object[]} results
+   * @return {Number}
+   */
+  countHits: function (results) {
+    var hitCount = 0,
+        i, max;
+    for (i = 0, max = results.length; i &lt; max; i++) {
+      if (results[i].action) {
+        hitCount++;
+      }
+    }
+    return hitCount;
+  }
+
+});
+</pre>
+</body>
+</html>

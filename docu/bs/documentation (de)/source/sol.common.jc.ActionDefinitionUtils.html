@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.jc.ActionHandler.js
+
+<span id='sol-common-jc-ActionDefinitionUtils'>/**
+</span> * This class loads ELO Business Solutions action definitions and creates the ribbon, button groups and buttons.
+ *
+ * This class is automatically called during client startup.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @requires sol.common.IxUtils
+ */
+sol.define(&quot;sol.common.jc.ActionDefinitionUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-jc-ActionDefinitionUtils-property-TAB_CONST'>  TAB_CONST: {
+</span>    HOME: { text: &quot;home&quot; },
+    DOCUMENT: { text: &quot;document&quot; },
+    ARCHIVE: { text: &quot;archive&quot; },
+    VIEW: { text: &quot;view&quot; },
+    WORKFLOW: { text: &quot;workflow&quot; },
+    INTRAY: { text: &quot;intray&quot; },
+    SEARCH: { text: &quot;search&quot; }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-property-BUTTON_MODES'>  BUTTON_MODES: {
+</span>    BIG: { name: &quot;big&quot;, jcPrio: 1 },
+    SMALL: { name: &quot;small&quot;, jcPrio: 3 }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-initializeRibbon'>  /**
+</span>   * Initializes ribbon buttons, groups and tabs for ELO Business Solutions.
+   *
+   * If called with a context, the method will use the old JavaClient way to initialize all the ribbon buttons.
+   * If called without a context, the method will use the new dynamic button registration.
+   *
+   * @param {Object} ctx (optional) The current script scope.
+   */
+  initializeRibbon: function (ctx) {
+    var me = this,
+        result, errorMessage;
+
+    try {
+      result = sol.common.IxUtils.execute(&quot;RF_sol_common_services_ActionDefinitionCollector&quot;, {});
+
+      if (result &amp;&amp; result.definitions) {
+        me.buildRibbonFromDefinition(result.definitions, ctx);
+      }
+    } catch (ex) {
+      errorMessage = String(ex);
+      me.logger.error(&quot;loading ribbon definition failed.&quot;, errorMessage);
+    }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-buildRibbonFromDefinition'>  /**
+</span>   * @private
+   * Builds the java client ribbon based on ribbon button / group / tab definitions given by RF_sol_common_services_ActionDefinitionCollector.
+   * @param {Object[]} defs action/ ribbon definition
+   * @param {Object} ctx
+   */
+  buildRibbonFromDefinition: function (defs, ctx) {
+    var me = this,
+        dynRibbon = {
+          _tabs: {},
+          tabs: [],
+          _bands: {},
+          bands: [],
+          _buttons: {},
+          buttons: []
+        },
+        def, i;
+
+    for (i = 0; i &lt; defs.length; i++) {
+      def = defs[i];
+
+      if (def.ribbon &amp;&amp; def.ribbon.button &amp;&amp; def.ribbon.ribbonTab &amp;&amp; def.ribbon.buttongroup) {
+        if (!dynRibbon._tabs[def.ribbon.ribbonTab.name]) {
+          dynRibbon._tabs[def.ribbon.ribbonTab.name] = def;
+          dynRibbon.tabs.push(dynRibbon._tabs[def.ribbon.ribbonTab.name]);
+        }
+
+        if (!dynRibbon._bands[def.ribbon.buttongroup.name]) {
+          dynRibbon._bands[def.ribbon.buttongroup.name] = def;
+          dynRibbon.bands.push(dynRibbon._bands[def.ribbon.buttongroup.name]);
+        }
+
+        if (!dynRibbon._buttons[def.ribbon.button.name]) {
+          dynRibbon._buttons[def.ribbon.button.name] = def;
+          dynRibbon.buttons.push(dynRibbon._buttons[def.ribbon.button.name]);
+        }
+      }
+    }
+
+    me.registerTabs(dynRibbon.tabs, ctx);
+    me.registerBands(dynRibbon.bands, ctx);
+    me.registerButtons(dynRibbon.buttons, ctx);
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-registerTabs'>  /**
+</span>   * @private
+   * Registers the tabs.
+   * @param {Object[]} tabDefinitions This contains one action definitions per tab which was found
+   * @param {Object} ctx (optional) Whether this is set or not, this method will use the old or the new way to register tabs in the client (see {@link #initializeRibbon})
+   */
+  registerTabs: function (tabDefinitions, ctx) {
+    var me = this,
+        tabsArray = [];
+
+    if (ctx) {
+      tabDefinitions.forEach(function (def) {
+        if (!me.TAB_CONST[def.ribbon.ribbonTab.name]) {
+          tabsArray.push(def.ribbon.ribbonTab.position + &quot;,&quot; + def.ribbon.ribbonTab.text);
+        }
+      });
+
+      ctx.getExtraTabs = function () {
+        return tabsArray.join(&quot;;&quot;);
+      };
+    } else {
+      tabDefinitions.forEach(function (def) {
+        if (!me.TAB_CONST[def.ribbon.ribbonTab.name]) {
+          ribbon.addTab(def.ribbon.ribbonTab.position, null, def.ribbon.ribbonTab.text).setTitle(def.ribbon.ribbonTab.text);
+        }
+      });
+    }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-registerBands'>  /**
+</span>   * @private
+   * Registers the buton groups.
+   * @param {Object[]} bandDefinitions This contains one action definitions per button group which was found
+   * @param {Object} ctx (optional) Whether this is set or not, this method will use the old or the new way to register tabs in the client (see {@link #initializeRibbon})
+   */
+  registerBands: function (bandDefinitions, ctx) {
+    var me = this,
+        bandsArray = [];
+
+    if (ctx) {
+      bandDefinitions.forEach(function (def) {
+        var tabDef = me.TAB_CONST[def.ribbon.ribbonTab.name] || def.ribbon.ribbonTab;
+        bandsArray.push(tabDef.text + &quot;,&quot; + def.ribbon.buttongroup.position + &quot;,&quot; + def.ribbon.buttongroup.text);
+      });
+
+      ctx.getExtraBands = function () {
+        return bandsArray.join(&quot;;&quot;);
+      };
+    } else {
+      bandDefinitions.forEach(function (def) {
+        var tabDef = me.TAB_CONST[def.ribbon.ribbonTab.name] || def.ribbon.ribbonTab;
+        ribbon.addBand(tabDef.text, def.ribbon.buttongroup.position, def.ribbon.buttongroup.text).setTitle(def.ribbon.buttongroup.text);
+      });
+    }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-registerButtons'>  /**
+</span>   * @private
+   * Registers the butons.
+   * @param {Object[]} buttonDefinitions This contains one action definitions per button which was found
+   * @param {Object} ctx (optional) Whether this is set or not, this method will use the old or the new way to register tabs in the client (see {@link #initializeRibbon})
+   */
+  registerButtons: function (buttonDefinitions, ctx) {
+    var me = this;
+
+    buttonDefinitions.sort(function (def1, def2) {
+      return def1.ribbon.button.position - def2.ribbon.button.position;
+    });
+
+    if (ctx) {
+      me.registerButtonsOld(buttonDefinitions, ctx);
+    } else {
+      me.registerButtonsNew(buttonDefinitions);
+    }
+
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-registerButtonsOld'>  /**
+</span>   * @private
+   * Registers the butons in the old fashion.
+   * @param {Object[]} buttonDefinitions This contains one action definitions per button group which was found
+   * @param {Object} ctx
+   */
+  registerButtonsOld: function (buttonDefinitions, ctx) {
+    var me = this,
+        buttonPositions = [];
+    buttonDefinitions.forEach(function (def) {
+      var tabDef = me.TAB_CONST[def.ribbon.ribbonTab.name] || def.ribbon.ribbonTab;
+
+      buttonPositions.push(def.ribbon.button.jc.buttonId + &quot;,&quot; + tabDef.text + &quot;,&quot; + def.ribbon.buttongroup.text + &quot;,&quot; + me.getPriority(def));
+
+      me.buttonEnabledStatic(def.ribbon.button.jc.buttonId, def.ribbon.button.access);
+
+      ctx[&quot;eloScriptButton&quot; + def.ribbon.button.jc.buttonId + &quot;Start&quot;] = function () {
+        me.buttonHandler(def);
+      };
+
+      ctx[&quot;getScriptButton&quot; + def.ribbon.button.jc.buttonId + &quot;Name&quot;] = function () {
+        return def.ribbon.button.text;
+      };
+
+      ctx[&quot;getScriptButton&quot; + def.ribbon.button.jc.buttonId + &quot;Tooltip&quot;] = function () {
+        return def.ribbon.button.tooltipText;
+      };
+
+    });
+
+    ctx.getScriptButtonPositions = function () {
+      return buttonPositions.join(&quot;;&quot;);
+    };
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-registerButtonsNew'>  /**
+</span>   * @private
+   * Registers the butons in the new dynamic way.
+   * @param {Object[]} buttonDefinitions This contains one action definitions per button group which was found
+   */
+  registerButtonsNew: function (buttonDefinitions) {
+    var me = this;
+
+    buttonDefinitions.forEach(function (def) {
+      var tabDef = me.TAB_CONST[def.ribbon.ribbonTab.name] || def.ribbon.ribbonTab,
+          buttonNo = def.ribbon.button.jc.buttonId,
+          btn = ribbon.addButton(tabDef.text, def.ribbon.buttongroup.text, buttonNo),
+          imageName = &quot;ScriptButton&quot; + buttonNo;
+      btn.setCallback(function () {
+        me.buttonHandler(def);
+      }, me);
+      btn.setTitle(def.ribbon.button.text);
+      btn.setTooltip(def.ribbon.button.tooltipText);
+      btn.setIconName(imageName);
+      btn.asTile(def.ribbon.button.asTile === true);
+      btn.setTileIconName(imageName);
+      btn.setPriority(me.getPriority(def));
+
+      if (def.ribbon.button.access &amp;&amp; def.ribbon.button.access.solTypes) {
+        btn.setEnabledCallback(function () {
+          return me.buttonEnabledHandler(def.ribbon.button.access);
+        }, me);
+      } else {
+        me.buttonEnabledStatic(btn.fctNr - 9000, def.ribbon.button.access);
+      }
+    });
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-getPriority'>  /**
+</span>   * @private
+   * Retrieves the priority from a button definition.
+   * @param {Object} btnDef
+   * @return {Number}
+   */
+  getPriority: function (btnDef) {
+    var me = this;
+    return (btnDef.ribbon.buttongroup.mode === me.BUTTON_MODES.SMALL.name) ? me.BUTTON_MODES.SMALL.jcPrio : me.BUTTON_MODES.BIG.jcPrio;
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-buttonEnabledStatic'>  /**
+</span>   * @private
+   * Checks, when the button should be enabled, and calls the `setScriptButtonEnabled` method accordingly.
+   * This is used by the old way of registering buttons and only while the button is initialized.
+   * @param {String} btnId A button id
+   * @param {Object} access A button access definition
+   */
+  buttonEnabledStatic: function (btnId, access) {
+    if (access &amp;&amp; (access.document || access.folder || access.multi)) {
+      workspace.setScriptButtonEnabled(
+          btnId,
+          access.document === true,
+          access.folder === true,
+          false,
+          false,
+          false,
+          access.multi === true
+        );
+    }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-buttonEnabledHandler'>  /**
+</span>   * @private
+   * Checks, if the button should be enabled. This is used by the the new way of registering buttons and will be called dynamically.
+   * @param {Object} access The access element of a button definition
+   * @return {Boolean}
+   */
+  buttonEnabledHandler: function (access) {
+    var activeView, activeNavBarSelection, checkElement, selectionCount, firstSelected, allSelected, current, i;
+
+    // if there is no access definition (or it has no content) the element should always be enabled
+    if (!access || (!access.document &amp;&amp; !access.folder &amp;&amp; !access.multi &amp;&amp; !access.solTypes)) {   // nothing set, button will always be enabled
+      return true;
+    }
+
+    activeView = workspace.activeView;
+    activeNavBarSelection = workspace.workspace.navigationBar &amp;&amp; workspace.workspace.navigationBar.active &amp;&amp; workspace.workspace.navigationBar.active.selectedIds;
+
+    // function to check a single indexed element
+    checkElement = function (e) {
+      var solType;
+
+      if (!e) {
+        return false;
+      }
+
+      if ((access.document !== true || access.folder !== true) &amp;&amp; ((access.document === true &amp;&amp; !e.isDocument()) || (access.folder === true &amp;&amp; !e.isStructure()))) {
+        return false;
+      }
+
+      if (!access.solTypes || (access.solTypes.length &lt;= 0)) {
+        return true;
+      }
+
+      try {
+        solType = e.getObjKeyValue(&quot;SOL_TYPE&quot;) + &quot;&quot;;
+      } catch (ex) {
+        // no sol type found //
+      }
+      return (solType &amp;&amp; (solType != &quot;&quot;)) ? access.solTypes.indexOf(solType) !== -1 : false;
+    };
+
+    selectionCount = (activeView) ? activeView.selectionCount : ((activeNavBarSelection) ? activeNavBarSelection.length : 0);
+
+    if (selectionCount &lt;= 0) {
+      return false; // nothing selected
+    }
+
+    // check single access
+    if (access.multi !== true) {
+      if (selectionCount !== 1) {
+        return false;
+      }
+      firstSelected = (activeView) ? activeView.firstSelected : ((activeNavBarSelection) ? archive.getElement(workspace.workspace.navigationBar.active.selectedIds[0]) : null);
+      return checkElement(firstSelected);
+    }
+
+    // check multi select
+    if (activeView &amp;&amp; activeView.allSelected) {  // for normal views
+      allSelected = activeView.allSelected;
+      while (allSelected.hasMoreElements()) {
+        current = allSelected.nextElement();
+        if (!checkElement(current)) {
+          return false;
+        }
+      }
+    } else if (activeNavBarSelection) {  // for AppViews, because those do not have an active view in 9.03
+      allSelected = workspace.workspace.navigationBar.active.selectedIds; // do not try this at home
+      for (i = 0; i &lt; allSelected.length; i++) {
+        current = allSelected[i];
+        if (!checkElement(archive.getElement(current))) {
+          return false;
+        }
+      }
+    } else {
+      return false;
+    }
+
+    return true;
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-buttonHandler'>  /**
+</span>   * This handles the button execution. This is used by the old and the new way of registering buttons alike.
+   * @param {Object} def A button definition
+   */
+  buttonHandler: function (def) {
+    var me = this,
+        objId = me.getSelection(def.ribbon.button.access);
+
+    switch (def.type) {
+      case &quot;ADVANCED_ACTION&quot;:
+        sol.common.jc.ActionHelper.executeAdvancedAction(objId, def.action);
+        break;
+      case &quot;SIMPLE_ACTION&quot;:
+        sol.common.jc.ActionHelper.executeSimpleAction(objId, def.action);
+        break;
+      default:
+        me.logger.error(&quot;No handler found for button definition&quot;, def.ribbon.button.name);
+    }
+  },
+
+<span id='sol-common-jc-ActionDefinitionUtils-method-getSelection'>  /**
+</span>   * @private
+   * returns the selected element objIds.
+   * @param {Object} access This object determines if this returns just one or many objIds (in case of multiselect).
+   * @return {String|String[]}
+   */
+  getSelection: function (access) {
+    var allSelected, selected, objIds;
+
+    if (workspace.activeView &amp;&amp; workspace.activeView.allSelected) {
+      allSelected = workspace.activeView.allSelected;
+      objIds = [];
+      while (allSelected.hasMoreElements()) {
+        selected = allSelected.nextElement();
+        if (selected.id) {
+          objIds.push(selected.id);
+        }
+      }
+    } else if (workspace.workspace.navigationBar &amp;&amp; workspace.workspace.navigationBar.active &amp;&amp; workspace.workspace.navigationBar.active.selectedIds) {
+
+      // FIXME as soon as the JC supports the retrival of selected elements from &quot;AppViews&quot; this should use the official API
+
+      allSelected = workspace.workspace.navigationBar.active.selectedIds; // do not try this at home
+      objIds = allSelected.map(function (objId) {
+        return objId;
+      }); // convert to JavaScript array
+    }
+
+    if (access &amp;&amp; (access.multi === true)) {
+      return (objIds &amp;&amp; objIds.length &gt; 0) ? objIds : null;
+    } else {
+      return (objIds &amp;&amp; objIds.length &gt; 0) ? objIds[0] : null;
+    }
+  }
+
+});
+
+// This will be used by ELO10 JavaClients //
+function eloExpandRibbon() {
+  if (typeof ribbon !== &quot;undefined&quot;) {
+    sol.common.jc.ActionDefinitionUtils.initializeRibbon();
+  }
+}
+
+// This is the fallback for older JavaClients //
+(function (ctx) {
+  if (typeof ribbon === &quot;undefined&quot;) {
+    sol.common.jc.ActionDefinitionUtils.initializeRibbon(ctx);
+  }
+}(this));</pre>
+</body>
+</html>

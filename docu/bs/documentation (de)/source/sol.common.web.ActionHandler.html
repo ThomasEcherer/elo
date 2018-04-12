@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+api.require({
+  namespace: [&quot;sol&quot;],
+  locales: [&quot;sol.common.client.ActionHandler&quot;]
+}, function (locales) {
+
+<span id='sol-common-web-ActionHelper'>  /**
+</span>   * This class provides helper functions for executing complex actions.
+   *
+   * @elojc
+   * @requires sol.common.web.ActionHandler
+   */
+  sol.define(&quot;sol.common.web.ActionHelper&quot;, {
+    singleton: true,
+
+<span id='sol-common-web-ActionHelper-method-executeSimpleAction'>    executeSimpleAction: function (objId, cfg) {
+</span>      var me = this,
+          cfgObject;
+
+      elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] executing advanced action on objId: &quot; + objId, cfg);
+
+      if (!cfg || !cfg.fct) {
+        throw &quot;executing a simple action requires mandatory config properties.&quot;;
+      }
+
+      cfgObject = (cfg.cfgTemplate) ? me.getConfigObject(cfg.cfgTemplate, me.initActionCfg(objId)) : {};
+
+      sol.common.web.ActionHandler.execute(
+        cfg.fct,
+        cfgObject
+      );
+    },
+
+<span id='sol-common-web-ActionHelper-method-executeAdvancedAction'>    /**
+</span>     * Helps in executing advanced actions that include precondition checks and
+     * different object types.
+     *
+     * Advanced action configurations are handled in the following order:
+     *
+     * 1.  select types (optional)
+     * 2.  check preconditions (type selection possible if returned by check) (optional)
+     * 3.  select target (optional)
+     * 4.  execute action (IX/ AS) (required)
+     *
+     * Please note that step 1 and 2 can be used for selecting types. If a special function
+     * is used for type selection (Step 1), the user selection is overriden if a second
+     * type selection is handled by step 2.
+     *
+     *     {
+     *       preconditions: {
+     *         fct: &#39;RF_sol_contact_service_CheckContactPreconditions&#39;,
+     *       },
+     *       fct: &#39;RF_sol_contact_action_CreateContact&#39;,
+     *       cfgTemplate: &#39;{
+     *              &quot;parentId&quot;: &quot;{{objId}}&quot;,
+     *              &quot;contactType&quot;: &quot;{{type.name}},
+     *              &quot;templateId&quot;: &quot;{{type.objId}}
+     *       }&#39;,
+     *       locale: {
+     *           errorDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.error.title&#39;],
+     *           typesDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.title&#39;],
+     *           typesDlgHeader: locale[&#39;sol.contact.client.contact.create.dialog.header&#39;],
+     *           typesDlgText: locale[&#39;sol.contact.client.contact.create.dialog.text&#39;],
+     *           typesDlgNoTypes: locale[&#39;sol.contact.client.contact.create.msg.notype&#39;],
+     *
+     *           targetDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.title&#39;],
+     *           targetDlgHeader: locale[&#39;sol.contact.client.contact.create.dialog.header&#39;],
+     *           targetDlgText: locale[&#39;sol.contact.client.contact.create.dialog.text&#39;],
+     *       }
+     *     }
+     *
+     * @param {String} objId
+     * @param {Object} cfg
+     */
+    executeAdvancedAction: function (objId, cfg) {
+      var me = this,
+          actionCfg = me.initActionCfg(objId),
+          handler_selectTypes, handler_preconditions, handler_selectTarget, handler_executeAction;
+
+      elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] executing advanced action on objId: &quot; + objId, cfg);
+
+      if (!cfg || !cfg.fct || !cfg.cfgTemplate) {
+        throw &quot;executing an advanced action requires mandatory config properties.&quot;;
+      }
+
+      // asynchronous calls require synchonisation between ajax responses.
+      // therefore several handlers are linked.
+      handler_selectTypes = function (objId, cfg, actionCfg) {
+        if (cfg.selectType &amp;&amp; cfg.selectType.fct) {
+          // action requires precondition checks
+          me.handleTypeSelection(objId, cfg, actionCfg, function (objId, cfg, actionCfg) {
+            // preconditions handled
+            handler_preconditions(objId, cfg, actionCfg);
+          });
+        } else {
+          handler_preconditions(objId, cfg, actionCfg);
+        }
+      };
+      handler_preconditions = function (objId, cfg, actionCfg) {
+        if (cfg.preconditions &amp;&amp; cfg.preconditions.fct) {
+          // action requires precondition checks
+          me.handlePrecondition(objId, cfg, actionCfg, function (objId, cfg, actionCfg) {
+            // preconditions handled
+            handler_selectTarget(objId, cfg, actionCfg);
+          });
+        } else {
+          handler_selectTarget(objId, cfg, actionCfg);
+        }
+      };
+      handler_selectTarget = function (objId, cfg, actionCfg) {
+        if (cfg.selectTree) {
+          me.handleTreeSelection(objId, cfg, actionCfg, function (objId, cfg, actionCfg) {
+            handler_executeAction(objId, cfg, actionCfg);
+          });
+        } else {
+          handler_executeAction(objId, cfg, actionCfg);
+        }
+      };
+      handler_executeAction = function (objId, cfg, actionCfg) {
+        me.handleExecuteAction(objId, cfg, actionCfg);
+      };
+
+      // call first handler
+      handler_selectTypes(objId, cfg, actionCfg);
+    },
+
+<span id='sol-common-web-ActionHelper-method-handlePrecondition'>    /**
+</span>     * @private
+     * handles precondition checks for advanced actions.
+     * @param {String} objId
+     * @param {Object} cfg
+     * @param {Object} actionCfg
+     * @param {Object} readyFct
+     */
+    handlePrecondition: function (objId, cfg, actionCfg, readyFct) {
+      var me = this;
+
+      sol.common.IxUtils.execute(cfg.preconditions.fct, {
+        targetId: objId
+      }, function (checkResult) {
+        // sucess
+        elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] prepare action successful.&quot;, checkResult);
+
+        if (checkResult.valid !== true) {
+          elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] prepare action returned invalid result. Cancel execution.&quot;);
+          api.Webclient.alert(cfg.locale.errorDlgTitle || locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], checkResult.msg);
+          return;
+        }
+
+        if (checkResult.targetId &amp;&amp; checkResult.targetId != objId) {
+          elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] changed objId by preconditions to: &quot; + checkResult.targetId);
+          objId = checkResult.targetId;
+        }
+
+        actionCfg.objId = objId;
+        actionCfg.preconditions = checkResult;
+
+        if (checkResult.types &amp;&amp; checkResult.types.length &gt;= 0) {
+          me.handleSimpleActionTypes(checkResult.types, objId, cfg, actionCfg, function (objId, cfg, actionCfg) {
+            // call ready
+            readyFct(objId, cfg, actionCfg);
+          });
+        } else {
+          // call ready
+          readyFct(objId, cfg, actionCfg);
+        }
+      }, function (error) {
+        elo.helpers.Console.error(&quot;[sol.common.web.ActionHelper] prepare action returned an unexpected error.&quot;, error);
+        api.Webclient.alert(cfg.locale.errorDlgTitle || locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], error.msg + &quot;: &quot; + error.details);
+      });
+    },
+
+<span id='sol-common-web-ActionHelper-method-handleSimpleActionTypes'>    /**
+</span>     * @private
+     * handles simple selection of different types.
+     * @param {String} types
+     * @param {String} objId
+     * @param {Object} cfg
+     * @param {Object} actionCfg
+     * @param {Object} readyFct
+     */
+    handleSimpleActionTypes: function (types, objId, cfg, actionCfg, readyFct) {
+      var choices, type, i;
+
+      if (types &amp;&amp; types.length &gt; 1) {
+        choices = [], type;
+        for (i = 0; i &lt; types.length; i++) {
+          type = types[i];
+          choices.push({ title: type.name, text: type.desc, data: type });
+        }
+
+        elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] prepare action returned multiple type choices.&quot;, choices);
+        api.Webclient.showCommandLinkDialog(
+          cfg.locale.typesDlgTitle,
+          cfg.locale.typesDlgHeader,
+          cfg.locale.typesDlgText,
+          choices,
+          function (choice) { // selected type
+            actionCfg.type = choice.data;
+            // call ready
+            readyFct(objId, cfg, actionCfg);
+          }, function () {    // clicked cancel
+            elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] closed file selection dialog. cancel execution.&quot;);
+          }
+        );
+      } else if (types &amp;&amp; types.length &gt; 0) {
+        actionCfg.type = types[0];
+        // call ready
+        readyFct(objId, cfg, actionCfg);
+      } else {
+        api.Webclient.alert(cfg.locale.typesDlgTitle || locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], cfg.locale.typesDlgNoTypes);
+      }
+    },
+
+<span id='sol-common-web-ActionHelper-method-handleTypeSelection'>    handleTypeSelection: function (objId, cfg, actionCfg, readyFct) {
+</span>      var me = this,
+          typeServiceCfg = {};
+
+      if (cfg.selectType &amp;&amp; cfg.selectType.cfgTemplate) {
+        typeServiceCfg = me.getConfigObject(cfg.selectType.cfgTemplate, actionCfg);
+      }
+
+      sol.common.IxUtils.execute(cfg.selectType.fct, typeServiceCfg, function (types) {
+        // sucess
+        me.handleSimpleActionTypes(types, objId, cfg, actionCfg, readyFct);
+      }, function (error) {
+        elo.helpers.Console.error(&quot;[sol.common.web.ActionHelper] prepare action returned an unexpected error.&quot;, error);
+        api.Webclient.alert(cfg.locale.errorDlgTitle || locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], error.msg + &quot;: &quot; + error.details);
+      });
+    },
+
+<span id='sol-common-web-ActionHelper-method-handleTreeSelection'>    handleTreeSelection: function (objId, cfg, actionCfg, readyFct) {
+</span>      var me = this,
+          rootId = 1;
+
+      if (cfg.selectTree.root) {
+        rootId = elo.IX.ix().checkoutSord(cfg.selectTree.root, elo.CONST.SORD.mbOnlyId, elo.CONST.LOCK.NO).id;
+      } else if (cfg.selectTree.rootFromCfgFile &amp;&amp; cfg.selectTree.rootFromCfgProperty) {
+        sol.common.IxUtils.execute(&quot;RF_sol_common_service_GetConfig&quot;, {
+          objId: cfg.selectTree.rootFromCfgFile
+        }, function (cfgResult) {
+          // set root id and recall handleTreeSelection
+          try {
+            cfg.selectTree.root = me.getConfigObject(cfg.selectTree.rootFromCfgProperty, cfgResult);
+            me.handleTreeSelection(objId, cfg, actionCfg, readyFct);
+          } catch (msg) {
+            api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], &quot;Invalid configuration for tree selection. rootFromCfgProperty should return a valid json object. &quot; + msg);
+          }
+        }, function (err) {
+          //console.error(o);
+        });
+        return;
+      }
+
+      elo.helpers.Console.info(&quot;[sol.common.web.ActionHelper] action requires target selection. Using root: &quot; + rootId);
+
+      api.Webclient.showTreeSelectDialog(
+        cfg.locale.treeDlgTitle || &quot;&quot;,
+        cfg.locale.treeDlgHeader || &quot;&quot;,
+        rootId,
+        cfg.locale.treeDlgRootName || &quot;..&quot;,
+        function (selection) {
+          // selected target
+          actionCfg.tree = {
+            name: selection.name,
+            objId: selection.id
+          };
+          // call ready
+          readyFct(objId, cfg, actionCfg);
+        },
+        function () {
+          // canceled
+        }
+      );
+    },
+
+<span id='sol-common-web-ActionHelper-method-handleExecuteAction'>    /**
+</span>     * @private
+     * handles the final execution of the action.
+     * @param {String} objId
+     * @param {Object} cfg
+     * @param {Object} actionCfg
+     */
+    handleExecuteAction: function (objId, cfg, actionCfg) {
+      var me = this;
+      switch (cfg.type) {
+        case &quot;AS&quot;:
+          sol.common.web.ActionHandler.executeAs(cfg.solution, cfg.fct, me.getConfigObject(cfg.cfgTemplate, actionCfg));
+          break;
+        default:
+          sol.common.web.ActionHandler.execute(cfg.fct, me.getConfigObject(cfg.cfgTemplate, actionCfg));
+      }
+    },
+
+<span id='sol-common-web-ActionHelper-method-initActionCfg'>    initActionCfg: function (objId) {
+</span>      var actionCfg = { objId: objId };
+      return actionCfg;
+    },
+
+<span id='sol-common-web-ActionHelper-method-getConfigObject'>    getConfigObject: function (cfgTemplate, data) {
+</span>      var str = Handlebars.compile(cfgTemplate)(data);
+      return JSON.parse(str);
+    }
+
+  });
+
+
+<span id='sol-common-web-ActionHandler'>  /**
+</span>   * This class provides utility functions to call IX or AS functions and handle the response in a standardized way.
+   *
+   * @eloweb
+   * @requires sol.common.IxUtils
+   */
+  sol.define(&quot;sol.common.web.ActionHandler&quot;, {
+    singleton: true,
+
+<span id='sol-common-web-ActionHandler-method-execute'>    /**
+</span>     * Executes a IX registered function and handles the response in a standardized way.
+     *
+     * If spezial handling is needed a custom callback can be spezified as parameter.
+     * This callback get&#39;s the result Object of the registered function as only parameter.
+     *
+     * @param {String} registeredFunctionName
+     * @param {Object} params (optional) The configuration object which will be send to the registered function
+     * @param {Function} callback (optional) Should not be used anymore
+     * @param {String} loadingMessage (optional) Message that is displayed while performing async operations.
+     */
+    execute: function (registeredFunctionName, params, callback, loadingMessage) {
+      var me = this;
+
+      me.showLoadingIndicator(loadingMessage);
+      sol.common.IxUtils.execute(registeredFunctionName, params, function (resultObj) {
+        if (callback &amp;&amp; Object.prototype.toString.call(callback) === &quot;[object Function]&quot;) {
+          me.logger.warn(&quot;Use of &#39;callback&#39; parameter is depricated and therefore not recommended.&quot;);
+          callback.call(me, resultObj);
+          me.hideLoadingIndicator();
+          return;
+        }
+        if (resultObj) {
+          me.handleEvents(resultObj.events);
+          // loading indicator is hidden by event handler
+        } else {
+          me.hideLoadingIndicator();
+        }
+      }, function (err) {
+        me.hideLoadingIndicator();
+        // error
+        var msg = &quot;&quot;;
+        if (err &amp;&amp; err.msg) {
+          msg = err.msg;
+        }
+        api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title.unexpected&quot;], msg);
+      });
+    },
+
+<span id='sol-common-web-ActionHandler-method-executeAs'>    executeAs: function (solutionName, asRuleName, params, callback, loadingMessage) {
+</span>      var me = this;
+
+      me.showLoadingIndicator(loadingMessage);
+      sol.common.IxUtils.execute(&quot;RF_sol_common_service_ExecuteAsAction&quot;, {
+        solution: solutionName,
+        action: asRuleName,
+        config: params,
+        connParams: {
+          language: elo.IX.getLoginResult().clientInfo.language
+        }
+      }, function (resultObj) {
+        if (resultObj &amp;&amp; resultObj.content) {
+          try {
+            resultObj = JSON.parse(resultObj.content);
+          } catch (ex) {
+            if (!resultObj.events) {
+              console.error(resultObj);
+              me.hideLoadingIndicator();
+              api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title.unexpected&quot;], locales[&quot;sol.common.client.ActionHandler.errordlg.msg.unexpected&quot;]);
+              return;
+            }
+          }
+        }
+        if (resultObj &amp;&amp; resultObj.events &amp;&amp; resultObj.events.length &gt; 0 &amp;&amp; resultObj.events[0].ID &amp;&amp; resultObj.events[0].ID === &quot;ERROR&quot;) {
+          // handle IX Exceptions
+          console.error(resultObj);
+          me.hideLoadingIndicator();
+          if (resultObj.events[0].obj &amp;&amp; resultObj.events[0].obj.msg) {
+            var error = resultObj.events[0].obj.msg;
+            api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title.unexpected&quot;], error);
+          }
+          return;
+        }
+        if (callback &amp;&amp; Object.prototype.toString.call(callback) === &quot;[object Function]&quot;) {
+          me.logger.warn(&quot;Use of &#39;callback&#39; parameter is depricated and therefore not recommended.&quot;);
+          callback.call(me, resultObj);
+          me.hideLoadingIndicator();
+          return;
+        }
+        if (resultObj &amp;&amp; resultObj.events) {
+          me.handleEvents(resultObj.events);
+          // loading indicator is hidden by event handler
+        } else {
+          me.hideLoadingIndicator();
+        }
+      }, function (err) {
+        // error
+        api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title.unexpected&quot;], locales[&quot;sol.common.client.ActionHandler.errordlg.msg.unexpected&quot;]);
+        console.error(err);
+        me.hideLoadingIndicator();
+      });
+    },
+
+<span id='sol-common-web-ActionHandler-method-handleEvents'>    /**
+</span>     * @private
+     * Handler for events passed by an Action. This function is called recursively for all events since event
+     * handlers might perform async operations.
+     * @param {Object} events
+     * @param {Object} context
+     */
+    handleEvents: function (events, context) {
+      var me = this,
+          eventTypes = sol.common.IxUtils.CONST.EVENT_TYPES,
+          event, handler;
+
+      context = context || { dirtySord: true, dirtyWfStatus: true };
+
+      if (events &amp;&amp; events.length &gt; 0) {
+        event = events.shift();
+
+        if (!me.checkExecution(event, context)) {
+          me.handleEvents(events, context);
+          return;
+        }
+
+        switch (event.ID) {
+          case eventTypes.REFRESH:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Refresh&quot;);
+            me.hideLoadingIndicator();
+            break;
+          case eventTypes.GOTO:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Goto&quot;);
+            me.hideLoadingIndicator();
+            break;
+          case eventTypes.DIALOG:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Dialog&quot;, {
+              actionHandler: me,
+              hideLoadingIndicator: me.hideLoadingIndicator
+            });
+            // loading indicator is hidden by Action Handler
+            break;
+          case eventTypes.ACTION:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Action&quot;, {
+              actionHandler: me,
+              hideLoadingIndicator: me.hideLoadingIndicator
+            });
+            // loading indicator is hidden by Action Handler
+            break;
+          case eventTypes.FEEDBACK:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Feedback&quot;);
+            me.hideLoadingIndicator();
+            break;
+          case eventTypes.ERROR:
+            handler = sol.create(&quot;sol.common.web.ActionHandler.Error&quot;);
+            me.hideLoadingIndicator();
+            break;
+          default:
+        }
+
+        if (handler &amp;&amp; me.isFunction(handler.execute)) {
+          handler.execute(event, context, function () {
+            me.handleEvents(events, context);
+          });
+        } else {
+          me.logger.warn([&quot;No handler for event of type &#39;{0}&#39;&quot;, event.ID]);
+        }
+      } else {
+        me.hideLoadingIndicator();
+      }
+    },
+
+<span id='sol-common-web-ActionHandler-method-checkExecution'>    /**
+</span>     * @private
+     * @param {Object} event
+     * @param {Object} context
+     * @return {Boolean}
+     */
+    checkExecution: function (event, context) {
+      var me = this,
+          checkValue, mapitems;
+
+      if (event.ON) {
+        if (context.dirtySord &amp;&amp; event.ON.objId) {
+          context.sord = elo.IX.ix().checkoutSord(event.ON.objId, elo.CONST.SORD.mbAllIndex, elo.CONST.LOCK.NO);
+          context.dirtySord = false;
+        }
+
+        if (context.dirtyWfStatus &amp;&amp; event.ON.flowId) {
+          context.wfStatus = sol.common.IxUtils.execute(&quot;RF_sol_common_service_GetWorkflowMetadata&quot;, { flowId: event.ON.flowId }).status;
+          context.dirtyWfStatus = false;
+        }
+
+        switch (event.ON.type) {
+          case &quot;WF_STATUS&quot;:
+            checkValue = context.wfStatus;
+            break;
+          case &quot;GRP&quot;:
+            checkValue = context.sord.getLineByGroup(event.ON.key);
+            break;
+          case &quot;SORD&quot;:
+            checkValue = context.sord[event.ON.key];
+            break;
+          case &quot;MAP&quot;:
+            mapitems = elo.IX.ix().checkoutMap(elo.CONST.MAP_CONFIG.DOMAIN_SORD, event.ON.objId, [event.ON.key], elo.CONST.LOCK.NO).items;
+            if (mapitems &amp;&amp; mapitems.length === 1) {
+              checkValue = mapitems[0].value;
+            }
+            break;
+          default:
+            me.logger.warn([&quot;event defines non existing ON.type={0}, ON condition will be ignored&quot;, event.ON.type]);
+            return true;
+        }
+
+        return checkValue == event.ON.value;
+      }
+      return true;
+    },
+
+<span id='sol-common-web-ActionHandler-method-isFunction'>    /**
+</span>     * @private
+     * @param {Object} obj
+     * @return {Object}
+     */
+    isFunction: function (obj) {
+      return obj &amp;&amp; Object.prototype.toString.call(obj) === &quot;[object Function]&quot;;
+    },
+
+<span id='sol-common-web-ActionHandler-method-showLoadingIndicator'>    showLoadingIndicator: function (text) {
+</span>      var me = this;
+      me.loadingIndicator = Ext.MessageBox.show({
+        msg: text || &quot;Loading...&quot;,
+        //modal: false,
+        width: 300,
+        wait: true,
+        waitConfig: { interval: 200 }
+      });
+    },
+
+<span id='sol-common-web-ActionHandler-method-hideLoadingIndicator'>    hideLoadingIndicator: function () {
+</span>      var me = this;
+      if (me.loadingIndicator) {
+        me.loadingIndicator.hide();
+      }
+    }
+
+
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Refresh&quot;, {
+    tryCheckoutTimes: 100,
+
+    execute: function (event, context, callback) {
+      var eventConfig;
+
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.REFRESH) {
+        throw &quot;&#39;sol.common.jc.ActionHandler.REFRESH&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.REFRESH + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      if (event.obj) {
+        eventConfig = event.obj;
+
+        if (eventConfig.objId) {
+          window.setTimeout(function () {
+            api.Webclient.refreshView();
+            callback.call(this);
+          }, 1);
+        }
+      }
+    }
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Goto&quot;, {
+    tryCheckoutTimes: 100,
+
+    execute: function (event, context, callback) {
+      var me = this,
+          eventConfig;
+
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.GOTO) {
+        throw &quot;&#39;sol.common.jc.ActionHandler.GOTO&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.GOTO + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      if (event.obj) {
+        eventConfig = event.obj;
+
+        if (eventConfig.flowId &amp;&amp; eventConfig.nodeId) {
+          window.setTimeout(function () {
+            // internal Web Client access
+            api.Webclient.gotoTask({ flowId: Number(eventConfig.flowId), nodeId: Number(eventConfig.nodeId) });
+            callback.call(this);
+          }, 1);
+        } else if (eventConfig.objId) {
+          window.setTimeout(function () {
+            // internal Web Client access
+            api.Webclient.gotoEntry(Number(eventConfig.objId));
+            if (eventConfig.checkout) {
+              me.checkoutSord(eventConfig.objId, 0);
+            }
+            callback.call(this);
+          }, 1);
+        }
+      }
+    },
+
+    checkoutSord: function (objId, times) {
+      var me = this,
+          sord;
+
+      // internal Web Client access
+      sord = elo.ModelRegistry.getDataInstance(elo.MainCtrl.modelNames.selectedSord);
+
+      if (sord &amp;&amp; Object.prototype.toString.call(sord) === &quot;[object Array]&quot;) {
+        sord = sord[0];
+      }
+
+      if (sord &amp;&amp; sord.get &amp;&amp; String(sord.get(&quot;id&quot;)) === String(objId)) {
+        elo.EventRegistry.callBusEvent(&quot;BTN_EDITINOFFICE&quot;);
+      } else if (times &lt; me.tryCheckoutTimes) {
+        window.setTimeout(function () {
+          me.checkoutSord(objId, times + 1);
+        }, 50);
+      } else {
+        console.error(&quot;Checkout document failed.&quot;);
+      }
+    }
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Dialog&quot;, {
+
+    execute: function (event, context, callback) {
+      var me = this,
+          eventConfig;
+
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.DIALOG) {
+        throw &quot;&#39;sol.common.web.ActionHandler.DIALOG&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.DIALOG + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      context.dirtySord = true;
+      context.dirtyWfStatus = true;
+
+      if (event.obj) {
+        eventConfig = event.obj;
+        if (eventConfig.url) {
+          if (me.hideLoadingIndicator) {
+            // prevent background flickering
+            Ext.suspendLayouts();
+            me.hideLoadingIndicator.call(me.actionHandler);
+          }
+
+          me.registerOpenWindow(event.obj.flowId, event.obj.nodeId);
+          api.Webclient.showAppDialog(eventConfig.title || &quot;&quot;, {
+            url: eventConfig.url,
+            doneHandler: function () {
+              me.unregisterOpenWindow();
+              callback.call(this);
+            },
+            closeHandler: function () {
+              me.closeForm(event.obj.flowId, event.obj.nodeId);
+              me.unregisterOpenWindow();
+              callback.call(this);
+            }
+          });
+          Ext.resumeLayouts();
+        } else if (eventConfig.flowId &amp;&amp; eventConfig.nodeId) {
+          Ext.suspendLayouts();
+          me.hideLoadingIndicator.call(me.actionHandler);
+
+          me.registerOpenWindow(event.obj.flowId, event.obj.nodeId);
+          api.Webclient.showAppDialog(eventConfig.title || &quot;&quot;, {
+            flowId: event.obj.flowId,
+            nodeId: event.obj.nodeId,
+            doneHandler: function () {
+              me.unregisterOpenWindow();
+              callback.call(this);
+            },
+            closeHandler: function () {
+              me.closeForm(event.obj.flowId, event.obj.nodeId);
+              me.unregisterOpenWindow();
+              callback.call(this);
+            }
+          });
+          Ext.resumeLayouts();
+        } else {
+          if (me.hideLoadingIndicator) {
+            me.hideLoadingIndicator.call(me.actionHandler);
+          }
+          callback.call(me);
+        }
+      }
+    },
+
+    registerOpenWindow: function (flowId, nodeId) {
+      var me = this;
+      me.originalonunload = window.onbeforeunload;
+      me.flowId = flowId;
+      me.nodeId = nodeId;
+      window.onbeforeunload = function () {
+        me.closeForm(me.flowId, me.nodeId);
+        if (me.originalonunload) {
+          me.originalonunload();
+        }
+      };
+      me.registeredWindow = true;
+    },
+
+    unregisterOpenWindow: function () {
+      var me = this;
+      if (me.registeredWindow) {
+        window.onbeforeunload = me.originalonunload;
+        me.flowId = null;
+        me.nodeId = null;
+        me.registeredWindow = false;
+      }
+    },
+
+<span id='sol-common-web-ActionHandler-method-closeForm'>    /**
+</span>     * Aborts the current form if the user clicks cancel or reloads the page.
+     * @param {Number} flowId
+     * @param {Number} nodeId
+     */
+    closeForm: function (flowId, nodeId) {
+      var me = this;
+      if (me.registeredWindow &amp;&amp; me.flowId &amp;&amp; me.nodeId) {
+        sol.common.IxUtils.execute(&quot;RF_sol_common_service_ActionCancelForm&quot;, {
+          flowId: flowId, nodeId: nodeId
+        }, function () {
+          console.info(&quot;sol.common.client.ActionHandler: Closed open process.&quot;);
+        }, function (error) {
+          console.error(&quot;sol.common.client.ActionHandler: Closing open process failed.&quot;, error);
+        });
+      }
+    }
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Error&quot;, {
+
+    execute: function (event, context, callback) {
+      var eventConfig;
+
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.ERROR) {
+        throw &quot;&#39;sol.common.web.ActionHandler.ERROR&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.ERROR + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      if (event.obj) {
+        eventConfig = event.obj;
+        api.Webclient.alert(locales[&quot;sol.common.client.ActionHandler.errordlg.title&quot;], eventConfig.msg);
+      }
+
+      callback.call(this);
+    }
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Feedback&quot;, {
+
+    execute: function (event, context, callback) {
+      var eventConfig;
+
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK) {
+        throw &quot;&#39;sol.common.web.ActionHandler.FEEDBACK&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      setTimeout(function () {
+        if (event.obj) {
+          eventConfig = event.obj;
+          if (eventConfig.permanent === true) {
+            sol.common.web.ApiUtils.showInfoMessage(eventConfig.msg);
+          } else {
+            sol.common.web.ApiUtils.showPopupMessage(eventConfig.msg);
+          }
+        }
+        callback.call(this);
+      }, 0);
+    }
+  });
+
+  sol.define(&quot;sol.common.web.ActionHandler.Action&quot;, {
+    execute: function (event, context, callback) {
+      if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.ACTION) {
+        throw &quot;&#39;sol.common.web.ActionHandler.ACTION&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.ACTION + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+      }
+
+      context.dirtySord = true;
+      context.dirtyWfStatus = true;
+
+      if (event.COMPONENT === sol.common.IxUtils.CONST.COMPONENTS.IX) {
+        sol.common.web.ActionHandler.execute(event.obj.registeredFunction, event.obj.params);
+      } else if (event.COMPONENT === sol.common.IxUtils.CONST.COMPONENTS.AS) {
+        sol.common.web.ActionHandler.executeAs(event.obj.solution, event.obj.directRule, event.obj.params, null, &quot;&quot;);
+      }
+
+      callback.call(this);
+    }
+  });
+
+});
+
+//# sourceURL=sol.common.web.ActionHandler.js
+</pre>
+</body>
+</html>

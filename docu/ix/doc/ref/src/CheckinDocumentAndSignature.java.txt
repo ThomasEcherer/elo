@@ -1,0 +1,212 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.io.File;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how a document and signature are checked-in.
+ * 
+ * A Document object is created along with a signature.
+ * The document and signature are checked in
+ * The document is checked-out and the version and signature are displayed
+ */
+
+
+public class CheckinDocumentAndSignature {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            checkinDocAndSig();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static void checkinDocAndSig() throws RemoteException {
+        
+        // Create a document without an associated file
+        EditInfo ed = ix.ix().createDoc("1", "0", null, EDIT_INFO.getMbSordDocAtt());
+        Sord sord = ed.getSord();
+        sord.setName("Example CheckinDocAndSig");
+        System.out.println("Sord created with Id: " + sord.getId() + 
+                           " and name: " + sord.getName());
+                           
+        // Create test file 
+        String text = "CheckinDocAndSig Example File";
+        File testFile = internalCreateTestFile(text, ".txt");
+            
+        // Supply the extension for the document
+        Document doc = ed.getDocument();
+        DocVersion dv = new DocVersion();
+        // The document path must be set for the document version along with the
+        // encryption path when in use
+        dv.setPathId(sord.getPath());
+        //dv.setEncryptionSet(sord.getDetails().getEncryptionSet());
+        dv.setExt(ix.getFileExt(testFile.getName()));
+        doc.setDocs(new DocVersion[] {dv});
+        System.out.println("Document version created for " + testFile.getName());
+        
+        // Create signature file (a dummy signature will be used)
+        File sigFile = internalCreateTestFile("Signature Dummy", ".txt");
+        DocVersion dvSig = new DocVersion();
+        // The document path must be set for the signature version 
+        dv.setPathId(sord.getPath());
+        dvSig.setExt(ix.getFileExt(sigFile.getName()));
+        doc.getDocs()[0].setSig(dvSig);
+        System.out.println("Signature file created: " + sigFile.getName());
+            
+        // The Index Server creates a URL where the document must be uploaded to
+        doc = ix.ix().checkinDocBegin(doc);
+        // dv = doc.getDocs()[0];
+        System.out.println("Prepared upload URL: " + doc.getDocs()[0].getUrl() + 
+                           " doc-guid: " + doc.getDocs()[0].getGuid());
+        
+          
+        // Upload document. Use helper function from IXClient.
+        doc.getDocs()[0].setUploadResult(ix.upload(doc.getDocs()[0].getUrl(), testFile));
+        System.out.println("Document uploaded");
+        
+        // Upload signature. Use helper function from IXClient.
+        doc.getDocs()[0].getSig().setUploadResult(ix.upload(doc.getDocs()[0].getSig().getUrl(), sigFile));
+        System.out.println("Signature uploaded");
+
+        // Commit document with checkinDocEnd method.
+        // uploadResult contains the document information from the ELODM -
+        // this must be passed to the Index Server
+       
+        doc = ix.ix().checkinDocEnd(ed.getSord(), SORD.getMbAll(), doc, LOCK.getNO());
+        dv = doc.getDocs()[0];
+            
+        System.out.println("Inserted document version:");
+        System.out.println("   objId = " + doc.getObjId());
+        System.out.println("   docId = " + doc.getDocs()[0].getId());
+        System.out.println("   doc Guid = " + doc.getDocs()[0].getGuid());
+        System.out.println("   doc url = " + doc.getDocs()[0].getUrl());
+        System.out.println("   sigId = " + doc.getDocs()[0].getSig().getId());
+        System.out.println("   sig Guid = " + doc.getDocs()[0].getSig().getGuid());
+        System.out.println("   sig url = " + doc.getDocs()[0].getSig().getUrl());
+            
+        // Delete local files
+        testFile.delete();
+        sigFile.delete();
+        System.out.println("Files deleted");
+
+       
+       // Checkout and display all versions
+       ed = ix.ix().checkoutDoc(ed.getSord().getGuid(), null, EDIT_INFO.getMbSordDocAtt(), LOCK.getYES());
+       sord = ed.getSord();
+       doc = ed.getDocument();
+       dv = doc.getDocs()[0];
+       dvSig = doc.getDocs()[0].getSig();
+       
+       System.out.println("Document version Id: " + dv.getId());
+       System.out.println("Document signature Id: " + dvSig.getId());
+  
+       
+       // Unlock using checkinSord
+       ix.ix().checkinSord(sord, SORD.getMbOnlyUnlock(), LOCK.getYES());
+       
+       // Delete sord if no longer required
+       // To delete set delete = true
+       boolean delete = false;
+       if (delete == true){
+           
+           DeleteOptions delOpts = new DeleteOptions();
+           delOpts.setDeleteFinally(true);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+           System.out.println("Sord with Id: " + sord.getGuid() + " has been deleted!");
+       }
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    // Write to temp file
+    public static File internalCreateTestFile(String text, String ext) {
+        File tempFile = null;
+        try{
+            tempFile = internalMakeTempFile(ext);
+            BufferedWriter out = new BufferedWriter(new FileWriter(tempFile));
+            out.write(text);
+            out.close();
+            
+        } catch (IOException ioe){
+            System.out.println(ioe.toString());
+        }
+        
+        return tempFile;
+    }
+    
+    
+    // Make file name and create temp file
+    public static File internalMakeTempFile(String ext) throws IOException {
+        
+        String tempFile = "Eloix";
+        File f = File.createTempFile(tempFile, ext);
+        System.out.println("File " + f.getName() + " created");
+        return f;
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

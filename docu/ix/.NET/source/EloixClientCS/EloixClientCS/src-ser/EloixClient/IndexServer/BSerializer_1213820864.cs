@@ -1,0 +1,55 @@
+﻿//
+// Serializer for de.elo.ix.client.BRequest_IXServicePortIF_startExport
+// 
+// THIS FILE HAS BEEN GENERATED. DO NOT MODIFY.
+//
+
+using System;
+using System.Collections.Generic;
+using byps;
+
+namespace EloixClient.IndexServer
+{
+	
+	public class BSerializer_1213820864 : BSerializer {
+		
+		public readonly static BSerializer instance = new BSerializer_1213820864();
+		
+		public BSerializer_1213820864()
+			: base(1213820864) {}
+		
+		public BSerializer_1213820864(int typeId)
+			: base(typeId) {}
+		
+		
+		public override void write(Object obj1, BOutput bout1, long version)
+		{
+			BRequest_IXServicePortIF_startExport obj = (BRequest_IXServicePortIF_startExport)obj1;			
+			BOutputBin bout = (BOutputBin)bout1;
+			BBufferBin bbuf = bout.bbuf;
+			// checkpoint byps.gen.cs.PrintContext:494
+			bbuf.putLong(obj.optionsValue);
+			// checkpoint byps.gen.cs.PrintContext:494
+			bout.writeObj(obj.ciValue, false, null);
+			// checkpoint byps.gen.cs.PrintContext:494
+			bout.writeObj(obj.topLevelIDsValue, true, EloixClient.IndexServer.BSerializer_1888107655.instance);
+		}
+		
+		public override Object read(Object obj1, BInput bin1, long version)
+		{
+			BInputBin bin = (BInputBin)bin1;
+			BRequest_IXServicePortIF_startExport obj = (BRequest_IXServicePortIF_startExport)(obj1 != null ? obj1 : bin.onObjectCreated(new BRequest_IXServicePortIF_startExport()));
+			
+			BBufferBin bbuf = bin.bbuf;
+			// checkpoint byps.gen.cs.PrintContext:449
+			obj.optionsValue = bbuf.getLong();
+			// checkpoint byps.gen.cs.PrintContext:449
+			obj.ciValue = (EloixClient.IndexServer.ClientInfo)bin.readObj(false, null);
+			// checkpoint byps.gen.cs.PrintContext:449
+			obj.topLevelIDsValue = (String[])bin.readObj(false, EloixClient.IndexServer.BSerializer_1888107655.instance);
+			
+			return obj;
+		}
+		
+	}
+} // namespace

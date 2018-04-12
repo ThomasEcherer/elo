@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+
+//@include lib_Class.js
+//@include lib_sol.common.FileUtils.js
+//@include lib_sol.common.ExecUtils.js
+
+importPackage(Packages.com.jacob.com);
+importPackage(Packages.com.jacob.activeX);
+importPackage(Packages.com.ms.activeX);
+importPackage(Packages.com.ms.com);
+
+<span id='sol-dev-jc-CompareDocVersions'>/**
+</span> * Compares document versions
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @elojc
+ *
+ * @requires sol.common.FileUtils
+ * @requires sol.common.ExecUtils
+ */
+sol.define(&quot;sol.dev.jc.CompareDocVersions&quot;, {
+
+  singleton: true,
+
+<span id='sol-dev-jc-CompareDocVersions-property-textExtensions'>  textExtensions: [&quot;csv&quot;, &quot;fo&quot;, &quot;js&quot;, &quot;json&quot;, &quot;properties&quot;, &quot;txt&quot;, &quot;html&quot;],
+</span>
+<span id='sol-dev-jc-CompareDocVersions-property-wordExtensions'>  wordExtensions: [&quot;doc&quot;, &quot;docx&quot;],
+</span>
+<span id='sol-dev-jc-CompareDocVersions-method-execute'>  execute: function (docVersionsDialog) {
+</span>    var me = this,
+        versionList, sord, docVersion1, docVersion2, file1, file2, ext1, ext2;
+
+    sord = docVersionsDialog.sord;
+    versionList = docVersionsDialog.selectedDocVersions;
+
+    if (versionList.size() != 2) {
+      return 1;
+    }
+
+    docVersion1 = versionList.get(0);
+    docVersion2 = versionList.get(1);
+
+    file1 = archive.getFile(sord, docVersion1);
+    file2 = archive.getFile(sord, docVersion2);
+
+    ext1 = String(docVersion1.ext).toLowerCase();
+    ext2 = String(docVersion2.ext).toLowerCase();
+
+    if ((me.textExtensions.indexOf(ext1) &gt; -1) &amp;&amp; (me.textExtensions.indexOf(ext2) &gt; -1)) {
+      me.compareText(file1, file2);
+      return -1;
+    }
+
+    if ((me.wordExtensions.indexOf(ext1) &gt; -1) &amp;&amp; (me.wordExtensions.indexOf(ext2) &gt; -1)) {
+      me.compareWord(file1, file2);
+      return -1;
+    }
+  },
+
+<span id='sol-dev-jc-CompareDocVersions-method-compareText'>  compareText: function (file1, file2) {
+</span>    var vsCodePath, winMergePath, args;
+
+    vsCodePath = sol.common.ExecUtils.getProgramFilesDir() + &quot;/Microsoft VS Code/Code.exe&quot;;
+    winMergePath = sol.common.ExecUtils.getProgramFilesX86Dir() + &quot;/WinMerge/WinMergeU.exe&quot;;
+
+    if (sol.common.FileUtils.exists(vsCodePath)) {
+      args = [vsCodePath, &quot;--diff&quot;, file2.absolutePath, file1.absolutePath];
+      sol.common.ExecUtils.startProcess(args);
+    } else if (sol.common.FileUtils.exists(winMergePath)) {
+      args = [winMergePath, &quot;/e&quot;, &quot;/s&quot;, &quot;/u&quot;, &quot;/wl&quot;, &quot;/wr&quot;, file1.absolutePath, file2.absolutePath];
+      sol.common.ExecUtils.startProcess(args);
+    }
+  },
+
+<span id='sol-dev-jc-CompareDocVersions-method-compareWord'>  compareWord: function (file1, file2) {
+</span>    var word, documents, doc;
+
+    ComThread.InitSTA();
+    try {
+      word = new ActiveXComponent(&quot;Word.Application&quot;);
+      Dispatch.put(word, &quot;Visible&quot;, true);
+
+      documents = Dispatch.get(word, &quot;Documents&quot;).toDispatch();
+      doc = Dispatch.call(documents, &quot;Open&quot;, file2.absolutePath).toDispatch();
+
+      try {
+        Dispatch.call(doc, &quot;Unprotect&quot;);
+      } catch (ex) {
+        log.info(&quot;Cannot unprotect document: &quot; + ex);
+      }
+
+      Dispatch.call(doc, &quot;Compare&quot;, file1.absolutePath, &quot;&quot;, 1, true, true, false, false, true);
+      Dispatch.put(doc, &quot;Saved&quot;, true);
+
+      return true;
+
+    } catch (ex) {
+      log.info(&quot;Error comparing documents: &quot; + ex);
+    } finally {
+      ComThread.Release();
+    }
+
+    return false;
+  }
+});
+
+function eloDocVersionsCompareStart(docVersionsDialog) {
+  return sol.dev.jc.CompareDocVersions.execute(docVersionsDialog);
+}</pre>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-as-functions-CreateSignedPdf'>/**
+</span> * @private
+ * Creates a signed PDF file
+ * Combines a given file with a signature image.
+ * The signature image is retrieved as base64 content from a &quot;properties&quot; property of a data node or form a form blob field
+ *
+ * @author MW, ELO Digital Office GmbH
+ *
+ * @eloas
+ * @requires sol.common.as.FunctionBase
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.WfUtils
+ *
+ * Sample node configuration:
+ *
+ *    {
+ *      &quot;$directRule&quot;: &quot;sol.common.CreateSignedPdf&quot; ,
+ *      &quot;field&quot;: {
+ *        &quot;type&quot;: &quot;FORMBLOB&quot;,
+ *        &quot;key&quot;: &quot;WO_SIGNATURE&quot;
+ *      },
+ *      &quot;signatureBasePath&quot;: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/visitor/Configuration/Reports/Signature&quot;,
+ *      &quot;signaturType&quot;: &quot;Default&quot;
+ *    }
+ *
+ *    {
+ *      &quot;$function&quot;: &quot;sol.common.as.functions.CreateSignedPdf&quot; ,
+ *      &quot;dataNodeName&quot;: &quot;[data] signature&quot;,
+ *      &quot;templateId&quot;: &quot;ARCPATH:/Administration/Business Solutions/visitor/Configuration/Reports/Signature/Signature&quot;,
+ *      &quot;name&quot;: &quot;signed&quot;
+ *    }
+ */
+sol.define(&quot;sol.common.as.functions.CreateSignedPdf&quot;, {
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+<span id='sol-common-as-functions-CreateSignedPdf-property-requiredProperty'>  requiredProperty: [&quot;objId&quot;, &quot;flowId&quot;, &quot;dataNodeName&quot;],
+</span>
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID of the PDF file that should be signed
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId (required)
+   * Workflow ID
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-dataNodeName'>  /**
+</span>   * @cfg {String} dataNodeName
+   * Name which holds the base64 string with the signature
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-field'>  /**
+</span>   * @cfg {String} field
+   * Field that contains the signature data
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-name'>  /**
+</span>   * @cfg {String} name (optional)
+   * Name of the created document, default will be the name of the original element
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-templateId'>  /**
+</span>   * @cfg {String} templateId (optional)
+   * Object ID of the FOP template. Either this, or `signatureBasePath` and `signaturType` has to be set. If a `templateId` is defined, it has priority.
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-signatureBasePath'>  /**
+</span>   * @cfg {String} signatureBasePath (optional)
+   * ARCPATH with the signatur types. If not set, `templateId` has to be defined. If a `templateId` is defined, it has priority.
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-signaturType'>  /**
+</span>   * @cfg {String} signaturType (optional)
+   * The template name for the signature (in the `signatureBasePath`). If not set, `templateId` has to be defined. If a `templateId` is defined, it has priority.
+   */
+
+<span id='sol-common-as-functions-CreateSignedPdf-cfg-dstFolderId'>  /**
+</span>   * @cfg {String} dstFolderId (optional)
+   * Folder ID of the destination folder
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    if (!me.templateId &amp;&amp; !me.signatureBasePath) {
+      throw &quot;IllegalArgumentException: either a &#39;templateId&#39; or &#39;signatureBasePath&#39; has to be defined&quot;;
+    }
+    if (me.signatureBasePath &amp;&amp; !me.signaturType) {
+      throw &quot;IllegalArgumentException: if a &#39;signatureBasePath&#39; is defined, a &#39;signaturType&#39; is mandatory&quot;;
+    }
+  },
+
+<span id='sol-common-as-functions-CreateSignedPdf-method-getName'>  getName: function () {
+</span>    return &quot;SignPdf&quot;;
+  },
+
+<span id='sol-common-as-functions-CreateSignedPdf-method-process'>  process: function () {
+</span>    var me = this,
+        wfDiagram, dataNode, blobValue, blobData, imageData, imageDataParts, fopRenderer, sord, srcObjUrl, srcTempFilePath,
+        data, signatureFopResult, srcDocInputStream, signatureInputStream, mergedOutputStream;
+
+    if (me.dataNodeName) {
+      wfDiagram = sol.common.WfUtils.getWorkflow(me.flowId);
+      dataNode = sol.common.WfUtils.getNodeByName(wfDiagram, me.dataNodeName);
+
+      if (!dataNode) {
+        throw &quot;Data node &#39;&quot; + me.dataNodeName + &quot;&#39; not found.&quot;;
+      }
+
+      imageData = dataNode.properties + &quot;&quot;;
+    }
+
+    sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+
+    if (me.field) {
+      blobValue = sol.common.SordUtils.getValue(sord, me.field);
+      blobData = JSON.parse(blobValue);
+      imageData = blobData.signature;
+    }
+
+    if (!imageData) {
+      throw &quot;Image data is empty&quot;;
+    }
+
+    imageDataParts = imageData.split(&quot;;base64,&quot;);
+    if (imageDataParts &amp;&amp; (imageDataParts.length == 2)) {
+      imageData = imageDataParts[1];
+    }
+
+    me.dstFolderId = me.dstFolderId || sord.parentId;
+    me.name = me.name || sord.name;
+    me.templateId = me.getTemplateId();
+
+    data = { srcTempFilePath: srcTempFilePath, srcObjUrl: srcObjUrl, imageData: imageData, sord: sol.common.SordUtils.getTemplateSord(sord).sord };
+
+    me.logger.debug([&quot;Create signature PDF: imageData={0}&quot; + imageData]);
+
+    fopRenderer = sol.create(&quot;sol.common.as.renderer.Fop&quot;, { templateId: me.templateId, toStream: true });
+    signatureFopResult = fopRenderer.render(me.name, data);
+
+    signatureInputStream = me.convertOutputStreamToInputStream(signatureFopResult.outputStream);
+
+    srcDocInputStream = sol.common.RepoUtils.downloadToStream(me.objId);
+    mergedOutputStream = new ByteArrayOutputStream();
+    sol.common.as.PdfUtils.mergePdfStreams([srcDocInputStream, signatureInputStream], mergedOutputStream);
+    sol.common.RepoUtils.saveToRepo({ objId: me.objId, name: me.name, outputStream: mergedOutputStream, extension: &quot;pdf&quot; });
+
+    return { passOn: true };
+  },
+
+<span id='sol-common-as-functions-CreateSignedPdf-method-convertOutputStreamToInputStream'>  /**
+</span>   * @private
+   * Converts an output stream to an input stream
+   * @param {java.io.OutputStream} outputStream
+   * @return {java.io.InputStream}
+   */
+  convertOutputStreamToInputStream: function (outputStream) {
+    if (!outputStream) {
+      throw &quot;Output stream is empty&quot;;
+    }
+    var inputStream = new ByteArrayInputStream(outputStream.toByteArray());
+    outputStream.close();
+    return inputStream;
+  },
+
+<span id='sol-common-as-functions-CreateSignedPdf-method-getTemplateId'>  /**
+</span>   * @private
+   * @return {String}
+   */
+  getTemplateId: function () {
+    var me = this;
+    return me.templateId || sol.common.RepoUtils.getObjIdFromRelativePath(me.signatureBasePath, &quot;/&quot; + me.signaturType);
+  }
+});
+</pre>
+</body>
+</html>

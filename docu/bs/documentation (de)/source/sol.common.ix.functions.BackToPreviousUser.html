@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.AsyncUtils.js
+//@include lib_sol.common.Map.js
+//@include lib_sol.common.ix.DynAdHocFlowUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.BackToPreviousUser&quot; });
+
+<span id='sol-common-ix-functions-BackToPreviousUser'>/**
+</span> * Send a dynamic ad-hocc workflow back to the previous user
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.2
+ *
+ * @eloix
+ *
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.WfMap
+ * @requires  sol.common.MapTable
+ * @requires  sol.common.ix.FunctionBase
+ * @requires  sol.common.ix.DynAdHocFlowUtils
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.BackToPreviousUser&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-BackToPreviousUser-cfg-requiredConfig'>  requiredConfig: [&quot;wfDiagram&quot;],
+</span>
+<span id='sol-common-ix-functions-BackToPreviousUser-cfg-wfDiagram'>  /**
+</span>   * @cfg {de.elo.ix.client.WFDiagram} wfDiagram (required)
+   * The WFDiagram to which the changes should me applied to
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.params = config;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+
+<span id='sol-common-ix-functions-BackToPreviousUser-method-process'>  /**
+</span>   * Send a dynamic ad-hocc workflow back to the previous user
+   * @return {Boolean}
+   */
+  process: function () {
+    var me = this,
+        config;
+
+    config = {
+      currentUserKey: me.currentUserKey,
+      previousUserKey: me.previousUserKey
+    };
+
+    sol.common.ix.DynAdHocFlowUtils.backToPreviousUser(me.wfDiagram.id, me.wfDiagram.objId, config);
+
+    return true;
+  }
+});
+
+<span id='sol-common-ix-functions-BackToPreviousUser-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.BackToPreviousUser
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_BackToPreviousUser&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var params, module;
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.wfDiagram = wfDiagram;
+
+  module = sol.create(&quot;sol.common.ix.functions.BackToPreviousUser&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_BackToPreviousUser&quot;);
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.UserUtils.js
+
+/*
+ * Local definition of the class `sol.common.Cache` for backward compatibility of previous solution packages.
+ */
+if (!sol.ClassManager.getClass(&quot;sol.common.Cache&quot;)) {
+  sol.define(&quot;sol.common.Cache&quot;, {
+
+    initialize: function (config) {
+      var me = this;
+      me.cache = new java.util.concurrent.ConcurrentHashMap(8, 0.9, 1);
+    },
+
+<span id='global-method-put'>    /**
+</span>     * Inserts the specified key-value pair into the cache.
+     * @param {String} key
+     * @param {Object} value
+     * @return {Object} The previous value associated with the key, or null if there was no mapping before
+     */
+    put: function (key, value) {
+      var me = this;
+      return me.cache.put(key, value);
+    },
+
+<span id='global-method-putAll'>    /**
+</span>     * Inserts all key-value pairs specified by an object into the cache. Existing mappings will be replaced.
+     * @param {Object} data Property names will be used as keys and the associated values as values.
+     */
+    putAll: function (data) {
+      var me = this;
+      me.cache.putAll(data);
+    },
+
+<span id='global-method-containsKey'>    /**
+</span>     * Tests if the specified object is a key in the cache.
+     * @param {String} key
+     * @return {Boolean}
+     */
+    containsKey: function (key) {
+      var me = this;
+      return me.cache.containsKey(key);
+    },
+
+<span id='global-method-get'>    /**
+</span>     * Returns the value for the specified key from the cache, or null if the chache contains no mapping for the key.
+     * @param {String} key
+     * @return {Object}
+     */
+    get: function (key) {
+      var me = this;
+      return me.cache.get(key);
+    },
+
+<span id='global-method-keys'>    /**
+</span>     * Returns an enumeration of all keys in the cache.
+     * @return {Object} An `java.util.Enumeration` of all keys
+     */
+    keys: function () {
+      var me = this;
+      return me.cache.keys();
+    },
+
+<span id='global-method-values'>    /**
+</span>     * Returns a collection view of the values contained in the cache.
+     * @return {Object} An `java.util.Collection` of all values
+     */
+    values: function () {
+      var me = this;
+      return me.cache.values();
+    },
+
+<span id='global-method-elements'>    /**
+</span>     * Returns an enumeration of the values in the cache.
+     * @return {Object} An `java.util.Enumeration` of all values
+     */
+    elements: function () {
+      var me = this;
+      return me.cache.elements();
+    },
+
+<span id='global-method-remove'>    /**
+</span>     * Removes the key (and its corresponding value) from the cache.
+     * @param {String} key
+     * @return {Object} The previous value associated with the key, or null if there was no value for the key
+     */
+    remove: function (key) {
+      var me = this;
+      return me.cache.remove(key);
+    },
+
+<span id='global-method-size'>    /**
+</span>     * Returns the number of key-value pairs in the cache.
+     * @return {Number}
+     */
+    size: function () {
+      var me = this;
+      return me.cache.size();
+    },
+
+<span id='global-method-isEmpty'>    /**
+</span>     * Returns `true` if the chache contains no key-value pairs.
+     * @return {Boolean}
+     */
+    isEmpty: function () {
+      var me = this;
+      return me.cache.isEmpty();
+    },
+
+<span id='global-method-clear'>    /**
+</span>     * Removes all of the mappings from the cache.
+     */
+    clear: function () {
+      var me = this;
+      me.cache.clear();
+    }
+  });
+}
+
+<span id='sol-common-Config'>/**
+</span> * Helper for JSON configuration files.
+ *
+ * The constructor can take either a `load`, a `compose` parameter or a JavaScript object.
+ * If the configuration was loaded from the repository (with an additional `writable=true`) as parameter, all changes can be saved back to the repository with {@link #save}.
+ * Saving will always be deactivated if the configuration was loaded with compose.
+ * If the instance was constructed with an object, it can be saved as a new repository element with {@link #saveNew}.
+ *
+ * # Load
+ * This code loads a configuration in readonly mode from a repository file:
+ *
+ *     var myconfig = sol.create(&quot;sol.common.Config&quot;, { load: &quot;(286B8C55-DBF6-2391-8447-479ED57FFDB0)&quot; }).config;
+ *
+ * The next example also loads a configuration, but also saves changed back:
+ *
+ *     var cfg = sol.create(&quot;sol.common.Config&quot;, { load: &quot;ARCPATH:/Administration/Configuration/MyJsonConfig&quot;, writable: true });
+ *     var myconfig = cfg.config;
+ *     // ... make some changes to myconfig ...
+ *     cfg.save();
+ *
+ *
+ * # Compose
+ * If a new configuration object is created using `compose`,
+ * it tries to load the original file as well as a customized file from the same path underneath the &#39;Business Solutions Costom&#39; folder.
+ * Both files will be merged, while the changes in the custom file will override the original settings.
+ *
+ *     var myconfig = sol.create(&quot;sol.common.Config&quot;, { compose: &quot;/contract/Configuration/contract.config&quot; }).config;
+ *
+ * If `compose` is used with an objId, it tries to figure out the relative path inside the Solution folder.
+ * If there is none, nothing will be loaded.
+ * If there is more then one valid path the first one will be used.
+ *
+ * # Config
+ * To save a new configuration, you could:
+ *
+ *     var cfg = sol.create(&quot;sol.common.Config&quot;, { config: { exampleConfigProperty: &quot;a String&quot;, anotherProperty: 4711 } });
+ *     cfg.saveNew(&quot;ARCPATH:/Administration/Configuration/myNewExampleConfig&quot;);
+ *
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.UserUtils
+ */
+sol.define(&quot;sol.common.Config&quot;, {
+
+<span id='sol-common-Config-property-pilcrow'>  pilcrow: &quot;\u00b6&quot;,
+</span>
+<span id='sol-common-Config-property-CONFIG_PATH'>  /**
+</span>   * @private
+   * @property {String} CONFIG_PATH
+   */
+  CONFIG_PATH: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/common/Configuration/base.config&quot;,
+
+<span id='sol-common-Config-property-DEFAULT_BASE_PATHS'>  /**
+</span>   * @private
+   * @property {String[]} DEFAULT_BASE_PATHS
+   */
+  DEFAULT_BASE_PATHS: [
+    &quot;Business Solutions&quot;,
+    &quot;Business Solutions Custom&quot;
+  ],
+
+<span id='sol-common-Config-cfg-load'>  /**
+</span>   * @cfg {String} load (optional) This can be an objId, GUID or arcpath to checkout a JSON configuration file from the repository.
+   */
+
+<span id='sol-common-Config-cfg-compose'>  /**
+</span>   * @cfg {String} compose (optional) This has to be a relative arcpath underneath the &#39;Business Solution&#39; folder or a valid objId
+   */
+
+<span id='sol-common-Config-cfg-config'>  /**
+</span>   * @cfg {Object} config (optional)
+   */
+
+<span id='sol-common-Config-cfg-merge'>  /**
+</span>   * @cfg {Boolean} [merge=false] (optional)
+   * If `true` the configuration loaded via `load`, will be merged (if possible).
+   * This is only neccessary if constructor is invoked with `load`, other wise it will be ignored.
+   */
+
+<span id='sol-common-Config-cfg-forceReload'>  /**
+</span>   * @cfg {Boolean} [forceReload=false] (optional) If `true` cache will be refreshed.
+   */
+
+<span id='sol-common-Config-cfg-copy'>  /**
+</span>   * @cfg {Boolean} [copy=false] (optional) If `true`, `config`-property of initialized class will contain a new object instead of a cache reference.
+   */
+
+<span id='sol-common-Config-cfg-writable'>  /**
+</span>   * @cfg {Boolean} [writable=false] (optional) If `true`, the loaded configuration is writable via the {@link #save} function
+   */
+
+<span id='sol-common-Config-cfg-exceptionOnBrokenConfig'>  /**
+</span>   * @cfg {Boolean} [exceptionOnBrokenConfig=false] (optional) If `true` the merge function throws an exception if on of the configs (which should be merged) is broken.
+   */
+
+<span id='sol-common-Config-property-config'>  /**
+</span>   * @property {Object} config The loaded (or via constructor initialized) configuration object.
+   */
+
+<span id='sol-common-Config-property-basePaths'>  /**
+</span>   * @private
+   * @property {String[]} basePaths
+   */
+
+<span id='sol-common-Config-property-objId'>  /**
+</span>   * @private
+   * @property {String} objId Reference to the loaded configuration in the repository
+   */
+
+<span id='sol-common-Config-property-log'>  /**
+</span>   * @private
+   * @property {sol.Logger} log Internal logger
+   */
+
+<span id='sol-common-Config-property-eloAsPathPattern'>  /**
+</span>   * @private
+   * @property {String} eloAsPathPattern
+   * Describes the paths where the `loadEloAsConfig` function looks for the ELOas configuration (inside the Solution folder)
+   */
+  eloAsPathPattern: &quot;/{{SOLUTION}}/Configuration/as.config&quot;,
+
+<span id='sol-common-Config-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    me.log = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.Config&quot; });
+    me.merge = config.merge;
+    me.copy = config.copy;
+    me.forceReload = config.forceReload;
+    me.exceptionOnBrokenConfig = config.exceptionOnBrokenConfig;
+
+    me.log.enter(&quot;initilialize configuration&quot;, config);
+
+    if (config.load &amp;&amp; (config.merge !== true)) {
+      me.objId = config.load;
+      me.reload(me.forceReload);
+    } else if (config.compose || (config.load &amp;&amp; (config.merge === true))) {
+      me.compose = me.getCompose(config);
+      me.reload(me.forceReload);
+    } else if (config.config) {
+      me.config = config.config;
+      me.objId = config.objId;
+    }
+
+    if (config.writable === true &amp;&amp; !me.compose) {
+      me.writable = true;
+    }
+
+    me.config = me.copy &amp;&amp; me.rawConfig || me.config;
+
+    me.log.exit(&quot;initilialize configuration&quot;);
+  },
+
+<span id='sol-common-Config-method-reload'>  /**
+</span>   * This function reloads the configuration from the repository, and updates the `config` property
+   * @param {Boolean} [force=false] (optional) If `true`, cached configs will be ignored.
+   */
+  reload: function (force) {
+    var me = this,
+        cacheKey = me.objId || me.compose, rawCacheKey = cacheKey + &quot;_raw&quot;,
+        cachedCfg, configObj, rawConfigStr, mergeHierarchy, mergeObjects;
+
+    me.log.enter(&quot;load configuration&quot;);
+
+    cachedCfg = sol.common.ConfigCache.get(cacheKey);
+    if (!cachedCfg || force === true) {
+
+      if (me.objId) {
+        me.log.debug([&quot;load configuration in simple mode (objId={0})&quot;, me.objId]);
+        try {
+          rawConfigStr = sol.common.RepoUtils.downloadToString(me.objId);
+          configObj = JSON.parse(rawConfigStr);
+        } catch (ex) {
+          me.log.error(&quot;could not parse configuration&quot;);
+          throw &quot;Configuration error: &quot; + ex;
+        }
+      } else if (me.compose) {
+        mergeHierarchy = me.retrieveMergeHierarchy(true);
+        mergeObjects = [];
+
+        me.log.debug([&quot;load configuration in merge mode (compose={0}), mergeing &#39;{1}&#39; configs&quot;, me.compose, mergeHierarchy.length]);
+
+        mergeHierarchy.forEach(function (mergeObj) {
+          if (mergeObj) {
+            try {
+              mergeObjects.push(JSON.parse(sol.common.RepoUtils.downloadToString(mergeObj.guid)));
+            } catch (ex) {
+              me.log.warn([&quot;no valid config in &#39;{0}&#39;&quot;, mergeObj.guid], ex);
+              if (me.exceptionOnBrokenConfig === true) {
+                throw &quot;Error loading config file &#39;&quot; + mergeObj.arcPath + &quot;&#39;&quot;;
+              }
+            }
+          }
+        });
+
+        configObj = sol.common.ObjectUtils.mergeObjects(mergeObjects.shift(), mergeObjects);
+        rawConfigStr = JSON.stringify(configObj);
+      }
+
+      sol.common.ConfigCache.put(cacheKey, configObj);  // cache reference to object
+      me.config = configObj;  // give access to reference
+      sol.common.ConfigCache.put(rawCacheKey, rawConfigStr);  // cache string
+      me.rawConfig = me.copy &amp;&amp; JSON.parse(rawConfigStr);  //  give access to parsed-string -&gt; returns a brand-new object
+    } else {
+      me.config = cachedCfg;
+      me.rawConfig = me.copy &amp;&amp; JSON.parse(String(sol.common.ConfigCache.get(rawCacheKey)));
+    }
+
+    me.log.exit(&quot;load configuration&quot;);
+  },
+
+<span id='sol-common-Config-method-save'>  /**
+</span>   * This function saves changes to the `config` property to the repository
+   * @throws Throws an exception, if there is no reference to an repository element (see {@link #objId})
+   * @throws Throws an exception, if the oebjct was created in readonly mode (see {@link #writable})
+   */
+  save: function () {
+    var me = this,
+        fileContent;
+
+    me.log.enter(&quot;save configuration&quot;);
+
+    if (!me.writable) {
+      throw &quot;Config in readonly mode&quot;;
+    }
+
+    if (!me.objId) {
+      throw &quot;no target path&quot;;
+    }
+
+    fileContent = new java.lang.String(JSON.stringify(me.config, null, 2));
+    sol.common.RepoUtils.uploadSmallContent(me.objId, fileContent);
+
+    me.log.exit(&quot;save configuration&quot;);
+  },
+
+<span id='sol-common-Config-method-saveNew'>  /**
+</span>   * Saves a new configuration file to the repository.
+   *
+   * - &lt;b&gt;The path has to contain the element name&lt;/b&gt;
+   * - &lt;b&gt;The path needs to exist (except for the element name), i.e. no new folders will be created&lt;/b&gt;
+   *
+   * @param {String} arcPath An repositoty path.
+   */
+  saveNew: function (arcPath) {
+    var me = this;
+
+    me.log.enter(&quot;save new configuration&quot;);
+
+    if (!arcPath) {
+      throw &quot;Repository path is missing.&quot;;
+    }
+    sol.common.RepoUtils.saveToRepo({ repoPath: arcPath, maskId: CONST.DOC_MASK.GUID_ELOSCRIPTS, contentObject: me.config });
+
+    me.log.exit(&quot;save new configuration&quot;);
+  },
+
+<span id='sol-common-Config-method-retrieveMergeHierarchy'>  /**
+</span>   * Retrieves all configs (objIds) for a given element which would be merged to it.
+   *
+   *     cfg.retrieveMergeHierarchy()   // =&gt; [&quot;(7AEC9AD9-A487-F472-1C60-24925943A3CB)&quot;]
+   *
+   *     cfg.retrieveMergeHierarchy(true)   // =&gt; [{ guid: &quot;(7AEC9AD9-A487-F472-1C60-24925943A3CB)&quot;, basePath: &quot;Business Solutions&quot;, arcPath: &quot;ARCPATH:/...&quot; }]
+   *
+   * @param {boolean} [extended=false] If `true`, this function returns additional infos.
+   * @return {String[]|Object[]} Array with GUIDs
+   */
+  retrieveMergeHierarchy: function (extended) {
+    var me = this,
+        mergeHierarchy = [],
+        composePath;
+
+    me.log.enter(&quot;retrieve hierarchy&quot;);
+
+    composePath = (me.compose) ? me.compose : me.retrieveComposePath(me.objId);
+
+    if (composePath) {
+      me.getBasePaths().forEach(function (basePath) {
+        var sep, arcpath, sord;
+        try {
+          sep = composePath.charAt(0);
+          arcpath = &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:&quot; + sep + basePath + composePath;
+          sord = ixConnect.ix().checkoutSord(arcpath, SordC.mbOnlyId, LockC.NO);
+          if (extended === true) {
+            mergeHierarchy.push({
+              guid: sord.guid,
+              basePath: basePath,
+              arcPath: arcpath
+            });
+          } else {
+            mergeHierarchy.push(sord.guid);
+          }
+        } catch (ex) {
+          mergeHierarchy.push(null);
+          me.log.warn([&quot;could not determine guid for arcpath=&#39;{0}&#39;&quot;, arcpath], ex);
+        }
+
+      });
+    }
+
+    me.log.exit(&quot;retrieve hierarchy&quot;);
+
+    return mergeHierarchy;
+  },
+
+<span id='sol-common-Config-method-retrieveComposePath'>  /**
+</span>   * Retrieves the relative path for an object, which can be used to compose.
+   * If there is more then one composable path, the first one will be used.
+   * @param {String} objId
+   * @return {String}
+   */
+  retrieveComposePath: function (objId) {
+    var me = this,
+        sord = ixConnect.ix().checkoutSord(objId, SordC.mbAll, LockC.NO),
+        validPath, refPaths;
+
+    refPaths = Array.prototype.slice.call(sord.refPaths); // Conversion to JavaScript array for Nashorn compatibility
+
+    refPaths.some(function (refpath) {
+      var valid = false;
+
+      if (!refpath.path || refpath.path.length &lt;= 2) {
+        return false;
+      }
+
+      if (refpath.path[0].guid != &quot;(E10E1000-E100-E100-E100-E10E10E10E00)&quot;) {
+        return;
+      }
+
+      valid = me.getBasePaths().some(function (entry) {
+        return entry == refpath.path[1].name;
+      });
+
+      if (valid) {
+        validPath = refpath;
+        return true;
+      }
+    });
+
+    if (validPath) {
+      validPath = Array.prototype.slice.call(validPath.path, 2); // Nashorn compatible call
+      validPath = me.pilcrow + validPath.map(function (e) {
+        return e.name;
+      }).join(me.pilcrow) + me.pilcrow + sord.name;
+
+      me.log.debug([&quot;Compose path for objId={0}: {1}&quot;, objId, validPath]);
+
+      return validPath;
+    }
+
+    return null;
+  },
+
+<span id='sol-common-Config-method-validForMergeing'>  /**
+</span>   * Checks, if an object is in a valid location, so it can be used for `compose` mode.
+   * @param {String} objId (optional) If `undefined` the internal value (from constructor: `load` or `compose`) will be used
+   * @return {Boolean}
+   */
+  validForMergeing: function (objId) {
+    var me = this,
+        validPath;
+
+    if (!objId &amp;&amp; !me.objId) {
+      return !!me.compose;
+    }
+
+    objId = objId || me.objId;
+    validPath = me.retrieveComposePath(objId);
+
+    return (validPath !== null);
+  },
+
+<span id='sol-common-Config-method-loadEloAsConfig'>  /**
+</span>   * Loads the ELOas configuration. The filename has to be `as.config`
+   *
+   * The `as.config` file content has to be a valid JSON string with at least the following propperties:
+   *
+   *     {
+   *       &quot;protocol&quot;: &quot;http&quot;,
+   *       &quot;server&quot;: &quot;myservername&quot;,
+   *       &quot;port&quot;: &quot;8080&quot;,
+   *       &quot;name&quot;: &quot;as-myarchive&quot;
+   *     }
+   *
+   * If a `solution` string is provided, the function tries to lookup a solution specific ELOas configuration.
+   * If no specific configuration is found, or no `solution` string is provied, it falls back to the `common` configuration.
+   *
+   * Lookup path:
+   *
+   *     &quot;ARCPATH:/Administration/Business Solutions/{{SOLUTION}}/Configuration/as.config&quot;
+   *
+   * Fallback path:
+   *
+   *     &quot;ARCPATH:/Administration/Business Solutions/common/Configuration/as.config&quot;
+   *
+   * The following examle tries to load an ELOas configuration specific for the &#39;invoice&#39; solution:
+   *
+   *     var eloAsConfig = sol.create(&quot;sol.common.Config&quot;).loadEloAsConfig(&quot;invoice&quot;);
+   *
+   * The result for the configuration file above:
+   *
+   *     {
+   *       protocol: &quot;http&quot;,
+   *       server: &quot;myservername&quot;,
+   *       port: &quot;8080&quot;,
+   *       name: &quot;as-myarchive&quot;
+   *     }
+   *
+   * This uses the {@link sol.common.ConfigCache}.
+   * First it tries to retrieve a configuration for the solution name.
+   * If none was found it attempts to read the configuration from a solution specific file.
+   * If there is no solution specific ELOas configuration (neither in cache, nor in the archive),
+   * it will try to use a cached common configuration or get the one from the archive.
+   *
+   * @param {String} solution (optional)
+   * @return {Object}
+   */
+  loadEloAsConfig: function (solution) {
+    var me = this,
+        oldCompose, oldObjId, eloAsConfig, result;
+
+    me.log.enter(&quot;load ELOas configuration&quot;);
+
+    if (solution) {
+      eloAsConfig = sol.common.ConfigCache.getELOasCfg(solution);
+      if (!eloAsConfig) {
+        try {
+          oldCompose = me.compose;
+          oldObjId = me.objId;
+          me.objId = null;
+          me.compose = me.eloAsPathPattern.replace(&quot;{{SOLUTION}}&quot;, solution);
+          me.reload(me.forceReload);
+          eloAsConfig = me.config;
+          sol.common.ConfigCache.putELOasCfg(solution, eloAsConfig);
+        } catch (ex) {
+          if (solution == &quot;common&quot;) {
+            me.log.warn(&quot;no ELOas configuration found in &#39;common&#39;&quot;);
+          } else {
+            me.log.warn([&quot;no solution specific ELOas configuration found for &#39;{0}&#39;&quot;, solution]);
+          }
+        } finally {
+          me.objId = oldObjId;
+          me.compose = oldCompose;
+          me.reload(me.forceReload);
+        }
+      }
+    }
+
+    if (sol.common.ObjectUtils.isEmpty(eloAsConfig) &amp;&amp; (solution != &quot;common&quot;)) {
+      me.log.debug(&quot;try fallback to &#39;common&#39;&quot;);
+      eloAsConfig = me.loadEloAsConfig(&quot;common&quot;);
+    }
+
+    result = (sol.common.ObjectUtils.isObject(eloAsConfig)) ? eloAsConfig : null;
+
+    me.log.exit(&quot;load ELOas configuration&quot;);
+
+    return result;
+  },
+
+<span id='sol-common-Config-method-getBasePaths'>  /**
+</span>   * @private
+   * Retrieves the base paths from the common.config.baseMergePaths or uses {@link #DEFAULT_BASE_PATHS} as fallback.
+   * @return {String}
+   */
+  getBasePaths: function () {
+    var me = this,
+        commonCfg;
+    if (!me.basePaths) {
+      try {
+        commonCfg = sol.create(&quot;sol.common.Config&quot;, { load: me.CONFIG_PATH }).config;
+        me.basePaths = (commonCfg &amp;&amp; commonCfg.baseMergePaths) ? commonCfg.baseMergePaths : me.DEFAULT_BASE_PATHS;
+      } catch (ex) {
+        me.basePaths = me.DEFAULT_BASE_PATHS;
+      }
+    }
+    return me.basePaths;
+  },
+
+<span id='sol-common-Config-method-getCompose'>  /**
+</span>   * @private
+   * Retrieves the compose path from the constructors config object.
+   * @param {Object} config
+   * @return {String}
+   */
+  getCompose: function (config) {
+    var me = this,
+        checkObjId;
+    if (config.compose) {
+      checkObjId = sol.common.RepoUtils.getObjId(config.compose);
+      return (checkObjId) ? me.retrieveComposePath(config.compose) : config.compose;
+    }
+    if (config.load &amp;&amp; me.validForMergeing(config.load)) {
+      return me.retrieveComposePath(config.load);
+    }
+    return null;
+  }
+
+});
+
+
+<span id='sol-common-ConfigCache'>/**
+</span> * Caching for configuration files.
+ *
+ * Cache is disabled for administrative users. If an administrative user requests a cached config this class always returns `null`.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ */
+sol.define(&quot;sol.common.ConfigCache&quot;, {
+  singleton: true,
+  requires: [&quot;sol.common.Cache&quot;],
+
+<span id='sol-common-ConfigCache-property-cache'>  /**
+</span>   * @private
+   * @property {sol.common.Cache} cache This contains the already loaded configurations
+   */
+  cache: sol.create(&quot;sol.common.Cache&quot;),
+
+<span id='sol-common-ConfigCache-property-eloAsKeyPrefix'>  eloAsKeyPrefix: &quot;ELOASCONFIG#&quot;,
+</span>
+<span id='sol-common-ConfigCache-method-get'>  /**
+</span>   * Retrieves a configuration from the cache.
+   * @param {String} key
+   * @return {Object}
+   */
+  get: function (key) {
+    var me = this,
+        cachedCfg = null;
+    if (!me.cacheDisabled() &amp;&amp; me.cache.containsKey(key)) {
+      me.logger.debug([&quot;cache hit for key={0}&quot;, key]);
+      cachedCfg = me.cache.get(key);
+    }
+    return cachedCfg;
+  },
+
+<span id='sol-common-ConfigCache-method-put'>  /**
+</span>   * Puts a configuration into the cache.
+   * @param {String} key
+   * @param {Object} cfg
+   */
+  put: function (key, cfg) {
+    var me = this;
+    if (key &amp;&amp; cfg) {
+      me.logger.debug([&quot;put key={0} into cache&quot;, key]);
+      me.cache.put(key, cfg);
+    }
+  },
+
+<span id='sol-common-ConfigCache-method-getELOasCfg'>  /**
+</span>   * Retrieves an ELOas configuration from the cache.
+   * @param {String} solution
+   * @return {Object}
+   */
+  getELOasCfg: function (solution) {
+    var me = this;
+    me.logger.debug([&quot;load ELOas &#39;{0}&#39; config from cache&quot;, solution]);
+    return me.get(me.eloAsKeyPrefix + solution);
+  },
+
+<span id='sol-common-ConfigCache-method-putELOasCfg'>  /**
+</span>   * Puts an ELOas configuration into the cache.
+   * @param {String} solution
+   * @param {Object} cfg
+   */
+  putELOasCfg: function (solution, cfg) {
+    var me = this;
+    if (solution &amp;&amp; cfg) {
+      me.logger.debug([&quot;put ELOas &#39;{0}&#39; config into cache&quot;, solution]);
+      me.cache.put(me.eloAsKeyPrefix + solution, cfg);
+    }
+  },
+
+<span id='sol-common-ConfigCache-method-cacheDisabled'>  /**
+</span>   * @private
+   * Checks, if caching is disabled.
+   * Currently caching is only disabled for administrative users.
+   * @return {Boolean}
+   */
+  cacheDisabled: function () {
+    var me = this,
+        isDisabled;
+    if (sol.common.UserUtils &amp;&amp; sol.common.UserUtils.isMainAdmin) {
+      isDisabled = sol.common.UserUtils.isMainAdmin(ixConnect.loginResult.user);
+    }
+    if (isDisabled) {
+      me.logger.debug(&quot;caching disabled for administrative users&quot;);
+    }
+    return isDisabled;
+  }
+
+});
+
+
+<span id='sol-common-ConfigMixin'>/**
+</span> * Utility functions to mix into objects and help working with configurations.
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.StringUtils
+ */
+sol.define(&quot;sol.common.ConfigMixin&quot;, {
+  singleton: true,
+<span id='sol-common-ConfigMixin-property-mixin'>  mixin: true,
+</span>
+<span id='sol-common-ConfigMixin-method-parseConfiguration'>  /**
+</span>   * Parses the configuration from an Object or a JSON String.
+   *
+   * Additionally, a JSON file can be specified, to load configuration from.
+   *
+   *     {
+   *       $config: &quot;4711&quot;,          // (optional) an objId, GUID or ARCPATH to a JSON file
+   *       $property: &quot;configParts.part1&quot;,  // (optional) if specified, and the property is an Object, this will be used, instead of the hole JSON file content (can reference sub-objects by using &#39;.&#39; notation)
+   *       extraParam: &quot;extra&quot;  // (optional) all properties, without `$` prefix, will be written into the result.config Object (possibly overwriting values from the JSON file)
+   *     }
+   *
+   * If the JSON file (with objId=4711) would contain something like this:
+   *
+   *     {
+   *       &quot;someProperty&quot;: &quot;string&quot;,
+   *       &quot;configParts&quot;: {
+   *         &quot;part1&quot;: {
+   *           &quot;firstParam&quot;: &quot;first&quot;,
+   *           &quot;secondParam&quot;: &quot;second&quot;
+   *         }
+   *       }
+   *     }
+   *
+   * The returned Object would look like this:
+   *
+   *     {
+   *       $config: &quot;4711&quot;,
+   *       $property: &quot;configParts.part1&quot;,
+   *       config: {
+   *         firstParam: &quot;first&quot;,
+   *         secondParam: &quot;second&quot;,
+   *         extraParam: &quot;extra&quot;
+   *       }
+   *     }
+   *
+   * @param {Object|String} configuration A JavaScript Object, or a JSON String
+   * @param {Boolean} allProps
+   * @return {Object}
+   */
+  parseConfiguration: function (configuration, allProps) {
+    var me = this,
+        configObj, configInstance, config, prop;
+
+    configObj = (sol.common.ObjectUtils.isObject(configuration)) ? configuration : JSON.parse(configuration);
+
+    // load the config from a JSON file
+    if (configObj &amp;&amp; configObj.$config) {
+      configInstance = sol.create(&quot;sol.common.Config&quot;, { compose: configObj.$config });
+      if (!configInstance.validForMergeing()) {
+        configInstance = sol.create(&quot;sol.common.Config&quot;, { load: configObj.$config }); // config is not in merge hierarchy -&gt; reload in simple mode
+      }
+      config = configInstance.config;
+    }
+
+    // use only the property part of the loaded config
+    if (config &amp;&amp; configObj.$property) {
+      config = me.extractConfigPart(config, configObj.$property);
+    }
+
+    if (!config) {
+      config = {};
+    }
+
+    // copy remaining properties to config (override properties from the file)
+    for (prop in configObj) {
+      if (configObj.hasOwnProperty(prop) &amp;&amp; (!sol.common.StringUtils.startsWith(prop, &quot;$&quot;) || allProps)) {
+        config[prop] = configObj[prop];
+      }
+    }
+
+    configObj.config = config;
+
+    return configObj;
+  },
+
+<span id='sol-common-ConfigMixin-method-extractConfigPart'>  /**
+</span>   * @private
+   * Extracts a part of a bigger configuration object.
+   * @param {Object} config The hole configuration object
+   * @param {String} property The property (or path in dot notation), which holds the desired property part
+   * @return {Object}
+   */
+  extractConfigPart: function (config, property) {
+    var configPart = property.split(&quot;.&quot;).reduce(function (obj, key) {
+      return obj[key];
+    }, config);
+    if (sol.common.ObjectUtils.isObject(configPart)) {
+      return configPart;
+    }
+  },
+
+<span id='sol-common-ConfigMixin-method-mergeConfiguration'>  /**
+</span>   * Merge configuration
+   * @param {Object|String} configuration A JavaScript Object, or a JSON String
+   * @return {Object} merged configuration
+   */
+  mergeConfiguration: function (configuration) {
+    var me = this;
+    return me.parseConfiguration(configuration, true).config;
+  }
+});
+</pre>
+</body>
+</html>

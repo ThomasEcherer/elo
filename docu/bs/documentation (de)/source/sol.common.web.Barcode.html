@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+api.require({
+  namespace: [&quot;sol&quot;]
+}, function () {
+    
+  var chars = [],
+      pressed = false,
+      timeout,
+      minBarcodeLength;
+
+<span id='sol-common-web-BarcodeHandler'>  /**
+</span>   * @private
+   * 
+   * This is an experimental class that might change in the future.
+   * Don&#39;t rely on its existance.
+   */ 
+  sol.define(&quot;sol.common.web.BarcodeHandler&quot;, {
+    singleton: true,
+
+<span id='sol-common-web-BarcodeHandler-method-initialize'>    initialize: function (config) {
+</span>      var me = this;
+      me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, arguments);
+
+      window.addEventListener(&quot;keypress&quot;, me.handleKeyEvent);   
+      timeout = me.timeout;
+      minBarcodeLength = me.minBarcodeLength;
+    },
+
+<span id='sol-common-web-BarcodeHandler-cfg-minimum'>    /**
+</span>     * @cfg {Number} minimum amount of characters that identifies a barcode.
+     */ 
+    minBarcodeLength: 10,
+<span id='sol-common-web-BarcodeHandler-cfg-timout'>    /**
+</span>     * @cfg {Number} timout in ms for the barcode sequence.
+     */        
+    timeout: 500,
+
+<span id='sol-common-web-BarcodeHandler-method-handleKeyEvent'>    handleKeyEvent: function (e) {
+</span>      chars.push(String.fromCharCode(e.which));
+      if (pressed == false) {
+        setTimeout(function () {
+          if(chars.length &gt;= minBarcodeLength) {
+            var barcode = chars.join(&quot;&quot;);
+            sol.common.web.BarcodeHandler.handleBarcode(barcode);
+          }
+          chars = [];
+          pressed = false;
+        }, timeout);
+      }
+      pressed = true;
+    },
+<span id='sol-common-web-BarcodeHandler-method-handleBarcode'>    handleBarcode: function (barcode) {
+</span>      var me = this,
+          regex, guid, objId;
+      me.logger.info(&quot;Barcode scanned: &quot; + barcode);
+      // if barcode was regognized in child component,
+      // redirect to parent handler.
+      if (api &amp;&amp; 
+          api.communication &amp;&amp; 
+          api.communication.Parent &amp;&amp;
+          api.communication.Parent.hasParent()) {
+        me.logger.info(&quot;Barcode scanned within child component. Redirect to parent.&quot;);                    
+
+        // not implemented yet.
+
+        return;        
+      }
+
+      if (barcode.indexOf(&quot;elodms&quot;) == 0) {
+          // handle wrong char set by some barcode readers [- equals ?ß]
+        if (barcode.indexOf(&quot;elodmsÖ--&quot;) == 0) {
+          barcode = barcode.replace(/[?ß]/g, &quot;-&quot;);
+        }                
+        regex = /[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/i.exec(barcode);
+        if (regex) {
+          guid = &quot;(&quot;+ regex[0] + &quot;)&quot;;
+          me.logger.info(&quot;Barcode contains elodms link. Goto element with GUID: &quot; + guid);   
+          try {
+            objId = elo.IX.ix().checkoutSord(guid, elo.CONST.SORD.mbOnlyId, elo.CONST.LOCK.NO).id;
+            api.Webclient.gotoEntry(objId);
+          } catch(e) {
+            me.logger.info(&quot;Object not found for GUID: &quot; + guid);   
+          }            	    
+        } else {
+          me.logger.info(&quot;Barcode contains wrong guid format: &quot; + guid);   
+        }
+      } else if (sol.common.web.BarcodeRegistry.isValidBarcode(barcode)) {
+        sol.common.web.BarcodeRegistry.execute(barcode);
+      }     
+    }
+
+  });
+    
+});
+
+
+api.require({
+  namespace: [&quot;sol&quot;]
+}, function () {
+    
+<span id='sol-common-web-BarcodeRegistry'>  /**
+</span>   * @private
+   * 
+   * This is an experimental class that might change in the future.
+   * Don&#39;t rely on its existance.
+   */     
+  sol.define(&quot;sol.common.web.BarcodeRegistry&quot;, {
+    singleton: true,
+<span id='sol-common-web-BarcodeRegistry-property-splitCharacter'>    splitCharacter: &quot;.&quot;,
+</span>
+<span id='sol-common-web-BarcodeRegistry-property-registered'>    /**
+</span>     * @property registered barcode handlers
+     * @private
+     */ 
+    registeredHandlers: {},
+
+<span id='sol-common-web-BarcodeRegistry-method-register'>    /**
+</span>     * registers a new handler for incoming barcodes.
+     * @param {String} identifier 
+     * @param {String} name name for the barcode handler
+     * @param {function} handler
+     */ 
+    register: function (identifier, name, handler) {
+      var me = this;
+      me.logger.info([&quot;Register handler &#39;{1}&#39; for identifier &#39;{0}&#39;.&quot;, identifier, name]);
+      if (me.registeredHandlers.hasOwnProperty(identifier)) {
+        me.logger.warn([&quot;Override exisiting barcode handler for {0}.&quot;, identifier]);
+      }
+      me.registeredHandlers[identifier] = {
+        name: name,
+        handler: handler
+      };
+    },
+
+<span id='sol-common-web-BarcodeRegistry-method-execute'>    /**
+</span>     * processes and executes a barcode by its handler.
+     * @param {String} barcode
+     * @return {Boolean}
+     */ 
+    execute: function (barcode) {
+      var me = this,
+          parts,
+          objId,
+          identifier;
+
+      if (!me.isValidBarcode(barcode)) {
+        return false;
+      }     
+
+      parts = barcode.split(me.splitCharacter);
+      identifier = parts[0];
+      objId = Number.parseFloat(parts[1]) || undefined;
+
+      if (me.registeredHandlers.hasOwnProperty(identifier) 
+              &amp;&amp; me.registeredHandlers[identifier].handler) {
+        me.registeredHandlers[identifier].handler.call(me, identifier, objId, {
+          parts: parts, 
+          barcode: barcode
+        });
+      } else {
+        sol.common.web.ApiUtils.showPopupMessage(&quot;No handler found for barcode&quot;);
+      }
+      return true;
+    },
+
+<span id='sol-common-web-BarcodeRegistry-method-isValidBarcode'>    /**
+</span>     * checks if a given barcode is a valid source for executing actions.
+     * @param {String} barcode
+     * @return {Boolean}
+     */
+    isValidBarcode: function (barcode) {
+      var me = this;
+      return (barcode.indexOf(me.splitCharacter) &gt; 0);
+    }
+  });
+});
+</pre>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-ExceptionUtils'>/**
+</span> * Exception utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.ObjectUtils
+ */
+sol.define(&quot;sol.common.ExceptionUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-ExceptionUtils-method-parseException'>  /**
+</span>   * Parses an exception
+   * @param {Excecption} ex
+   * @return {String}
+   */
+  parseException: function (ex) {
+    var messageParts = [],
+        message;
+
+    if (!ex) {
+      messageParts.push(&quot;Unknown exception&quot;);
+    } else if (sol.common.ObjectUtils.isString(ex)) {
+      messageParts.push(ex);
+    } else if (ex.javaException) {
+      messageParts.push(ex.javaException + &quot;&quot;);
+    }
+
+    if (ex.message) {
+      messageParts.push(ex.message);
+    }
+
+    if (ex.lineNumber) {
+      messageParts.push(&quot; (&quot; + ex.fileName + &quot;#&quot; + ex.lineNumber);
+      if (ex.columnNumber) {
+        messageParts.push(&quot;-&quot; + ex.columnNumber);
+      }
+      messageParts.push(&quot;)&quot;);
+      if (ex.scriptStackTrace) {
+        messageParts.push(&quot; &quot; + ex.scriptStackTrace);
+      }
+    }
+
+    message = messageParts.join(&quot;&quot;);
+
+    return message;
+  },
+
+<span id='sol-common-ExceptionUtils-method-logAsException'>  /**
+</span>   * Logs the ELOas script part where the exception occurs
+   * @param {Exception} ex
+   * @param {Object} params Parameters
+   * @param {Number} params.numberOfLinesBefore Number of lines before
+   * @param {Number} params.numberOfLinesAfter Number of lines after
+   * @param {Object} params.logger Logger
+   * @return {String}
+   */
+  logAsException: function (ex, params) {
+    var me = this,
+        script, scriptArr,
+        partArr = [],
+        i, part, lineNumber, beforeLineNumber, afterLineNumber, logger, message, line, mark;
+
+    if (!ex) {
+      return &quot;&quot;;
+    }
+
+    params = params || {};
+    logger = params.logger || log;
+
+    message = me.parseException(ex);
+    logger.info(&quot;Ruleset name: &quot; + ruleset.rulesetName);
+    logger.info(&quot;Exception: &quot; + message);
+
+    if (typeof ruleset == &quot;undefined&quot;) {
+      return &quot;&quot;;
+    }
+
+    script = ruleset.JScript + &quot;&quot;;
+
+    lineNumber = ex.lineNumber;
+    if (!lineNumber) {
+      return &quot;&quot;;
+    }
+    scriptArr = script.split(/\r\n|\r|\n/);
+
+    params.numberOfLinesBefore = params.numberOfLinesBefore || 10;
+    params.numberOfLinesAfter = params.numberOfLinesAfter || 10;
+
+    beforeLineNumber = lineNumber - params.numberOfLinesBefore;
+    afterLineNumber = lineNumber + params.numberOfLinesAfter;
+
+    beforeLineNumber = (beforeLineNumber &lt; 0) ? 0 : beforeLineNumber;
+    afterLineNumber = (afterLineNumber &gt; scriptArr.length) ? scriptArr.length : afterLineNumber;
+
+    for (i = beforeLineNumber; i &lt; afterLineNumber; i++) {
+      line = scriptArr[i];
+      mark = (i == (lineNumber - 1)) ? &quot;*&quot; : &quot; &quot;;
+      logger.info(&quot;Line &quot; + mark + &quot; &quot; + (i + 1) + &quot;: &quot; + line);
+      partArr.push(line);
+    }
+
+    part = partArr.join(&quot;\r\n&quot;);
+
+    me.exportAsScript({ logger: logger });
+
+    return part;
+  },
+
+<span id='sol-common-ExceptionUtils-method-exportAsScript'>  /**
+</span>   * Exports the ELOas ruleset script file
+   * @param {Object} params Parameters
+   * @param {Object} params.logger Logger
+   * @return {String}
+   */
+  exportAsScript: function (params) {
+    var logger, script, tempDirPath, scriptFilePath, scriptTempDirPath, scriptTempDir, scriptFile;
+
+    if (typeof ruleset == &quot;undefined&quot;) {
+      return &quot;&quot;;
+    }
+
+    params = params || {};
+    logger = params.logger || log;
+
+    script = ruleset.JScript + &quot;&quot;;
+
+    tempDirPath = String(java.lang.System.getProperty(&quot;java.io.tmpdir&quot;));
+    scriptTempDirPath = tempDirPath + &quot;ELOasScripts&quot;;
+    scriptTempDir = new java.io.File(scriptTempDirPath);
+    Packages.org.apache.commons.io.FileUtils.deleteQuietly(scriptTempDir);
+    Packages.org.apache.commons.io.FileUtils.forceMkdir(scriptTempDir);
+    scriptFilePath = scriptTempDirPath + java.io.File.separator + ruleset.rulesetName + &quot;.js&quot;;
+    scriptFile = new java.io.File(scriptFilePath);
+    logger.info(&quot;Export ruleset script file: &quot; + scriptFilePath);
+    Packages.org.apache.commons.io.FileUtils.writeStringToFile(scriptFile, script, &quot;UTF-8&quot;);
+
+    return script;
+  }
+});</pre>
+</body>
+</html>

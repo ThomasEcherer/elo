@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ActionDefinitionCollector&quot; });
+
+var _0xda5f=[&quot;\x64\x65\x73\x63&quot;,&quot;\x70\x61\x72\x73\x65&quot;,&quot;\x63\x6C\x69\x65\x6E\x74\x41\x70\x70\x54\x79\x70\x65&quot;,&quot;\x73\x65\x73\x73\x69\x6F\x6E\x4F\x70\x74\x69\x6F\x6E\x73&quot;,&quot;\x44\x52\x46\x4A&quot;,&quot;\x63\x6C&quot;,&quot;\x65&quot;,&quot;\x6C\x69\x63&quot;,&quot;\x45\x4C\x4F\x62\x73&quot;,&quot;\x73\x65\x74\x43\x75\x73\x74\x6F\x6D\x65\x72\x4E\x61\x6D\x65&quot;,&quot;\x45\x4C\x4F\x4D\x69\x6E\x69\x41\x70\x70\x2F&quot;,&quot;\x66\x63\x74&quot;,&quot;\x61\x63\x74\x69\x6F\x6E&quot;,&quot;\x73\x65\x74\x4D\x6F\x64\x75\x6C\x65\x4E\x61\x6D\x65&quot;,&quot;\x73\x65\x74\x4C\x69\x63\x65\x6E\x73\x65\x4B\x65\x79&quot;,&quot;\x63\x68\x65\x63\x6B\x4C\x69\x63\x65\x6E\x73\x65&quot;,&quot;\x69\x78&quot;,&quot;\x64\x63&quot;,&quot;\x69\x64&quot;,&quot;\x75\x73\x65\x72&quot;,&quot;\x23&quot;,&quot;\x73\x69\x67&quot;,&quot;\x55\x54\x46\x2D\x38&quot;,&quot;\x67\x65\x74\x4D\x44\x35&quot;,&quot;\x4D\x64\x35\x48\x61\x73\x68&quot;,&quot;\x73\x65\x63&quot;,&quot;\x75\x74\x69\x6C\x73&quot;,&quot;\x65\x6C\x6F&quot;,&quot;\x64\x65&quot;,&quot;\x73\x65\x72\x6E\x6F&quot;,&quot;\x6C\x69\x63\x65\x6E\x73\x65&quot;,&quot;\x67\x65\x74\x53\x65\x72\x76\x65\x72\x49\x6E\x66\x6F&quot;,&quot;\x5C\x6E&quot;,&quot;\x73\x70\x6C\x69\x74&quot;,&quot;\x6C\x65\x6E\x67\x74\x68&quot;];var ActionDefinitionManager={register:function(_0x39eex2,_0x39eex3){var _0x39eex4=this,_0x39eex5;_0x39eex5= JSON[_0xda5f[1]](_0x39eex2[_0xda5f[0]]);return (_0x39eex3[_0xda5f[3]][_0xda5f[2]]== _0xda5f[4])?((_0x39eex4[_0xda5f[5]](_0x39eex5))?_0x39eex4[_0xda5f[6]](_0x39eex3,_0x39eex5,true):null):_0x39eex4[_0xda5f[6]](_0x39eex3,_0x39eex5,false)},cl:function(_0x39eex5){var _0x39eex4=this,_0x39eex6=false,_0x39eex7= new LicenseInfo(),_0x39eex8;if(_0x39eex5[_0xda5f[7]]){try{_0x39eex7[_0xda5f[9]](_0xda5f[8]);_0x39eex7[_0xda5f[13]](_0xda5f[10]+ _0x39eex5[_0xda5f[12]][_0xda5f[11]]);_0x39eex7[_0xda5f[14]](_0x39eex5[_0xda5f[7]]);ixConnect[_0xda5f[16]]()[_0xda5f[15]](_0x39eex7);_0x39eex6= true}catch(ex){};if(_0x39eex6!== true){_0x39eex8= _0x39eex4[_0xda5f[17]]();if(_0x39eex8){try{_0x39eex7[_0xda5f[9]](_0x39eex8);_0x39eex7[_0xda5f[13]](_0xda5f[10]+ _0x39eex5[_0xda5f[12]][_0xda5f[11]]);_0x39eex7[_0xda5f[14]](_0x39eex5[_0xda5f[7]]);ixConnect[_0xda5f[16]]()[_0xda5f[15]](_0x39eex7);_0x39eex6= true}catch(ex){}}}};return _0x39eex6},e:function(_0x39eex3,_0x39eex5,_0x39eex9){var _0x39eexa,_0x39eexb,_0x39eexc,_0x39eexd;_0x39eexa= _0x39eex5[_0xda5f[7]];_0x39eexb= _0x39eex5[_0xda5f[12]][_0xda5f[11]];_0x39eexc= _0x39eex3[_0xda5f[19]][_0xda5f[18]];_0x39eexd= (_0x39eex9&amp;&amp; _0x39eexa)?(_0x39eexa+ _0xda5f[20]+ _0x39eexb+ _0xda5f[20]+ _0x39eexc):_0x39eexb;_0x39eex5[_0xda5f[21]]= String(Packages[_0xda5f[28]][_0xda5f[27]][_0xda5f[26]][_0xda5f[25]][_0xda5f[24]][_0xda5f[23]](_0x39eexd,_0xda5f[22]));return _0x39eex5},dc:function(){var _0x39eexe,_0x39eexf,_0x39eex8;try{_0x39eexe= ixConnect[_0xda5f[16]]()[_0xda5f[31]]()[_0xda5f[30]][_0xda5f[29]];_0x39eexf= String(_0x39eexe)[_0xda5f[33]](_0xda5f[32]);_0x39eex8= (_0x39eexf[_0xda5f[34]]=== 2)?_0x39eexf[0]:null}catch(ex){_0x39eex8= null};return _0x39eex8}} // eslint-disable-line
+
+<span id='global-property-'>/**
+</span> * Collects all ribbon and action definitions for ELO Business Solutions.
+ * This service is usually called automatically during the client startup procedure.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ */
+sol.define(&quot;sol.common.ix.services.ActionDefinitionCollector&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+  collectorVersion: &quot;1.02.001&quot;,
+
+<span id='global-cfg-parentId'>  /**
+</span>   * @cfg {String} parentId (required)
+   * id of the parent element (guid, objId or archivepath)
+   */
+  parentId: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/_global/Action definitions&quot;,
+  sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;name&quot;, &quot;desc&quot;],
+  totalCount: 10000,
+  maxFind: 1000,
+  objKeys: [],
+  filter: [],
+  endLevel: 1,
+
+  sordKeyMap: {
+    id: { elementSelector: ObjDataC.mbId },
+    guid: { elementSelector: ObjDataC.mbGuid },
+    name: { elementSelector: ObjDataC.mbName },
+    desc: { elementSelector: SordC.mbDesc }
+  },
+
+  initialize: function (config) {
+    var me = this;
+
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.maskName = config.maskName || me.maskName;
+    me.parentId = config.parentId || me.parentId;
+    me.formatter = config.formatter || me.formatter;
+    me.sordKeys = config.sordKeys || me.sordKeys;
+    me.objKeys = config.objKeys || me.objKeys;
+    me.ec = config.ec || me.ec;
+    me.endLevel = config.endLevel || me.endLevel;
+    me.returnDataDefinition = config.returnDataDefinition || me.returnDataDefinition;
+    me.filter = config.filter || me.filter;
+
+    me.objKeyMap = {};
+    me.jsonData = [];
+    me.docMasks = {};
+  },
+
+<span id='global-property-translateObjectProperties'>  /**
+</span>   * list of objects that are translated using IX translation keys.
+   */
+  translateObjectProperties: {
+    ribbon: {
+      button: {
+        text: true,
+        splitText: true,
+        tooltipText: true,
+        tooltipTitle: true
+      },
+      buttongroup: {
+        text: true
+      },
+      ribbonTab: {
+        text: true
+      }
+    },
+    action: {
+      locale: {
+        errorDlgTitle: true,
+        typesDlgTitle: true,
+        typesDlgHeader: true,
+        typesDlgText: true,
+        typesDlgNoTypes: true,
+        treeDlgTitle: true,
+        treeDlgHeader: true,
+        treeDlgRootName: true
+      }
+    }
+  },
+
+<span id='global-method-execute'>  /**
+</span>   * Starts the collection of the desired data
+   * @return {String}
+   */
+  execute: function () {
+    var me = this,
+        childSords, i, def,
+        terms = [],
+        definitions = [];
+
+    me.computeSordElementSelector();
+    childSords = me.collectChildren();
+
+    if (childSords) {
+      // read definitions
+      for (i = 0; i &lt; childSords.length; i++) {
+        try {
+          def = ActionDefinitionManager.register(childSords[i], me.ec);
+
+          if (def &amp;&amp; me.checkRequiredModules(def)) {
+            me.parseDefinition(me.translateObjectProperties, def, function (key, val) {
+              terms.push(val);
+              return null;
+            });
+
+            definitions.push(def);
+          }
+        } catch (ex) {
+          me.logger.error(&quot;failed loading definition: &quot; + childSords[i].name, ex);
+        }
+      }
+
+      // translate definitions
+      sol.common.TranslateTerms.require(terms);
+
+      for (i = 0; i &lt; definitions.length; i++) {
+        def = definitions[i];
+        me.parseDefinition(me.translateObjectProperties, def, function (key, val) {
+          return sol.common.TranslateTerms.translate(val);
+        });
+      }
+    }
+
+    return JSON.stringify({
+      definitions: definitions
+    });
+  },
+
+<span id='global-method-parseDefinition'>  /**
+</span>   * @private
+   * Helper for handling object structures.
+   * @param {Object} base
+   * @param {Object} obj
+   * @param {Function} fct
+   */
+  parseDefinition: function (base, obj, fct) {
+    var me = this,
+        objName, res;
+    for (objName in base) {
+      if (base &amp;&amp; base.hasOwnProperty(objName)
+          &amp;&amp; obj &amp;&amp; obj.hasOwnProperty(objName)) {
+        if (base[objName] === true) {
+          res = fct.call(me, objName, obj[objName], obj);
+          if (res !== null &amp;&amp; res !== &quot;&quot;) {
+            obj[objName] = res;
+          }
+        } else {
+          me.parseDefinition(base[objName], obj[objName], fct);
+        }
+      }
+    }
+  },
+
+<span id='global-method-collectChildren'>  /**
+</span>   * @private
+   * @return {Array}
+   */
+  collectChildren: function () {
+    var me = this,
+        i, filter, idx, objKey, length,
+        jsonData = [],
+        findInfo = new FindInfo(),
+        objKeyFilters = [],
+        findResult,
+        parentEditInfo, parentId;
+
+    me.logger.enter(&quot;collectChildren&quot;);
+
+    // get guid from arcpath
+    // this allows accessing child elements of the given path without the requiremt of accessing
+    // parent elements in the Administration folder.
+    try {
+      parentEditInfo = ixConnectAdmin.ix().checkoutSord(me.parentId, EditInfoC.mbOnlyId, LockC.NO);
+      parentId = parentEditInfo.sord.id;
+    } catch (exc) {
+      me.logger.warn(&quot;&#39;_global/Action definition&#39; folder is missing.&quot;);
+      return null;
+    }
+
+    findInfo.findChildren = new FindChildren();
+    findInfo.findChildren.parentId = parentId;
+    findInfo.findChildren.endLevel = me.endLevel;
+
+    // apply optional mask filter
+    if (me.maskName) {
+      if (!findInfo.findByIndex) {
+        findInfo.findByIndex = new FindByIndex();
+      }
+      findInfo.findByIndex.maskId = me.maskName;
+    }
+
+    // apply filter
+    if (me.filter &amp;&amp; me.filter.length &gt; 0) {
+      if (!findInfo.findByIndex) {
+        findInfo.findByIndex = new FindByIndex();
+      }
+      for (i = 0; i &lt; me.filter.length; i++) {
+        filter = me.filter[i];
+        objKey = new ObjKey();
+        objKey.name = filter.key;
+        objKey.data = [filter.val];
+        objKeyFilters.push(objKey);
+        me.logger.debug(&quot;applied filter:&quot;, objKey);
+      }
+      findInfo.findByIndex.objKeys = objKeyFilters;
+    }
+
+    // apply find options
+    findInfo.findOptions = new FindOptions();
+    findInfo.findOptions.totalCount = me.totalCount;
+
+    try {
+      idx = 0;
+      findResult = ixConnect.ix().findFirstSords(findInfo, me.maxFind, me.sordZ);
+      while (true) {
+        for (i = 0, length = findResult.sords.length; i &lt; length; i++) {
+          jsonData.push(findResult.sords[i]);
+        }
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.sords.length;
+        findResult = ixConnect.ix().findNextSords(findResult.searchId, idx, me.maxFind, me.sordZ);
+      }
+    } finally {
+      if (findResult) {
+        ixConnect.ix().findClose(findResult.searchId);
+      }
+    }
+
+    me.logger.exit(&quot;collectChildren&quot;);
+
+    return jsonData;
+  },
+
+<span id='global-method-computeSordElementSelector'>  /**
+</span>   * @private
+   *
+   * Computes a SordZ selector for information that is required.
+   */
+  computeSordElementSelector: function () {
+    var me = this,
+        sordKey, elementSelector, i, objKeyName;
+    me.sordZ = new SordZ(ObjDataC.mbMask);
+    if (me.sordKeys) {
+      me.sordKeys.forEach(function (key) {
+        sordKey = me.sordKeyMap[key];
+        if (sordKey) {
+          elementSelector = sordKey.elementSelector;
+        }
+        if (elementSelector) {
+          me.sordZ.add(elementSelector);
+        }
+      });
+    }
+    if (me.objKeys) {
+      me.sordZ.add(SordC.mbObjKeys);
+      for (i = 0; i &lt; me.objKeys.length; i++) {
+        objKeyName = me.objKeys[i];
+        me.objKeyMap[objKeyName] = true;
+      }
+    }
+  },
+
+<span id='global-method-checkRequiredModules'>  /**
+</span>   * @private
+   * Checks, if all required modules are installed.
+   * @param {Object} actionDefinition
+   * @return {Boolean}
+   */
+  checkRequiredModules: function (actionDefinition) {
+    var me = this,
+        requirementsMeet = true;
+
+    if (actionDefinition &amp;&amp; actionDefinition.action &amp;&amp; actionDefinition.action.requiredModules &amp;&amp; (actionDefinition.action.requiredModules.length &gt; 0)) {
+      requirementsMeet = actionDefinition.action.requiredModules.every(function (requiredModule) {
+        var modulePath, moduleObjId, moduleInstalled;
+        modulePath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{bsFolderPath}}/&quot; + requiredModule);
+        moduleObjId = sol.common.RepoUtils.getObjId(modulePath);
+        moduleInstalled = !!moduleObjId;
+        if (!moduleInstalled) {
+          me.logger.warn([&quot;ActionDefinition of button &#39;{0}&#39; is missing requirements. Required module &#39;{1}&#39; is not installed.&quot;, actionDefinition.ribbon.button.name, requiredModule]);
+        }
+        return moduleInstalled;
+      });
+    }
+
+    return requirementsMeet;
+  }
+});
+
+<span id='sol-common-ix-services-ActionDefinitionCollector-static-method-RF_sol_common_services_ActionDefinitionCollector'>/**
+</span> * @member sol.common.ix.services.ActionDefinitionCollector
+ * @method RF_sol_common_services_ActionDefinitionCollector
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_services_ActionDefinitionCollector(ec, configAny) {
+  var config, actionDefinitionCollector, result;
+
+  logger.enter(&quot;RF_sol_common_services_ActionDefinitionCollector&quot;);
+
+  config = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny);
+  config.ec = ec;
+
+  logger.debug([&quot;ec.ci.language={0}&quot;, String(ec.ci.language)]);
+  logger.debug([&quot;ixConnect.loginResult.clientInfo.language={0}&quot;, String(ixConnect.loginResult.clientInfo.language)]);
+
+  actionDefinitionCollector = sol.create(&quot;sol.common.ix.services.ActionDefinitionCollector&quot;, config);
+  result = actionDefinitionCollector.execute();
+
+  logger.exit(&quot;RF_sol_common_services_ActionDefinitionCollector&quot;);
+
+  return result;
+}
+
+</pre>
+</body>
+</html>

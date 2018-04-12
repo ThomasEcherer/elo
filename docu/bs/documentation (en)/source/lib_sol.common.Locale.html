@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='sol-common-Locale'>/**
+</span> * Helper class for reading a users locale settings.
+ *
+ *     var locale = sol.create(&#39;sol.common.Locale&#39;, {
+ *       ec: ec
+ *     });
+ *
+ *     // read user profile opts and default values
+ *     locale.read();
+ *
+ *     // access properties of the locale object
+ *     var lang = locale.language;
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloall
+ */
+sol.define(&quot;sol.common.Locale&quot;, {
+
+<span id='sol-common-Locale-property-requiredProperties'>  requiredProperties: [&quot;ec&quot;],
+</span>
+<span id='sol-common-Locale-property-language'>  /**
+</span>   * @property {String} language
+   * ISO language code of this user.
+   *
+   *     language = &quot;de&quot;
+   */
+<span id='sol-common-Locale-property-locale'>  /**
+</span>   * @property {java.util.Locale} locale
+   * Java locale object for this users language.
+   */
+<span id='sol-common-Locale-property-decimalFormatSymbols'>  /**
+</span>   * @property {String} decimalFormatSymbols
+   *
+   */
+<span id='sol-common-Locale-property-decimalSeparator'>  /**
+</span>   * @property {String} decimalSeparator
+   */
+<span id='sol-common-Locale-property-groupingSeparator'>  /**
+</span>   * @property {String} groupingSeparator
+   */
+<span id='sol-common-Locale-property-profileOpts'>  /**
+</span>   * @property {Object} profileOpts
+   * Settings from this users profileOpts database.
+   *
+   * @property {Object} profileOpts.useDefaultDateFormat Is true if default date format should be used.
+   * @property {Object} profileOpts.dateFormat Java Client date format entered by the user.
+   * @property {Object} profileOpts.useDefaultSystemSeparator Is true if default separator format should be used.
+   * @property {Object} profileOpts.decimalSeparator Separator setting from the Java Client that was entered by the user.
+   * @property {Object} profileOpts.thousandSeparator Thousand Separator setting from the Java Client that was entered by the user.
+   */
+
+<span id='sol-common-Locale-method-read'>  /**
+</span>   * Reads and processes locale specific data from the elo profile opts database and java locale defaults.
+   */
+  read: function () {
+    var me = this;
+    me.logger.enter(&quot;read&quot;, arguments);
+
+    me.language = me.ec.ci.language;
+    me.locale = new java.util.Locale(me.language);
+    me.decimalFormatSymbols = new java.text.DecimalFormatSymbols(me.locale);
+    me.dateFormatSymbols = new java.text.DateFormatSymbols(me.locale);
+
+    me.userProfile = sol.create(&quot;sol.common.UserProfile&quot;, { userId: me.ec.user.id });
+    me.userProfile.read();
+
+    me.profileOpts = {};
+    me.profileOpts.useDefaultDateFormat = me.userProfile.getOption(&quot;EloJ.I.UseDefaultDateformat&quot;);
+    me.profileOpts.dateFormat = me.userProfile.getOption(&quot;EloJ.S.DateFormat&quot;);
+
+    if ((me.profileOpts.useDefaultDateFormat == &quot;0&quot;) || !me.profileOpts.dateFormat) {
+      me.dateFormat = me.getDefaultDateFormat();
+    } else {
+      me.dateFormat = me.normalizeDateFormat(me.profileOpts.dateFormat);
+    }
+
+    me.profileOpts.useDefaultSystemSeparator = me.userProfile.getOption(&quot;EloJ.I.UseDefaultSystemSeparator&quot;);
+    me.profileOpts.decimalSeparator = me.userProfile.getOption(&quot;EloJ.S.DecimalSeparator&quot;);
+    me.profileOpts.thousandSeparator = me.userProfile.getOption(&quot;EloJ.S.ThousandSeparator&quot;);
+
+    if ((me.profileOpts.useDefaultSystemSeparator == &quot;0&quot;) || !me.profileOpts.decimalSeparator) {
+      me.decimalSeparator = me.getDefaultDecimalSeparator();
+    } else {
+      me.decimalSeparator = me.profileOpts.decimalSeparator;
+    }
+
+    if ((me.profileOpts.useDefaultSystemSeparator == &quot;0&quot;) || !me.profileOpts.thousandSeparator) {
+      me.groupingSeparator = me.getDefaultGroupingSeparator();
+    } else {
+      me.groupingSeparator = me.profileOpts.thousandSeparator;
+    }
+    me.logger.exit(&quot;read&quot;, { dateFormat: me.dateFormat, decimalSeparator: me.decimalSeparator, groupingSeparator: me.groupingSeparator });
+  },
+
+<span id='sol-common-Locale-method-getDefaultDateFormat'>  /**
+</span>   * @private
+   * reads the defaults date format from the java locale class.
+   * @return {String} date result
+   */
+  getDefaultDateFormat: function () {
+    var me = this;
+    return String(java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, me.locale).toPattern());
+  },
+
+<span id='sol-common-Locale-method-normalizeDateFormat'>  /**
+</span>   * @private
+   * @param {Object} dateFormat Java Client date format entered by the user.
+   * @return {String} date result
+   */
+  normalizeDateFormat: function (dateFormat) {
+    dateFormat = String(dateFormat);
+    dateFormat = dateFormat.replace(/y*/i, function (str) {
+      if (str.length == 1) {
+        return &quot;yyyy&quot;;
+      } else {
+        return str;
+      }
+    });
+    return dateFormat;
+  },
+
+<span id='sol-common-Locale-method-getDefaultDecimalSeparator'>  /**
+</span>   * Returns the default decimal separator
+   * @return {String} default decimal separator
+   */
+  getDefaultDecimalSeparator: function () {
+    var me = this;
+    return me.javaCharToJsString(me.decimalFormatSymbols.decimalSeparator);
+  },
+
+<span id='sol-common-Locale-method-getDefaultGroupingSeparator'>  /**
+</span>   * Returns the default grouping separator
+   * @return {String} default grouping separator
+   */
+  getDefaultGroupingSeparator: function () {
+    var me = this;
+    return me.javaCharToJsString(me.decimalFormatSymbols.groupingSeparator);
+  },
+
+<span id='sol-common-Locale-method-javaCharToJsString'>  /**
+</span>   * @private
+   * @param {Char} javaChar java character
+   * @return {String} java character
+   */
+  javaCharToJsString: function (javaChar) {
+    return String(java.lang.Character.toString(javaChar));
+  },
+
+<span id='sol-common-Locale-method-formatDecimal'>  /**
+</span>   * Formats a decimal number
+   * @param {String} decimal Decimal
+   * @param {Object} params Parameters
+   * @param {Number} params.minimumFractionDigits Minimum fraction digits
+   * @param {Number} params.maximumFractionDigits Maximum fraction digits
+   * @param {Boolean} params.groupingUsed Grouping used
+   * @return {String} Formatted decimal
+   */
+  formatDecimal: function (decimal, params) {
+    var me = this,
+        decimalFormatSymbols, decimalFormat, decimalString, bigDecimal, formattedString;
+
+    if (decimal == &quot;&quot;) {
+      return &quot;&quot;;
+    }
+
+    params = params || {};
+    params.maximumFractionDigits = (typeof params.maximumFractionDigits != &quot;undefined&quot;) ? params.maximumFractionDigits : 2;
+    params.minimumFractionDigits = (typeof params.minimumFractionDigits != &quot;undefined&quot;) ? params.minimumFractionDigits : params.maximumFractionDigits;
+    params.groupingUsed = (params.groupingUsed == false) ? false : true;
+
+    decimalFormat = new java.text.DecimalFormat();
+    decimalFormatSymbols = new java.text.DecimalFormatSymbols();
+
+    decimalFormatSymbols.decimalSeparator = new java.lang.Character(me.decimalSeparator);
+    if (params.groupingUsed) {
+      decimalFormat.groupingUsed = true;
+      decimalFormatSymbols.groupingSeparator = new java.lang.Character(me.groupingSeparator);
+    } else {
+      decimalFormat.groupingUsed = false;
+    }
+
+    decimalFormat.decimalFormatSymbols = decimalFormatSymbols;
+    decimalFormat.minimumFractionDigits = java.lang.Integer(params.minimumFractionDigits);
+    decimalFormat.maximumFractionDigits = java.lang.Integer(params.maximumFractionDigits);
+
+    decimalString = decimal + &quot;&quot;;
+    decimalString = decimalString.replace(&quot;,&quot;, &quot;.&quot;);
+
+    bigDecimal = new java.math.BigDecimal(decimalString);
+
+    formattedString = decimalFormat.format(bigDecimal) + &quot;&quot;;
+
+    return formattedString;
+  }
+});
+</pre>
+</body>
+</html>

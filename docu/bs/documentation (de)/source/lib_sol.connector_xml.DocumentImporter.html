@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='sol-connector_xml-DocumentImporter'>/**
+</span> * Contains the DocumentImporter functions
+ *
+ * The importer is used to process XML files and import files into the archive.
+ * The XML extraction is controlled by a configuration object.
+ *
+ * ## Usage
+ *
+ *     var targetId = ... ,
+ *         config = ... ,
+ *         xml = new java.io.File( ... ),
+ *         importer = sol.create(&quot;sol.connector_xml.DocumentImporter&quot;, config);
+ *
+ *     if (importer.validate(xml)) {
+ *       importer.process(xml, targetId);
+ *     }
+ *
+ * ## Configuration
+ * The configuration consists of several properties/sections, which will be described below.
+ * ### xsd
+ * This contains an Array with GUIDs of XSD files in the archive. They&#39;re optional, but if none are defined the validation will always return true.
+ *
+ * ### container
+ * If this is set to true, the files should be imported into a new subfolder of the target folder (this is not implemented yet, so far only container=false will work)
+ *
+ * ### sord
+ * Only required, in container mode ans specifies the mask of the new container (also not implemented yet)
+ *
+ * ### importSuccessAction
+ * Defines, what happens to the XML file in case of import success.
+ * Further documentation an the options/ the structure of the instriction see {@link sol.connector_xml.Utils#handleImportAction Utils.handleImportAction}
+ *
+ * ### importErrorAction
+ * Defines, what happens to the XML file in case of import error.
+ * Further documentation an the options/ the structure of the instriction see {@link sol.connector_xml.Utils#handleImportAction Utils.handleImportAction}
+ *
+ * ### files
+ * This object holds configurations for the informations needed to import the files from the filesystem to the archive.
+ *
+ * - xpath: Path to the file nodes inside the XML
+ * - useRelativePaths: if set to `true` paths will be evaluated relative to the XML file
+ * - importSuccessAction: Action for the files in case of success (see {@link sol.connector_xml.Utils#handleImportAction Utils.handleImportAction})
+ * - importErrorAction: Action for the files in case of error (see {@link sol.connector_xml.Utils#handleImportAction Utils.handleImportAction})
+ * - values: This object contains the XPaths for reading the file information from the file node.
+ *
+ * Each value has a describing object:
+ *
+ *     { xpath: &quot;comment&quot;, converter: &quot;defaultComment&quot; }
+ *
+ * xpath: XPath inside the file node
+ * converter: (optional) for documentation see {@link sol.connector_xml.Importer}
+ *
+ * This are the values which will be read from the file nodes:
+ *
+ * #### FILE_PATH
+ * The file system path of the file
+ * #### FILE_MASK
+ * The mask which should be set after import
+ * #### FILE_NAME
+ * The name for the archive element
+ * #### FILE_COMMENT
+ * The comment for the archive element
+ * #### FILE_VERSION
+ * The version for the archive element
+ *
+ * ### converter
+ * For documentation see {@link sol.connector_xml.Importer} and {@link sol.connector_xml.Converter Converter}
+ *
+ * ## Configuration example
+ *
+ *     {
+ *       xsd: [{ name: &quot;XSD Name&quot;, guid: &quot;(04089DB6-E667-EDDE-DB86-5FCB6E5F4DFB)&quot; }],  //optional
+ *       container: false,
+ *       sord: {   //only for container=true
+ *         mask: &quot;Eingangsrechnung&quot;
+ *       },
+ *       importSuccessAction: &quot;rename:imported&quot;, //[delete|move:SUBFOLDER|rename:SUFFIX], default is delete
+ *       importErrorAction: &quot;rename:error&quot;, //[delete|move:ARCPATH|rename:SUFFIX], default in delete
+ *       files: {
+ *         xpath: &quot;/import/file&quot;,
+ *         importSuccessAction: &quot;rename:imported&quot;, //[delete|move:SUBFOLDER|rename:SUFFIX], default is delete
+ *         importErrorAction: &quot;rename:error&quot;, //[delete|move:ARCPATH|rename:SUFFIX], default in delete
+ *         values: {
+ *           &quot;FILE_PATH&quot;: { xpath: &quot;path&quot; },
+ *           &quot;FILE_MASK&quot;: { xpath: &quot;mask&quot;, converter: &quot;defaultMask&quot; },
+ *           &quot;FILE_NAME&quot;: { xpath: &quot;name&quot; },
+ *           &quot;FILE_COMMENT&quot;: { xpath: &quot;comment&quot;, converter: &quot;defaultComment&quot; },
+ *           &quot;FILE_VERSION&quot;: { xpath: &quot;version&quot;, converter: &quot;defaultVersion&quot; }
+ *         }
+ *       },
+ *       converter: [
+ *         { name: &quot;defaultMask&quot;, type: &quot;DefaultConverter&quot;, defaultValue: &quot;Basic Entry&quot; },
+ *         { name: &quot;defaultComment&quot;, type: &quot;DefaultConverter&quot;, defaultValue: &quot;standard import&quot; },
+ *         { name: &quot;defaultVersion&quot;, type: &quot;DefaultConverter&quot;, defaultValue: &quot;0.8.15&quot; }
+ *       ]
+ *     }
+ *
+ * # Metadata import
+ * The `DocumentImporter` can import metadata as well.
+ *
+ * At this point only metadata import is only supported in `container` mode.
+ * To import metadata to the newly generated container, the configuration has to define a `mapping` (see {@link sol.connector_xml.Importer} for configuration).
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.002
+ *
+ * @requires sol.common.RepoUtils
+ * @requires sol.connector_xml.Utils
+ *
+ */
+sol.define(&quot;sol.connector_xml.DocumentImporter&quot;, {
+
+<span id='sol-connector_xml-DocumentImporter-cfg-xsd'>  /**
+</span>   * @cfg xsd
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-container'>  /**
+</span>   * @cfg container
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-sord'>  /**
+</span>   * @cfg sord
+   * required if &#39;container&#39;= true
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-importSuccessAction'>  /**
+</span>   * @cfg importSuccessAction (required)
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-importErrorAction'>  /**
+</span>   * @cfg importErrorAction (required)
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-files'>  /**
+</span>   * @cfg files (required)
+   */
+<span id='sol-connector_xml-DocumentImporter-cfg-converter'>  /**
+</span>   * @cfg converter
+   */
+
+<span id='sol-connector_xml-DocumentImporter-property-logger'>  /**
+</span>   * @private
+   * @property logger
+   */
+<span id='sol-connector_xml-DocumentImporter-property-config'>  /**
+</span>   * @private
+   * @property config
+   */
+<span id='sol-connector_xml-DocumentImporter-property-utils'>  /**
+</span>   * @private
+   * @property utils
+   */
+<span id='sol-connector_xml-DocumentImporter-property-validator'>  /**
+</span>   * @private
+   * @property validator
+   */
+<span id='sol-connector_xml-DocumentImporter-property-documentBuilder'>  /**
+</span>   * @private
+   * @property documentBuilder
+   */
+<span id='sol-connector_xml-DocumentImporter-property-importer'>  /**
+</span>   * @private
+   * @property importer
+   */
+
+  initialize: function (config) {
+    var me = this;
+    if (!config) {
+      throw &quot;cannot initialize new &quot; + me.$className + &quot; without configuration&quot;;
+    }
+
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: me.$className });
+
+    me.config = config;
+    me.utils = sol.connector_xml.Utils;
+
+    me.validator = (me.config.xsd &amp;&amp; (me.config.xsd.length &gt; 0)) ? me.utils.createValidator(me.config.xsd) : null;
+    me.documentBuilder = me.utils.getDocumentBuilder();
+    me.importer = me.impl.getInstance(me.config);
+  },
+
+<span id='sol-connector_xml-DocumentImporter-method-validate'>  /**
+</span>   * Validation against the schema which is defined in the config
+   * @param {java.io.File} xml The XML file that should be validated
+   * @return {Boolean}
+   */
+  validate: function (xml) {
+    if (this.validator) {
+      var xmlStreamSource = this.utils.getStreamSource(xml);
+      try {
+        this.validator.validate(xmlStreamSource);
+      } catch (ex) {
+        this.logger.warn(&quot;validation failed&quot;, ex);
+        return false;
+      }
+    }
+    return true;
+  },
+
+<span id='sol-connector_xml-DocumentImporter-method-process'>  /**
+</span>   * Starts the import according to the configuration.
+   * @param {java.io.File} xml The XML file that should be processed
+   * @param {String} parentId The ID of the target folder
+   * @return {Object}
+   */
+  process: function (xml, parentId) {
+    var me = this,
+        fileData, result, action, timestamp;
+
+    me.logger.enter(&quot;process&quot;, { objId: parentId });
+    if (!me.importer) {
+      throw &quot;no importer defined&quot;;
+    }
+
+    me.logger.info([&quot;process XML: {0}; import into &#39;{1}&#39;; using &#39;{2}&#39;&quot;, xml, parentId, me.importer.name]);
+
+    me.doc = me.utils.getDocument(me.documentBuilder, xml);
+
+    fileData = me.readXmlData();
+
+    me.preprocessFilePaths(xml, fileData);
+
+    me.logger.debug([&quot;import files using &#39;{0}&#39;&quot;, me.importer.name]);
+    timestamp = sol.common.FileUtils.getTimeStampString();
+
+    result = me.importer.process(parentId, fileData, me.config.files.importSuccessAction, me.config.files.importErrorAction, timestamp, me.config.sord.mask);
+    action = me.config.importSuccessAction;
+
+    me.writeMetadata(xml, result);
+
+    if (result.errors &amp;&amp; result.errors.length &gt; 0) {
+      action = me.config.importErrorAction;
+      me.utils.writeErrorLog(xml, result.errors);
+    }
+
+    me.utils.handleImportAction(xml, action, timestamp);
+
+    me.doc = undefined;
+
+    return result;
+  },
+
+<span id='sol-connector_xml-DocumentImporter-method-readXmlData'>  /**
+</span>   * @private
+   * Parses the XML file and reads the data according to the configuration.
+   * @return {java.io.File[]}
+   */
+  readXmlData: function () {
+
+    var me = this,
+        files = [],
+        fileConfig, nodes, node, info, i, xmlString,
+        pathConverter, maskConverter, nameConverter, commentConverter, versionConverter;
+
+    me.logger.enter(&quot;readXmlData&quot;);
+
+    fileConfig = me.config.files;
+
+    if (me.logger.debugEnabled) {
+      xmlString = sol.connector_xml.Utils.xmlToString(me.doc);
+      me.logger.debug([&quot;xml=&quot; + xmlString]);
+    }
+
+    nodes = sol.connector_xml.Utils.getElements(me.doc, fileConfig.xpath);
+
+    pathConverter = sol.connector_xml.Utils.getConverterConfig(me.config, fileConfig.values.FILE_PATH.converter);
+    maskConverter = sol.connector_xml.Utils.getConverterConfig(me.config, fileConfig.values.FILE_MASK.converter);
+    nameConverter = sol.connector_xml.Utils.getConverterConfig(me.config, fileConfig.values.FILE_NAME.converter);
+    commentConverter = sol.connector_xml.Utils.getConverterConfig(me.config, fileConfig.values.FILE_COMMENT.converter);
+    versionConverter = sol.connector_xml.Utils.getConverterConfig(me.config, fileConfig.values.FILE_VERSION.converter);
+
+    for (i = 0; i &lt; nodes.getLength(); i++) {
+      node = nodes.item(i);
+      info = {};
+
+      info.path = sol.connector_xml.Utils.getValue(node, fileConfig.values.FILE_PATH, pathConverter) + &quot;&quot;;
+      info.mask = sol.connector_xml.Utils.getValue(node, fileConfig.values.FILE_MASK, maskConverter) + &quot;&quot;;
+      info.name = sol.connector_xml.Utils.getValue(node, fileConfig.values.FILE_NAME, nameConverter) + &quot;&quot;;
+      info.comment = sol.connector_xml.Utils.getValue(node, fileConfig.values.FILE_COMMENT, commentConverter) + &quot;&quot;;
+      info.version = sol.connector_xml.Utils.getValue(node, fileConfig.values.FILE_VERSION, versionConverter) + &quot;&quot;;
+
+      files.push(info);
+    }
+
+    me.logger.exit(&quot;readXmlData&quot;);
+    return files;
+  },
+
+<span id='sol-connector_xml-DocumentImporter-method-preprocessFilePaths'>  /**
+</span>   * @private
+   * Preprocessing of the file paths.
+   * If `useRelativePaths` is set to `true`, this evaluates the relative (from the XML) paths to the files to absulute paths.
+   * @param {java.io.File} xmlFile
+   * @param {Object[]} fileData
+   */
+  preprocessFilePaths: function (xmlFile, fileData) {
+    var me = this,
+        xmlPath, basePath;
+
+    if (me.config.files.useRelativePaths !== true) {
+      return;
+    }
+    if (!xmlFile || !xmlFile.exists()) {
+      return;
+    }
+    if (!fileData || (fileData.length &lt;= 0)) {
+      return;
+    }
+
+    xmlPath = xmlFile.getAbsolutePath();
+    basePath = xmlPath.substring(0, xmlPath.lastIndexOf(File.separator));
+
+    fileData.forEach(function (data) {
+      data.path = basePath + File.separator + data.path;
+    });
+  },
+
+<span id='sol-connector_xml-DocumentImporter-method-writeMetadata'>  /**
+</span>   * @private
+   * Imports metadata for a container from the xml file.
+   * @param {java.io.File} xml
+   * @param {Object} params This should be the result of the importer process function
+   */
+  writeMetadata: function (xml, params) {
+    var me = this,
+        importer;
+
+    if (xml &amp;&amp; params &amp;&amp; params.containerId &amp;&amp; me.config &amp;&amp; me.config.mapping &amp;&amp; (me.config.mapping.length &gt; 0)) {
+      importer = sol.create(&quot;sol.connector_xml.Importer&quot;, me.config);
+      importer.process(xml, params.containerId);
+    }
+  },
+
+<span id='sol-connector_xml-DocumentImporter-property-impl'>  /**
+</span>   * @private
+   * Contains the implementations for the differant importer strategies.
+   *
+   * An importer needs to have the following structure:
+   *
+   *     my_importer: {
+   *       name: &quot;importer name&quot;,
+   *       process: function (parentId, fileData, successAction, errorAction) {
+   *         ...
+   *       }
+   *     }
+   *
+   * The process method should return an Object containing two arrays (`objIds` and `errors`).
+   *
+   * If the import is in container mode, a containerId will be returned as well.
+   */
+  impl: {
+
+<span id='sol-connector_xml-DocumentImporter-method-getInstance'>    /**
+</span>     * Returns the correct importer implementation based on a given configuration.
+     * @param {Object} config
+     * @return {Object}
+     */
+    getInstance: function (config) {
+      if (config.container === true) {
+        return this.CONTAINER_IMPORTER;
+      }
+      return this.PLAIN_IMPORTER;
+    },
+
+<span id='sol-connector_xml-DocumentImporter-property-PLAIN_IMPORTER'>    /**
+</span>     * The plain importer just puts all files plain into a folder.
+     */
+    PLAIN_IMPORTER: {
+<span id='sol-connector_xml-DocumentImporter-property-name'>      /**
+</span>       * @property {String} name
+       * The name of ths importer.
+       */
+      name: &quot;PLAIN_IMPORTER&quot;,
+
+<span id='sol-connector_xml-DocumentImporter-method-process'>      /**
+</span>       * Starts the import.
+       * @param {String} parentId ID of the target folder
+       * @param {Object} fileData Description of the files
+       * @param {String} successAction Action string which specifies the behaviour in an success case
+       * @param {String} errorAction Action string which specifies the behaviour in an error case
+       * @param {String} timestamp A timestamp for possible rename actions
+       * @return {Object} Returns an object containing an array with objIds and an array with errors (if there have been any)
+       */
+      process: function (parentId, fileData, successAction, errorAction, timestamp) {
+        var result = { errors: [], objIds: [] },
+            i, data, action, objId;
+
+        for (i = 0; i &lt; fileData.length; i++) {
+          data = fileData[i];
+          action = successAction;
+          objId = sol.connector_xml.Utils.importDocument(data.path, parentId, data.mask, data.name, data.comment, data.version, false);
+
+          if (!objId) {
+            if (!errorAction) {
+              throw &quot;error importing &#39;&quot; + data.path + &quot;&#39; and no error handling defined&quot;;
+            }
+            action = errorAction;
+            result.errors.push(data.path);
+          } else {
+            result.objIds.push(objId);
+          }
+          sol.connector_xml.Utils.handleImportAction(new File(data.path), action, timestamp);
+        }
+        return result;
+      }
+    },
+
+<span id='sol-connector_xml-DocumentImporter-property-CONTAINER_IMPORTER'>    /**
+</span>     * Creates a subfolder and imports all files (from one XML) into that folder.
+     */
+    CONTAINER_IMPORTER: {
+
+      name: &quot;CONTAINER_IMPORTER&quot;,
+
+<span id='sol-connector_xml-DocumentImporter-method-process'>      /**
+</span>       * Starts the import.
+       * @param {String} parentId ID of the target folder
+       * @param {Object} fileData Description of the files
+       * @param {String} successAction Action string which specifies the behaviour in an success case
+       * @param {String} errorAction Action string which specifies the behaviour in an error case
+       * @param {String} timestamp A timestamp for possible rename actions
+       * @param {String} mask Doc mask
+       * @return {Object} Returns an object containing an array with objIds, an array with errors (if there have been any) and an objId of the container
+       */
+      process: function (parentId, fileData, successAction, errorAction, timestamp, mask) {
+        var result = { errors: [], objIds: [] },
+            name, i, data, action, objId;
+
+        name = fileData[0].name;
+
+        if (!name) {
+          throw &quot;Import file name is empty&quot;;
+        }
+
+        parentId = sol.common.RepoUtils.preparePath(&quot;ARCPATH[&quot; + parentId + &quot;]:&quot; + sol.common.RepoUtils.pilcrow + fileData[0].name, { mask: mask });
+
+        result.containerId = parentId;
+
+        for (i = 0; i &lt; fileData.length; i++) {
+          data = fileData[i];
+          action = successAction;
+          objId = sol.connector_xml.Utils.importDocument(data.path, parentId, data.mask, data.name, data.comment, data.version, false);
+
+          if (!objId) {
+            if (!errorAction) {
+              throw &quot;error importing &#39;&quot; + data.path + &quot;&#39; and no error handling defined&quot;;
+            }
+            action = errorAction;
+            result.errors.push(data.path);
+          } else {
+            result.objIds.push(objId);
+          }
+          sol.connector_xml.Utils.handleImportAction(new File(data.path), action, timestamp);
+        }
+        return result;
+      }
+    }
+  }
+});
+</pre>
+</body>
+</html>

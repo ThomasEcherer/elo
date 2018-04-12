@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.de.elo.ix.jscript);
+
+//@include lib_Class.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common.ix.ActionBase.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.dev.ix.ActionUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.dev.ix.actions.Deploy&quot; });
+
+<span id='sol-dev-ix-actions-Deploy'>/**
+</span> * Deploys / Undeploys a package.
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ActionBase
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.ix.functions.CopyFolderContents
+ * @requires sol.common.ix.functions.CopySordData
+ * @requires sol.common.ActionUtils
+ */
+sol.define(&quot;sol.dev.ix.actions.Deploy&quot;, {
+  extend: &quot;sol.common.ix.ActionBase&quot;,
+
+<span id='sol-dev-ix-actions-Deploy-cfg-requiredConfig'>  requiredConfig: [&quot;ci&quot;, &quot;user&quot;, &quot;objId&quot;, &quot;mode&quot;],
+</span>
+<span id='sol-dev-ix-actions-Deploy-cfg-ci'>  /**
+</span>   * @cfg {de.elo.ix.client.ClientInfo} ci (required)
+   */
+
+<span id='sol-dev-ix-actions-Deploy-cfg-user'>  /**
+</span>   * @cfg {de.elo.ix.client.UserInfo} user (required)
+   */
+
+<span id='sol-dev-ix-actions-Deploy-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID of the selected package
+   */
+
+<span id='sol-dev-ix-actions-Deploy-cfg-mode'>  /**
+</span>   * @cfg {String} mode (required)
+   * Deploy or undeploy selected package
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.ActionBase&quot;, &quot;initialize&quot;, [config]);
+    me.config = sol.dev.ix.ActionUtils.loadConfigDev();
+  },
+
+<span id='sol-dev-ix-actions-Deploy-method-getName'>  getName: function () {
+</span>    return &quot;Deploy&quot;;
+  },
+
+<span id='sol-dev-ix-actions-Deploy-method-process'>  process: function () {
+</span>    var me = this,
+        name, flowId, wfTemplate, sord;
+
+    if ((!me.objId) || (!me.isPackage(me.objId))) {
+      if (me.mode == &quot;deploy&quot;) {
+        me.addErrorEvent(&quot;sol.dev.ix.actions.Deploy.error.target&quot;, null, null, me.ci);
+      } else {
+        me.addErrorEvent(&quot;sol.dev.ix.actions.Undeploy.error.target&quot;, null, null, me.ci);
+      }
+      return;
+    }
+
+    if (me.mode == &quot;undeploy&quot;) {
+      sord = sol.common.RepoUtils.getSord(me.objId);
+      if (sord.name.indexOf(&quot;undeployed&quot;) &gt; -1) {
+        me.addErrorEvent(&quot;sol.dev.ix.actions.Undeploy.error.target&quot;, null, null, me.ci);
+        return;
+      }
+    }
+
+    name = me.buildElementName(me.mode);
+    wfTemplate = me.getWfTemplate(me.mode);
+    flowId = me.startWorkflow(me.objId, wfTemplate, name);
+
+    if (flowId) {
+      me.addWfDialogEvent(flowId, { objId: me.objId, title: name, dialogId: me.getName() });
+      me.addRefreshEvent(me.objId);
+    }
+  },
+
+<span id='sol-dev-ix-actions-Deploy-method-isPackage'>  isPackage: function (objId) {
+</span>    var sord;
+
+    sord = sol.common.RepoUtils.getSord(objId);
+    return sol.common.SordUtils.hasDocMask(sord, &quot;ELO Business Solution&quot;);
+  },
+
+<span id='sol-dev-ix-actions-Deploy-method-getWfTemplate'>  /**
+</span>   * @private
+   * @param {String} mode
+   * @return {String}
+   */
+  getWfTemplate: function (mode) {
+    var me = this,
+        wfTemplate;
+
+    switch (mode) {
+      case &quot;deploy&quot;:
+        wfTemplate = me.config.workflows.Deploy.workflowTemplateName;
+        break;
+      case &quot;undeploy&quot;:
+        wfTemplate = me.config.workflows.Undeploy.workflowTemplateName;
+        break;
+      default:
+        wfTemplate = me.config.workflows.Deploy.workflowTemplateName;
+    }
+    return wfTemplate;
+  },
+
+<span id='sol-dev-ix-actions-Deploy-method-buildElementName'>  /**
+</span>   * @private
+   * @return {Object}
+   */
+  buildElementName: function (mode) {
+    var me = this,
+        prefix, wfName;
+
+    switch (mode) {
+      case &quot;deploy&quot;:
+        prefix = me.getLocalizedString(me.ci, me.config.workflows.Deploy.workflowPrefixKey);
+        wfName = sol.create(&quot;sol.common.Template&quot;, { source: me.config.workflows.Deploy.workflowNameTemplate }).apply({ wfPrefix: prefix, mode: me.mode });
+        break;
+      case &quot;undeploy&quot;:
+        prefix = me.getLocalizedString(me.ci, me.config.workflows.Undeploy.workflowPrefixKey);
+        wfName = sol.create(&quot;sol.common.Template&quot;, { source: me.config.workflows.Undeploy.workflowNameTemplate }).apply({ wfPrefix: prefix, mode: me.mode });
+        break;
+      default:
+        prefix = me.getLocalizedString(me.ci, me.config.workflows.Undeploy.workflowPrefixKey);
+        wfName = sol.create(&quot;sol.common.Template&quot;, { source: me.config.workflows.Undeploy.workflowNameTemplate }).apply({ wfPrefix: prefix, mode: me.mode });
+    }
+    return wfName;
+  }
+
+});
+
+<span id='sol-dev-ix-actions-Deploy-static-method-RF_sol_dev_action_Deploy'>/**
+</span> * @member sol.dev.ix.actions.Deploy
+ * @method RF_sol_dev_action_Deploy
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_dev_action_Deploy(ec, configAny) {
+  logger.enter(&quot;RF_sol_dev_action_Deploy&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny, &quot;objId&quot;, &quot;mode&quot;),
+      Deploy, result;
+
+  config.ci = ec.ci;
+  config.user = ec.user;
+
+  Deploy = sol.create(&quot;sol.dev.ix.actions.Deploy&quot;, config);
+  result = Deploy.execute();
+  logger.exit(&quot;RF_sol_dev_action_Deploy&quot;, result);
+  return result;
+}
+
+
+</pre>
+</body>
+</html>

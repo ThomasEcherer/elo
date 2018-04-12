@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.ServiceBase.js
+//@include lib_sol.common.RepoUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.dev.ix.services.CreateRepoEntry&quot; });
+
+<span id='sol-dev-ix-services-CreateRepoEntry'>/**
+</span> * Creates a new repository entry.
+ *
+ * This service is useful if repositiory entries should be created from web applications.
+ *
+ * # As IX service call
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_dev_service_CreateRepoEntry&#39;, {
+ *       saveToRepoConfig: { repoPath: arcPath, maskId: elo.CONST.DOC_MASK.GUID_ELOSCRIPTS, contentObject: configJson }
+ *     });
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ *
+ * @requires  sol.Logger
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.dev.ix.services.CreateRepoEntry&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+<span id='sol-dev-ix-services-CreateRepoEntry-cfg-requiredConfig'>  requiredConfig: [&quot;saveToRepoConfig&quot;],
+</span>
+<span id='sol-dev-ix-services-CreateRepoEntry-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-dev-ix-services-CreateRepoEntry-method-process'>  /**
+</span>   * Creates a new repository document or saves a new version to an existing document
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        objId;
+
+    objId = sol.common.RepoUtils.saveToRepo(me.saveToRepoConfig);
+
+    return {
+      objId: objId
+    };
+  }
+});
+
+<span id='sol-dev-ix-services-CreateRepoEntry-static-method-RF_sol_dev_service_CreateRepoEntry'>/**
+</span> * @member sol.dev.ix.services.CreateRepoEntry
+ * @method RF_sol_dev_service_CreateRepoEntry
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_dev_service_CreateRepoEntry(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_dev_service_CreateRepoEntry&quot;, args);
+  var params, service, result;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;saveToRepoConfig&quot;);
+  service = sol.create(&quot;sol.dev.ix.services.CreateRepoEntry&quot;, params);
+  result = sol.common.JsonUtils.stringifyAll(service.process());
+  logger.exit(&quot;RF_sol_dev_service_CreateRepoEntry&quot;, result);
+  return result;
+}
+</pre>
+</body>
+</html>

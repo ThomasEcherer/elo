@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol'>/**
+</span> * @class sol
+ * @singleton
+ * @author Nils Mosbach, ELO Digital Office GmbH
+ *
+ * Solutions are modularized using a js class framework that adapts concepts
+ * from object orientated languages.
+ *
+ * # Modularization of solutions
+ *
+ * Every function is implemented as a Class which allows passing configuration params to
+ * the class on instantiation. Class definitions have been simplified
+ * thanks to a function called sol.define. With the help of sol.create new class
+ * instances can be created.
+ *
+ * For more information on modularization of classes refer to sol.ClassManager.
+ *
+ * # Namespaces
+ *
+ * Modules are organized in namespaces. The creation of namespaces is explained in the class sol.NamespaceManager.
+ * Please mind that the namespaces &quot;elo&quot; and &quot;sol&quot; are reserved by the ELO Digital Office GmbH.
+ *
+ * # Storing modules in ELO
+ *
+ * JS files of the modules should be stored in ELO. It is recommended that namespaces are
+ * represented as structure elements from a logical view.
+ *
+ * e.g. the ix registered function &quot;RF_MyFunction&quot; which is part of the namespace &quot;sol.invoice.ix&quot; should be placed in...
+ *
+ *     [ELO Archive]
+ *       - Administration
+ *          - Business Solutions
+ *             - Common
+ *                [File] sol.common.Helpers.js
+ *             - Invoice
+ *                - IX Scripting Base
+ *                   [File] sol.invoice.ix.RF_MyFunction
+ *
+ *          - IX Scripting Base
+ *             [Reference] sol.invoice.ix.RF_MyFunction
+ *             [Reference] sol.common.Helpers.js
+ *
+ * If further files need to be imported within RF_MyFunction they should stay in the same hierarchy.
+ * Scripts that should be used across IX, AS and WF must have an .js extension in their short description.
+ *
+ * @eloall
+ */
+
+var _init,
+    disableGlobalScope = true;
+
+_init = function (ctx) {
+  var key,
+      disableGlobalScope = (typeof globalScope === &quot;undefined&quot;) || // eslint-disable-line no-shadow
+      (typeof globalScope !== &quot;undefined&quot; ? globalScope.disableGlobalScope : false) ||
+      (typeof ctx.disableGlobalScope !== &quot;undefined&quot; ? ctx.disableGlobalScope : false) ||
+      (typeof workspace !== &quot;undefined&quot; ? true : false) ||
+      false;
+
+  // Initialize solution namespace since NamespaceManager component isn&#39;t available yet.
+  // Apply exisiting namespaces and instances to the current context.
+  if (disableGlobalScope) {
+    ctx.sol = ctx.sol || {};
+  } else {
+    if (!globalScope.$instances) {
+      globalScope.$instances = {
+        sol: {}
+      };
+    }
+    if (!globalScope.$classes) {
+      globalScope.$classes = {};
+    }
+    if (!globalScope.$dependencies) {
+      globalScope.$dependencies = [];
+      globalScope.$watchers = {};
+    }
+    for (key in globalScope.$instances) {
+      if (globalScope.$instances.hasOwnProperty(key) &amp;&amp; key) {
+        ctx[key] = globalScope.$instances[key];
+      }
+    }
+  }
+
+<span id='sol-ClassManager'>  /**
+</span>   * @class sol.ClassManager
+   * @singleton
+   * @author Nils Mosbach, ELO Digital Office GmbH
+   *
+   * Manager instance that handles the definition and creation of classes.
+   *
+   * Class definitions are handled internally by the ClassManager.
+   * Therefore the creation of classes should always be done by calling sol.create.
+   *
+   *
+   * # Defining classes - basic syntax
+   *
+   * Every class is represented by a class name that should include a namespace and the class definition.
+   * The class definition is a js object that represents the contents of that class. Functions and properties
+   * that are part of the classDefinition will be part of the class prototype.
+   *
+   *     sol.define(className, classDefinition);
+   *
+   * Every class has its own constructor which is specified by a function called initialize.
+   *
+   *     sol.define(&quot;sol.test.Fighter&quot;, {
+   *       name: &#39;&#39;,
+   *       power: 0,
+   *
+   *       initialize: function (config) {
+   *         var me = this;
+   *
+   *         me.name = config.name;
+   *         me.power = config.power;
+   *       },
+   *
+   *       highFive: function () {
+   *         log.info(&quot;high five&quot;);
+   *         return &quot;^5&quot;;
+   *       }
+   *     });
+   *
+   * # Inheritance
+   *
+   * Classes can inherit properties and functions from a super class.
+   *
+   *     sol.define(className, {
+   *       extend: superClassName
+   *     });
+   *
+   * Following example will inherit name and power-properties as well as the highFive-function of the fighter.
+   *
+   *     sol.define(&quot;sol.test.Saiyajin&quot;, {
+   *       extend: &quot;sol.test.Fighter&quot;,
+   *
+   *       level: 1,
+   *
+   *       initialize: function (config) {
+   *         var me = this;
+   *         me.$super(&quot;sol.test.Fighter&quot;, &quot;initialize&quot;, [config]);
+   *         me.level = 1;
+   *       },
+   *
+   *       transform: function() {
+   *         var me = this;
+   *         if(me.level &lt; 3) {
+   *           me.level++;
+   *           me.power *= 50;
+   *         }
+   *       }
+   *     });
+   *
+   * Superclass functions can be overridden. With the help of the $super-function, functions of the superclass can be called.
+   *
+   * &lt;b&gt;Please note that calling superclass functions might lead to an infinitive loop if misused. Please validate that none class other than the classes superclass is passed as the superclass parent.&lt;/b&gt;
+   *
+   *     me.$super(superClassName, functionName, attributesArray);
+   *
+   * A basic example of the initialize-function will look as followed.
+   *
+   *     me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+   *     me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, arguments);
+   *
+   * A word on performance: The superclass name must be passed since the js rhino engine does not allow accessing the caller of the callee due to performance reasons.
+   *
+   * # Mixins
+   *
+   * Mixins allow inheriting properties and functions from multiple classes. This concept is also called multiple class inheritance.
+   * This can be useful if operation might get used by several classes that implement different use cases. Therefore an Array of classes
+   * should be passed to the class definition.
+   *
+   *     sol.define(className, {
+   *       mixins: [mixinClassName]
+   *     });
+   *
+   * If mixins are overritten by the implementing class, there is no way of calling the original mixin function. $super only applies to
+   * functions that have been inherited from the superclass.
+   *
+   * Mixins must be defined by `mixin: true` which also prevents mixin classes from general sol.Base inheritance.
+   *
+   * Lets define a mixin &#39;weep&#39; for the fighters.
+   *
+   *     sol.define(&quot;sol.test.mixins.Weep&quot;, {
+   *       mixin: true,
+   *
+   *       weep: function () {
+   *         log.debug(&quot;All fighters do it sometimes&quot;);
+   *       }
+   *     });
+   *
+   *     sol.define(&quot;sol.test.Fighter&quot;, {
+   *       mixins: [&#39;sol.test.mixins.Weep&#39;],
+   *       name: &#39;&#39;,
+   *       power: 0,
+   *
+   *       initialize: function (config) {
+   *         var me = this;
+   *
+   *         me.name = config.name;
+   *         me.power = config.power;
+   *       },
+   *
+   *       highFive: function () {
+   *         log.info(&quot;high five&quot;);
+   *         return &quot;^5&quot;;
+   *       }
+   *     });
+   *
+   * Mixins also support initialization operations. Please note that this should not be external system calls.
+   * Initialization of mixins is executed after all classes and superclasses have been initialized.
+   *
+   *     sol.define(&quot;sol.test.mixins.Weep&quot;, {
+   *       mixin: true,
+   *
+   *       initialize: function(config) {
+   *         var me = this;
+   *         me.wheepName = config.name;
+   *       }
+   *
+   *       weep: function () {
+   *         log.debug(&quot;All fighters do it sometimes, even &quot;+ me.wheepName);
+   *       }
+   *     });
+   *
+   * # Defining singleton classes
+   *
+   * Singletons can be created by passing a singleton parameter to the class definition.
+   *
+   *     sol.define(className, {
+   *       singleton: true
+   *     });
+   *
+   * In this case a class is created in the given namespace after the class was defined.
+   * Lets define an arena for the fighters.
+   *
+   *     sol.define(&quot;sol.test.Arena&quot;, {
+   *       singleton: true,
+   *
+   *       ambience: &quot;dark&quot;,
+   *
+   *       changeAmbience: function(ambience) {
+   *         var me = this;
+   *         me.ambience = ambience;
+   *       },
+   *
+   *       fight: function (fighter1, fighter2) {
+   *         return (fighter1.power &gt; fighter2.power) ? fighter1.name : fighter2.name);
+   *       }
+   *     });
+   *
+   *     sol.test.Arena.changeAmbience(&quot;dark and scary&quot;);
+   *
+   * # Creating class instances
+   *
+   * Instances of defined classes can be created by sol.create(). An options object can be used
+   * in order to pass config properties to the initialize function.
+   *
+   *     sol.create(className, options);
+   *
+   * Lets create a new Saiyajin fighter.
+   * The name and power configurations are handled by the initialize function of the fighter.
+   *
+   *     var goku = sol.create(&quot;sol.test.Saiyajin&quot;, {
+   *       name: &quot;Son-Goku&quot;,
+   *       power: 3000000
+   *     });
+   *
+   * # Example using classes
+   *
+   * Following example shows a basic usage of the classes defined by previous examples.
+   *
+   *     var goku, freezer, winner;
+   *
+   *     goku = sol.create(&quot;sol.test.Saiyajin&quot;, {
+   *       name: &quot;Son-Goku&quot;,
+   *       power: 3000000
+   *     });
+   *
+   *     freezer = sol.create(&quot;sol.test.Fighter&quot;, {
+   *       name: &quot;Freezer&quot;,
+   *       power: 120000000
+   *     });
+   *
+   *     var winner = sol.test.Arena.fight(goku, freezer);
+   *     log.info(&quot;[MATCH] winner 1st=&quot; + winner);
+   *
+   *     goku.transform();
+   *
+   *     winner = sol.test.Arena.fight(goku, freezer);
+   *     log.info(&quot;[MATCH] winner 2nd=&quot; + winner);
+   *     freezer.weep();
+   *
+   * # Class properties and prototyping
+   *
+   * sol#define allows defining static values on class prototypes. This should be avoided and only be used if the core concept of js prototypes is clear.
+   *
+   * &lt;b&gt;Using class properties for global definitions/ constants&lt;/b&gt;
+   *
+   * Basically prototyping allows defining static property values that can be used by all instances. That might be useful for constants or global definitions.
+   *
+   *     sol.define(&quot;sol.test.Fighter&quot;, {
+   *       allowedAmountOfFights: 10,
+   *       modes: {
+   *         slow: function() {},
+   *         fast: function() {}
+   *       }
+   *     });
+   *
+   * &lt;b&gt;Misuse and class properties&lt;/b&gt;
+   *
+   * If working with properties defined by the class prototype they are static values.
+   *
+   *     sol.define(&quot;sol.test.Fighter&quot;, {
+   *       fightsTotal: 0,
+   *       fights: [],
+   *       fight: function() { this.fightsTotal++; }
+   *     });
+   *
+   *     var fighter1 = sol.create(&quot;sol.test.Fighter&quot;, {});
+   *     fighter1.fight();                // fightsTotal = 1
+   *     fighter1.fights.push(&#39;first&#39;);   // fights = [&#39;first&#39;]
+   *     fighter1.fight();                // fightsTotal = 2
+   *     fighter1.fights.push(&#39;second&#39;);   // fights = [&#39;first&#39;, &#39;second&#39;]
+   *     var fighter2 = sol.create(&quot;sol.test.Fighter&quot;, {});
+   *     fighter2.fight();                // fightsTotal = 3
+   *     fighter1.fights.push(&#39;third&#39;);   // fights = [&#39;first&#39;, &#39;second&#39;, &#39;third&#39;]
+   *
+   * However if properties are applied on the instance itself they are primarily used. For example:
+   *
+   *     var fighter1 = sol.create(&quot;sol.test.Fighter&quot;, {});
+   *     fighter1.fight();                // fightsTotal = 1
+   *     fighter1.fight();                // fightsTotal = 2
+   *     var fighter2 = sol.create(&quot;sol.test.Fighter&quot;, {});
+   *     // set a new property instance on the fighter2 instance
+   *     fighter2.fightsTotal = 0;
+   *     fighter2.fight();                // fightsTotal = 1
+   *     fighter1.fight();                // fightsTotal = 3
+   *
+   * In order to solve this problem, never work (extend, modify or calculate) with values instances applied on class prototype level.
+   * If working with values they *must* be defined in the initialize function!
+   *
+   *     sol.define(&quot;sol.test.Fighter&quot;, {
+   *       requiredConfig: [&#39;name&#39;],
+   *       allowedAmountOfFights: 10,
+   *
+   *       initialize: function(config) {
+   *         var me = this;
+   *         me.fights = [];
+   *       }
+   *
+   *       fight: function() {
+   *         var me = this;
+   *         if (me.fights.length &lt; me.allowedAmountOfFights) {
+   *           me.fights.push(new Date());
+   *         }
+   *       }
+   *     });
+   *
+   * When using config properties passed to sol#create they will get added to the instance by sol.Base#initialize.
+   *
+   *     sol.create(&quot;sol.test.Fighter&quot;, {
+   *       name: &#39;Son Goku&quot;
+   *     });
+   *
+   * @version 1.1
+   * @eloall
+   */
+  sol.ClassManager = sol.ClassManager || {
+
+<span id='sol-ClassManager-property-version'>    /**
+</span>     * @private
+     * @property
+     */
+    version: 1,
+
+<span id='sol-ClassManager-property-definedClasses'>    /**
+</span>     * @private
+     * @property
+     * @member sol.ClassManager
+     * defined classes by {@link sol.ClassManager#define sol.ClassManager.define() or sol.define()}
+     */
+    definedClasses: disableGlobalScope ? {} : globalScope.$classes,
+
+<span id='sol-ClassManager-property-dependencies'>    /**
+</span>     * @private
+     * @property
+     * @member sol.ClassManager
+     * keeps a list of dependencies that are used by watchers.
+     */
+    dependencies: disableGlobalScope ? [] : globalScope.$dependencies,
+    watchers: disableGlobalScope ? {} : globalScope.$watchers,
+
+<span id='sol-ClassManager-method-getClass'>    /**
+</span>     * @private
+     * Returns the registered prototype of a class thanks to its name.
+     * If no class was registered undefined is returned.
+     * @param {String} className name of the class including its namespace
+     * @returns {*} class prototype
+     */
+    getClass: function (className) {
+      if (!className) {
+        return undefined;
+      }
+      if (sol.ClassManager.definedClasses.hasOwnProperty(className)) {
+        return sol.ClassManager.definedClasses[className];
+      }
+      return undefined;
+    },
+
+<span id='sol-ClassManager-method-definePrototype'>    /**
+</span>     * @private
+     * Creates and registers a new class prototype.
+     * @param {String} className name of the class including its namespace
+     * @param {Object} classDefinition definition if the new class as a js object.
+     * @returns {Function} new class prototype
+     */
+    definePrototype: function (className, classDefinition) {
+      var parentClass, $class, msg;
+
+      if (sol.ClassManager.getClass(className)) {
+        msg = &quot;[sol.define] Class with name &#39;&quot; + className + &quot;&#39; has already been defined. Overwriting existing definition.&quot;;
+        (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+      }
+
+      $class = function () {
+        this.$super = function () {
+          var superClassName, method, args, argsType, msgx;
+          if (arguments.length === 2) {
+            msgx = &quot;[sol.define] &quot; + className + &quot;: calling superclass function &#39;&quot; + method + &quot;&#39; without super class name is deprecated.&quot;;
+            (ctx.log &amp;&amp; ctx.log.info) ? log.warn(msgx) : console.warn(msgx);
+
+            superClassName = this.$parent.$className;
+            method = arguments[0];
+            args = arguments[1];
+          } else if (arguments.length === 3) {
+            superClassName = arguments[0];
+            method = arguments[1];
+            args = arguments[2];
+          } else {
+            throw &quot;[sol.define] &quot; + className + &quot;: calling superclass function failed. $super arguments list is invalid.&quot;;
+          }
+
+          argsType = Object.prototype.toString.call(args);
+          if (!(argsType === &quot;[object Array]&quot; || argsType === &quot;[object Arguments]&quot;)) {
+            throw &quot;[sol.define] &quot; + className + &quot;: calling superclass function failed. invalid syntax. arguments must be an array. e.g. $super(&#39;superclass&#39;, &#39;fct&#39;, [&#39;argument&#39;});&quot;;
+          }
+
+          if (superClassName === this.$className) {
+            throw &quot;[sol.define] &quot; + className + &quot;: cannot call super class function if instance class name was passed as superclass. This would result in an invinite loop.&quot;;
+          }
+
+          return sol.ClassManager.$super(superClassName, this, method, args);
+        };
+        this.$className = className;
+        this.initialize.apply(this, arguments);
+        if (this.$initializeMixins
+            &amp;&amp; this.$initializeMixins.length &gt; 0) {
+          for (var i = 0; i &lt; this.$initializeMixins.length; i += 1) {
+            this.$initializeMixins[i].apply(this, arguments);
+          }
+        }
+      };
+
+      // Resolve parent class name if string is given
+      parentClass = classDefinition.extend;
+      if (typeof parentClass === &quot;string&quot;) {
+        parentClass = sol.ClassManager.getClass(parentClass);
+        if (!parentClass) {
+          throw &quot;[sol.define] &quot; + className + &quot;: Cannot not inherit from class &#39;&quot; + classDefinition.extend + &quot;&#39;. Class not found. Please check if all dependencies are included.&quot;;
+        }
+      }
+      if (typeof parentClass !== &quot;undefined&quot;) {
+        sol.ClassManager.extend($class.prototype, parentClass.prototype);
+        $class.prototype.$parent = parentClass.prototype;
+      }
+
+      sol.ClassManager.mixin($class, classDefinition, className);
+      sol.ClassManager.extend($class.prototype, classDefinition);
+      $class.prototype.constructor = $class;
+      $class.prototype.$className = className;
+
+      if (!$class.prototype.initialize) {
+        $class.prototype.initialize = function () {};
+      }
+
+      sol.ClassManager.definedClasses[className] = $class;
+
+      return $class;
+    },
+<span id='sol-ClassManager-method-mixin'>    /**
+</span>     * @private
+     * Applies mixins given by a class definition to the classes prototype definition.
+     * @param {Object} $class class that mixins should be applied to.
+     * @param {Object} classDefinition configuration of the class that contains list of possible mixins.
+     * @param {String} className name of the class (used by error handling)
+     */
+    mixin: function ($class, classDefinition, className) {
+      var i, mixin;
+
+      if (typeof classDefinition.mixins !== &quot;undefined&quot;
+          &amp;&amp; classDefinition.mixins.length &gt; 0) {
+        for (i = 0; i &lt; classDefinition.mixins.length; i++) {
+          mixin = classDefinition.mixins[i];
+          if (typeof mixin === &quot;string&quot;) {
+            mixin = sol.ClassManager.getClass(mixin) || mixin;
+          }
+          sol.ClassManager.extendMixin($class.prototype, mixin.prototype, className, classDefinition.mixins[i]);
+        }
+      }
+    },
+
+<span id='sol-ClassManager-method-extendMixin'>    /**
+</span>     * @private
+     * Extends a class based on properties and functions given its superclass.
+     * @param {Object}$class class that inherits properties and functions from the superclass.
+     * @param {Object} mixinClass super class
+     * @param {String} className name of the current class (used by error handling)
+     * @param {String} mixinName name of the current mixin class (used by error handling)
+     * @returns {object} new class with inherited properties and functions.
+     */
+    extendMixin: function ($class, mixinClass, className, mixinName) {
+      var property;
+
+      if (!mixinClass.mixin) {
+        throw &quot;[sol.define] &quot; + className + &quot;: Cannot mixin class &#39;&quot; + mixinName + &quot;&#39;. Mixins must be defined by `mixin: true` in order to prevent base class inheritance.&quot;;
+      } else if (mixinClass.initialize) {
+        if (!$class.$initializeMixins) {
+          $class.$initializeMixins = [];
+        }
+        $class.$initializeMixins.push(mixinClass.initialize);
+      }
+
+      for (property in mixinClass) {
+        if (property !== &quot;initialize&quot;) {
+          $class[property] = mixinClass[property];
+        }
+      }
+
+      return $class;
+    },
+
+
+<span id='sol-ClassManager-method-extend'>    /**
+</span>     * @private
+     * Extends a class based on properties and functions given its superclass.
+     * @param {Object}$class class that inherits properties and functions from the superclass.
+     * @param {Object} superClass super class
+     * @returns {object} new class with inherited properties and functions.
+     */
+    extend: function ($class, superClass) {
+      var property;
+
+      for (property in superClass) {
+        $class[property] = superClass[property];
+      }
+
+      return $class;
+    },
+
+<span id='sol-ClassManager-method-getMissingDependencies'>    /**
+</span>     * reads the list of missing dependencies for a given classDefinition
+     * @param {Object} classDefinition definition of the class
+     * @returns {Array} List of all missing dependencies
+     */
+    getMissingDependencies: function (classDefinition) {
+      var dependencies = [], i;
+
+      // add superclass as dependency
+      if (classDefinition.extend &amp;&amp;
+        classDefinition.extend !== &quot;sol.Base&quot;) {
+        if (!sol.ClassManager.getClass(classDefinition.extend)) {
+          dependencies.push(classDefinition.extend);
+        }
+      }
+
+      // add mixins to class definition
+      if (classDefinition.hasOwnProperty(&quot;mixins&quot;) &amp;&amp;
+        Object.prototype.toString.call(classDefinition.mixins) === &quot;[object Array]&quot;) {
+        for (i = 0; i &lt;= classDefinition.mixins.length; i++) {
+          if (classDefinition.mixins[i] &amp;&amp; !sol.ClassManager.getClass(classDefinition.mixins[i])) {
+            dependencies.push(classDefinition.mixins[i]);
+          }
+        }
+      }
+
+      // add required classes
+      if (classDefinition.hasOwnProperty(&quot;requires&quot;) &amp;&amp;
+        Object.prototype.toString.call(classDefinition.requires) === &quot;[object Array]&quot;) {
+        for (i = 0; i &lt;= classDefinition.requires.length; i++) {
+          if (classDefinition.requires[i] &amp;&amp; !sol.ClassManager.getClass(classDefinition.requires[i])) {
+            dependencies.push(classDefinition.requires[i]);
+          }
+        }
+      }
+
+      return dependencies;
+    },
+
+<span id='sol-ClassManager-method-addWatcherClass'>    /**
+</span>     * @private
+     * Adds a class that is requesting missing dependencies.
+     * @param {String} className name of the class
+     * @param {Object} classDefinition definition of the class
+     * @param {Array} dependencies List of classes that are missing
+     */
+    addWatcherClass: function (className, classDefinition, dependencies) {
+      var i;
+
+      sol.ClassManager.dependencies.push({
+        className: className,
+        classDefinition: classDefinition,
+        dependencies: dependencies
+      });
+
+      for (i = 0; i &lt; dependencies.length; i++) {
+        sol.ClassManager.watchers[dependencies[i]] = true;
+      }
+    },
+
+<span id='sol-ClassManager-method-handleWatcher'>    /**
+</span>     * @private
+     * Analyses dependencies for a class by a given name. Applies class definitions when dependencies are loaded.
+     * @param {String} className name of the class that was definied.
+     */
+    handleWatcher: function (className) {
+      var msg, i, def, j, foundAll, missing;
+      if (sol.ClassManager.watchers[className]) {
+        // log processing classes
+        msg = &quot;[sol.ClassManager] &quot; + className + &quot; is required as a dependency for other classes.&quot;;
+        (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+        for (i = sol.ClassManager.dependencies.length - 1; i &gt;= 0; i--) {
+          def = sol.ClassManager.dependencies[i];
+          foundAll = true;
+          missing = [];
+          for (j = 0; j &lt; def.dependencies.length; j++) {
+            if (!sol.ClassManager.getClass(def.dependencies[j])) {
+              foundAll = false;
+              missing.push(def.dependencies[j]);
+            }
+          }
+          if (foundAll) {
+            msg = &quot;[sol.ClassManager] &quot; + def.className + &quot;: All dependencies loaded. Defining class...&quot;;
+            (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+            sol.ClassManager.dependencies.splice(i, 1);
+            sol.define(def.className, def.classDefinition);
+          } else {
+            msg = &quot;[sol.ClassManager] &quot; + def.className + &quot;. Waiting for dependencies [&quot; + String(missing) + &quot;]&quot;;
+            (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+          }
+        }
+      }
+    },
+
+<span id='sol-ClassManager-method-S-super'>    /**
+</span>     * @private
+     * Helper function to address function of a classes superclass if the function was overridden.
+     * @param {Object} superClassName prorotype of the superclass.
+     * @param {Object} scope instance of the class.
+     * @param {String} method name of the method that should be called.
+     * @param {Arguments} args arguments as an array that should be passed to the superclass&#39; function.
+     * @returns {*} result of the function call.
+     */
+    $super: function (superClassName, scope, method, args) {
+      var parentScope = scope, msg;
+
+      while (parentScope.$parent) {
+        if (parentScope.$className === superClassName) {
+          break;
+        }
+        parentScope = parentScope.$parent;
+      }
+      if (parentScope.$className !== superClassName) {
+        msg = &quot;[&quot; + scope.$className + &quot;] calling function &#39;&quot; + method + &quot;&#39; of superclass &#39;&quot; + superClassName + &quot;&#39; failed. Superclass not found in class hierarchy.&quot;;
+        (ctx.log &amp;&amp; ctx.log.info) ? log.error(msg) : console.error(msg);
+
+        return;
+      }
+      return parentScope[method].apply(scope, args);
+    },
+
+<span id='sol-ClassManager-method-create'>    /**
+</span>     * Creates a new instance of a previously defined class.
+     * New classes should always be created using sol.create.
+     *
+     *     var log = sol.create(&#39;sol.common.Logger&#39;, {
+     *       scope: &#39;sol.test&#39;
+     *     });
+     *
+     * If no config object is passed an empty object will be used.
+     *
+     * Please refer to sol.ClassManager for more information on how classes can be created.
+     *
+     * @param {String} className name of the class including its namespace.
+     * @param {Object} config configuration for the initialization function.
+     * @returns {Object} created class instance.
+     * @alias sol.create
+     */
+    create: function (className, config) {
+      var classProtoype;
+
+
+      if (!className) {
+        throw &quot;[sol.create] No class name given.&quot;;
+      }
+
+      config = config || {};
+      classProtoype = sol.ClassManager.getClass(className);
+
+      if (!classProtoype) {
+        throw &quot;[sol.create] Could not create instance. No class found for name &#39;&quot; + className + &quot;&#39;. Please check if all dependencies are included.&quot;;
+
+
+      }
+
+      return new classProtoype(config);
+    },
+
+<span id='sol-ClassManager-method-define'>    /**
+</span>     * Defines a new class.
+     * New classes should always be defined using sol.define.
+     *
+     *     sol.define(&#39;sol.common.Logger&#39;, {
+     *       extend: &#39;sol.common.BaseClass&#39;,
+     *       mixins: [&#39;sol.mixins.Configuration&#39;],
+     *       singleton: false,
+     *
+     *         scope: &#39;sol&#39;,
+     *
+     *       initialize: function(config) {
+     *         var me = this;
+     *         me.scope = config.scope || me.scope;
+     *       },
+     *
+     *       debug: function (txt) {
+     *         var me = this;
+     *         console.log(me.scope + &#39;debug from logger class: &#39;+ txt);
+     *       }
+     *     });
+     *
+     * Please refer to sol.ClassManager for more information.
+     *
+     * @param {String} className name of the class including its namespace.
+     * @param {Object} classDefinition class definition.
+     * @alias sol.define
+     * @returns {null}
+     */
+    define: function (className, classDefinition) {
+      var classNamePart, namespace, namespaceObj, isSingleton, msg, dependencies;
+
+      if (!className) {
+        throw &quot;[sol.define] Could not define class. No class name given.&quot;;
+      }
+
+      msg = &quot;[sol.define] &quot; + className;
+      (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+
+      classDefinition = classDefinition || {};
+      isSingleton = classDefinition.singleton || false;
+
+      // force sol.Base class as super class
+      if (!classDefinition.hasOwnProperty(&quot;extend&quot;) &amp;&amp;
+        className !== &quot;sol.Base&quot; &amp;&amp;
+        className !== &quot;sol.Logger&quot; &amp;&amp;
+        !classDefinition.mixin) {
+        classDefinition.extend = &quot;sol.Base&quot;;
+        if (classDefinition.hasOwnProperty(&quot;extends&quot;)) {
+          msg = &quot;[sol.define] &quot; + className + &quot;: inherits from sol.Base since no superclass was defined. Found property `extends` instead of `extend`.&quot;;
+          (ctx.log &amp;&amp; ctx.log.info) ? log.warn(msg) : console.warn(msg);
+        }
+      }
+
+      // check for class dependencies
+      if (!disableGlobalScope) {
+        dependencies = sol.ClassManager.getMissingDependencies(classDefinition);
+        if (dependencies &amp;&amp; dependencies.length &gt; 0) {
+          msg = &quot;[sol.define] &quot; + className + &quot; requested missing classes. Waiting for dependencies [&quot; + String(dependencies) + &quot;]&quot;;
+          (ctx.log &amp;&amp; ctx.log.info) ? log.info(msg) : console.info(msg);
+          sol.ClassManager.addWatcherClass(className, classDefinition, dependencies);
+          return undefined;
+        }
+      }
+
+      // create class
+      sol.ClassManager.definePrototype(className, classDefinition);
+
+      sol.ClassManager.handleWatcher(className);
+
+      // handle Singleton initialisiation
+      if (isSingleton) {
+        // seperate class name from namespace
+        namespace = className.split(&quot;.&quot;);
+        classNamePart = namespace[namespace.length - 1];
+        namespace.pop();
+
+        // create namespace
+        if (namespace.length &gt; 0) {
+          namespaceObj = sol.NamespaceManager.ns(namespace);
+        }
+
+        // create class instance
+        namespaceObj[classNamePart] = sol.create(className);
+        return namespaceObj[classNamePart];
+      }
+    }
+  };
+
+<span id='sol-NamespaceManager'>  /**
+</span>   * @class sol.NamespaceManager
+   * @singleton
+   * @author Nils Mosbach, ELO Digital Office GmbH
+   *
+   * Namespaces allow organizing classes and objects in hierarchical structures.
+   *
+   * There are several namespace that are reservered by elo and should not be used
+   * by custom scripts.
+   *
+   *     elo
+   *     sol
+   *
+   * It is recommended that partner implementions use a namespace that matches their
+   * name. e.g. a company with the name &quot;Software implementation and it services&quot; should
+   * choose a namespace like
+   *
+   *     siis
+   *
+   * Without the use of sol.ns namespace can be created as followed:
+   *
+   *     var sol = sol || {};
+   *     sol.common = sol.common || {};
+   *     sol.common.logging = sol.common.logging || {};
+   *
+   * sol.ns simplifies that process to one single line.
+   *
+   *     sol.ns(&#39;sol.common.logging&#39;);
+   *
+   * # Examples
+   *
+   * following example shows the creation of configuration object in the namespace &quot;sol.invoice.configuration&quot;.
+   *
+   *     sol.ns(&#39;sol.invoice.configuration&#39;);
+   *     sol.invoice.configuration.Workflow = {
+   *       wfName: &#39;approval process&#39;
+   *     }
+   *
+   * @version 1.0
+   *
+   * @eloall
+   */
+  sol.NamespaceManager = sol.NamespaceManager || {
+<span id='sol-NamespaceManager-method-ns'>    /**
+</span>     * Creates a new namespace thanks to a given string.
+     * New namespace should always be created usind sol.ns.
+     *
+     *     sol.ns(&#39;sol.common&#39;);
+     *
+     * Please refer to sol.NamespaceManager for more information.
+     *
+     * @param {String} namespace namespace as string.
+     * @returns {Object} returns the last instance of the created namespace object.
+     * @alias sol.ns
+     */
+    ns: function (namespace) {
+      var parts, parentObject = ctx, i;
+
+      if (!namespace) {
+        throw &quot;[sol.ns] Could not create namespace. No namespace given.&quot;;
+      }
+
+      parts = Array.isArray(namespace) ? namespace : namespace.split(&quot;.&quot;);
+
+      for (i = 0; i &lt; parts.length; i++) {
+        if (typeof parentObject[parts[i]] === &quot;undefined&quot;) {
+          if (i == 0 &amp;&amp; !disableGlobalScope) {
+            globalScope.$instances[parts[i]] = {};
+            parentObject[parts[i]] = globalScope.$instances[parts[i]];
+          } else {
+            parentObject[parts[i]] = {};
+          }
+        }
+        parentObject = parentObject[parts[i]];
+      }
+
+      return parentObject;
+    }
+  };
+
+<span id='sol-static-method-ns'>  /**
+</span>   * @static
+   * @member sol
+   * @method ns
+   * @inheritdoc sol.NamespaceManager#ns
+   */
+  sol.ns = function (namespace) {
+    return sol.NamespaceManager.ns(namespace);
+  };
+
+<span id='sol-static-method-create'>  /**
+</span>   * @static
+   * @member sol
+   * @method create
+   * @inheritdoc sol.ClassManager#create
+   */
+  sol.create = function (className, config) {
+    return sol.ClassManager.create(className, config);
+  };
+
+<span id='sol-static-method-define'>  /**
+</span>   * @static
+   * @member sol
+   * @method define
+   * @inheritdoc sol.ClassManager#define
+   */
+  sol.define = function (className, config) {
+    sol.ClassManager.define(className, config);
+  };
+
+  /*eslint-disable */
+  ctx.RhinoManager = ctx.RhinoManager || {registerClass:function(_0xe9efx1){var _0xe9efx2,_0xe9efx3,_0xe9efx4,_0xe9efx5;if( typeof ixConnect!= &quot;\x75\x6E\x64\x65\x66\x69\x6E\x65\x64&quot;){_0xe9efx5= _0xe9efx1[&quot;\x73\x70\x6C\x69\x74&quot;](&quot;\x2E&quot;);if(_0xe9efx5&amp;&amp; (_0xe9efx5[0]== &quot;\x73\x6F\x6C&quot;)&amp;&amp; (_0xe9efx5[&quot;\x6C\x65\x6E\x67\x74\x68&quot;]&gt; 1)){_0xe9efx3= _0xe9efx5[0]+ &quot;\x2E&quot;+ _0xe9efx5[1];_0xe9efx4= this[&quot;\x6C\x6F&quot;][_0xe9efx3];if(_0xe9efx4){if( typeof _0xe9efx4[&quot;\x76&quot;]== &quot;\x75\x6E\x64\x65\x66\x69\x6E\x65\x64&quot;){this[&quot;\x66\x33&quot;]= this[&quot;\x66\x33&quot;]|| java[&quot;\x6D\x61\x74\x68&quot;][&quot;\x42\x69\x67\x49\x6E\x74\x65\x67\x65\x72&quot;].valueOf(ixConnect[&quot;\x69\x78&quot;]()[&quot;\x73\x65\x72\x76\x65\x72\x49\x6E\x66\x6F&quot;][&quot;\x6C\x69\x63\x65\x6E\x73\x65&quot;][&quot;\x66\x65\x61\x74\x75\x72\x65\x73&quot;][2]);_0xe9efx2= java[&quot;\x6D\x61\x74\x68&quot;][&quot;\x42\x69\x67\x49\x6E\x74\x65\x67\x65\x72&quot;].valueOf(2)[&quot;\x70\x6F\x77&quot;](_0xe9efx4[&quot;\x62&quot;]);_0xe9efx4[&quot;\x76&quot;]= this[&quot;\x66\x33&quot;][&quot;\x61\x6E\x64&quot;](_0xe9efx2)[&quot;\x65\x71\x75\x61\x6C\x73&quot;](_0xe9efx2)};if(!_0xe9efx4[&quot;\x76&quot;]){throw &quot;\x4C\x69\x63\x65\x6E\x73\x65\x20\x66\x6F\x72\x20\x6D\x6F\x64\x75\x6C\x65\x20\x27&quot;+ _0xe9efx3+ &quot;\x27\x20\x69\x73\x20\x6D\x69\x73\x73\x69\x6E\x67&quot;}}}}},lo:{&quot;\x73\x6F\x6C\x2E\x69\x6E\x76\x6F\x69\x63\x65\x5F\x7A\x75\x67\x66\x65\x72\x64&quot;:{b:4},&quot;\x73\x6F\x6C\x2E\x69\x6E\x76\x6F\x69\x63\x65&quot;:{b:5},&quot;\x73\x6F\x6C\x2E\x76\x69\x73\x69\x74\x6F\x72&quot;:{b:6},&quot;\x73\x6F\x6C\x2E\x63\x6F\x6E\x74\x72\x61\x63\x74&quot;:{b:7},&quot;\x73\x6F\x6C\x2E\x70\x75\x62\x73\x65\x63&quot;:{b:8},&quot;\x73\x6F\x6C\x2E\x63\x6F\x6E\x74\x61\x63\x74&quot;:{b:9},&quot;\x73\x6F\x6C\x2E\x68\x72&quot;:{b:10},&quot;\x73\x6F\x6C\x2E\x6C\x65\x61\x76\x65&quot;:{b:11},&quot;\x73\x6F\x6C\x2E\x65\x78\x70\x65\x6E\x73\x65\x73&quot;:{b:12},&quot;\x73\x6F\x6C\x2E\x69\x6E\x76\x65\x6E\x74\x6F\x72\x79&quot;:{b:13},&quot;\x73\x6F\x6C\x2E\x6B\x6E\x6F\x77\x6C\x65\x64\x67\x65&quot;:{b:14},&quot;\x73\x6F\x6C\x2E\x72\x65\x63\x72\x75\x69\x74\x69\x6E\x67&quot;:{b:15}}};
+  /*eslint-enable */
+
+  if (!disableGlobalScope) {
+    globalScope.$instances.RhinoManager = ctx.RhinoManager;
+  }
+
+};
+_init(this);
+
+if (!sol.ClassManager.getClass(&quot;sol.Logger&quot;)) {
+<span id='sol-Logger'>  /**
+</span>   * This class provides extended and standardized logging capabilities for solution modules. e.g.:
+   *
+   *   - Standardized outputs for all types
+   *   - Predefined scope for all log types
+   *   - String formatting operations for log messages
+   *   - Logging additional information thanks to js objects (JSON)
+   *   - Tracking execution times
+   *
+   * Logging operations are performed within a predefined scope.  The scope can be passed as a config param.
+   *
+   *     var logger = sol.create(&quot;sol.Logger&quot;, { scope: &#39;custom.ix.MyClass&#39; });
+   *
+   * Please mind that all classes defined by sol.create inherit from sol.Base which initializes
+   * a new logging instance by default.
+   *
+   * # Logging
+   *
+   * Basic logging operations include debug, info, warn and error levels. While the first parameter &#39;messsage&#39; is mandatory
+   * a second parameter allows logging additional information with the help of an informationObject.
+   * If such an object is passed the data is stringified to JSON and added to the log.
+   *
+   * The message can either be a string or an Array of Strings. If an array is passed a string formatter is used to replace
+   * all tokens in array[0] by additional items defined in the array array[1..].
+   *
+   *     // simple message as string.
+   *     logger.info(message, informationObject);
+   *
+   *     // working with placeholders
+   *     logger.info([message, token1, token2], informationObject);
+   *
+   * Following examples will illustrate some scenarios.
+   *
+   *     logger.info(&#39;Searching for elements...&#39;);
+   *     // [custom.ix.MyClass] Searching for elements... :
+   *
+   *     logger.info(&#39;Searching for elements...&#39;, { parentId: 123 });
+   *     // [custom.ix.MyClass] Searching for elements... : {&quot;parentId&quot;:123}
+   *
+   *     logger.info([&#39;Searching for elements of parentId: {0}&#39;, 123]);
+   *     // [custom.ix.MyClass] Searching for elements of parentId: 123 :
+   *
+   *     logger.info([&#39;Searching for elements of parentId: {0}&#39;, 123], {userName: &#39;Administrator&#39;});
+   *     // [custom.ix.MyClass] Searching for elements of parentId: 123 : {&quot;userName&quot;:&quot;Administrator&quot;}
+   *
+   * The same logic can be used for all logging types debug, info, warn and error.
+   *
+   *     logger.error(&quot;an error occurred&quot;);
+   *     logger.warn([&quot;use default value= &#39;{0}&#39;&quot;, defaultValue]);
+   *     logger.info([&quot;processing {0} (id={1})&quot;, obj.name, obj.id]);
+   *     logger.debug(&quot;simple debug message&quot;, { foo: &quot;bar&quot; });
+   *
+   * # Log exceptions
+   *
+   * In case of exceptions, the exception object can be passed as the information object.
+   *
+   *     logger.error(&quot;an error occurred&quot;, ex);
+   *     // [custom.ix.MyClass] an error occurred : File not found
+   *
+   *     logger.warn([ &quot;use default value= &#39;{0}&#39;&quot;, defaultValue], ex);
+   *     // [custom.ix.MyClass] use default value= &#39;4711&#39; : Could not read user ID
+   *
+   * # Log execution of functions
+   *
+   * The execution of functions can be logged in debug mode thanks to the enter and exit functions. The Logger measures
+   * the execution time between enter and exit calls.
+   *
+   *     logger.enter(&quot;my.Function&quot;);
+   *     logger.enter(&quot;my.Function&quot;, informationObject);
+   *
+   *     logger.exit(&quot;my.Function&quot;);
+   *     logger.exit(&quot;my.Function&quot;, informationObject);
+   *
+   * Following example shows a basic usage:
+   *
+   *     myFunction: function() {
+   *       var me = this;
+   *       me.logger.enter(&quot;my.Function&quot;, { param: &quot;abc&quot; });  // Object optional
+   *       // function code belongs here.
+   *       me.logger.exit(&quot;my.Function&quot;, { result: &quot;xyz&quot;});  // Object optional
+   *     }
+   *
+   *     // [custom.ix.MyClass] ENTER my.Function : {&quot;param&quot;:&quot;abc&quot;}
+   *     // [custom.ix.MyClass] EXIT my.Function : 313ms : {&quot;result&quot;:&quot;xyz&quot;}
+   *
+   * # Own logger implementation
+   *
+   * The component should at least implement the following functions:
+   *
+   * - error(String)
+   * - warn(String)
+   * - info(String)
+   * - debug(String)
+   * - isDebugEnabled() : Boolean
+   *
+   * You can use your own logger as follows:
+   *
+   *     var logger = sol.create(&quot;sol.Logger&quot;, { scope: &#39;custom.ix.MyClass&#39;, logger: new MyLoggerImpl() });
+   *
+   * # Troubleshooting
+   *
+   * If class has no logging instance please ensure that if the class definition contains an
+   * initialize param, the superclass&#39; initialize function mus be called. e.g.
+   *
+   *     sol.define(&quot;custom.ix.MyClass&quot;, {
+   *       initialize: function(config) {
+   *         var me = this;
+   *         // logging instance is created in the superclass&#39; initialize function
+   *         me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+   *       }
+   *     });
+   *
+   * @todo Handlebars.js templates with lazy compile routine.
+   * @author Pascal Zipfel, ELO Digital Office GmbH
+   * @version 1.1
+   *
+   * @eloall
+   */
+  sol.define(&quot;sol.Logger&quot;, {
+
+<span id='sol-Logger-cfg-scope'>    /**
+</span>     * @cfg [scope=&#39;sol&#39;] The scope will be logged with every log statement
+     */
+    scope: &quot;sol&quot;,
+
+<span id='sol-Logger-cfg-logger'>    /**
+</span>     * @cfg [logger=log|console] (optional) An own logger implementation can be supplied
+     */
+    logger: undefined,
+
+<span id='sol-Logger-property-debugEnabled'>    /**
+</span>     * @private
+     * @property
+     * Flag which saves the state of logger.isDebugEnabled
+     */
+    debugEnabled: false,
+
+<span id='sol-Logger-property-timings'>    /**
+</span>     * @private
+     * @property
+     * Internally handles timers for execution time calculations
+     */
+    timings: {},
+
+<span id='sol-Logger-property-pattern'>    /**
+</span>     * @private
+     * @property
+     * Patterns used by different logging types to generate an output.
+     */
+    pattern: {
+      error: &quot;[{{scope}}] {{msg}} : {{ex}}&quot;,
+      warn: &quot;[{{scope}}] {{msg}} : {{ex}}&quot;,
+      info: &quot;[{{scope}}] {{msg}} : {{object}}&quot;,
+      debug: &quot;[{{scope}}] {{msg}} : {{object}}&quot;,
+      enter: &quot;[{{scope}}] ENTER {{funct}} : {{object}}&quot;,
+      exit: &quot;[{{scope}}] EXIT {{funct}} : {{time}}ms : {{object}}&quot;
+    },
+
+<span id='sol-Logger-method-initialize'>    initialize: function (config) {
+</span>      var me = this;
+      if (config.scope) {
+        me.scope = config.scope;
+      }
+      if (config.logger) {
+        me.logger = config.logger;
+        me.debugEnabled = me.logger.isDebugEnabled();
+      } else {
+        me.logger = (typeof console === &quot;undefined&quot;) ? log : console;
+        me.debugEnabled = (typeof console === &quot;undefined&quot;) ? me.logger.isDebugEnabled() : true;
+      }
+
+      if (!me.debugEnabled) {
+        me.debug = me.noop;
+        me.enter = me.noop;
+        me.exit = me.noop;
+      }
+    },
+
+<span id='sol-Logger-method-error'>    /**
+</span>     * Logs a message in ERROR level.
+     *
+     * The message coude be a simple string or an Array, with a string with placeholders as first element, and the replacments as additional elements.
+     *
+     * @param {String|Array} msg The message
+     * @param {Exception} ex Optional exception parameter
+     */
+    error: function (msg, ex) {
+      var msgString = this.pattern.error.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{msg}}&quot;, this.format(msg)).replace(&quot;{{ex}}&quot;, ex ? ex : &quot;&quot;).replace(/ : $/, &quot;&quot;);
+      this.logger.error(msgString);
+    },
+
+<span id='sol-Logger-method-warn'>    /**
+</span>     * Logs a message in WARN level.
+     *
+     * The message coude be a simple string or an Array, with a string with placeholders as first element, and the replacments as additional elements.
+     *
+     * @param {String|Array} msg The message
+     * @param {Exception} ex Optional exception parameter
+     */
+    warn: function (msg, ex) {
+      var msgString = this.pattern.warn.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{msg}}&quot;, this.format(msg)).replace(&quot;{{ex}}&quot;, ex ? ex : &quot;&quot;).replace(/ : $/, &quot;&quot;);
+      this.logger.warn(msgString);
+    },
+
+<span id='sol-Logger-method-info'>    /**
+</span>     * Logs a message in INFO level.
+     *
+     * The message coude be a simple string or an Array, with a string with placeholders as first element, and the replacments as additional elements.
+     *
+     * @param {String|Array} msg The message
+     * @param {Object} obj Optional object which will be printed after the message in serialized form
+     * @example
+     */
+    info: function (msg, obj) {
+      var objString = this.stringify(obj), msgString = this.pattern.info.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{msg}}&quot;, this.format(msg)).replace(&quot;{{object}}&quot;, objString).replace(/ : $/, &quot;&quot;);
+      this.logger.info(msgString);
+    },
+
+<span id='sol-Logger-method-debug'>    /**
+</span>     * Logs a message in DEBUG level.
+     *
+     * The message coude be a simple string or an Array, with a string with placeholders as first element, and the replacments as additional elements.
+     *
+     * @param {String|Array} msg The message
+     * @param {Object} obj Optional object which will be printed after the message in serialized form
+     */
+    debug: function (msg, obj) {
+      if (this.debugEnabled) {
+        var objString = this.stringify(obj), msgString = this.pattern.debug.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{msg}}&quot;, this.format(msg)).replace(&quot;{{object}}&quot;, objString).replace(/ : $/, &quot;&quot;);
+        this.logger.debug(msgString);
+      }
+    },
+
+<span id='sol-Logger-method-enter'>    /**
+</span>     * Logs a message in DEBUG level and starts the time meassurment for the function.
+     *
+     * @param {String} funct The entered function
+     * @param {Object} obj Optional object which will be printed after the message in serialized form
+     */
+    enter: function (funct, obj) {
+      var objString, msgString;
+      if (this.debugEnabled) {
+        this.doTiming(funct);
+
+        objString = this.stringify(obj);
+        msgString = this.pattern.enter.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{funct}}&quot;, funct).replace(&quot;{{object}}&quot;, objString).replace(/ : $/, &quot;&quot;);
+        this.logger.debug(msgString);
+      }
+    },
+
+<span id='sol-Logger-method-exit'>    /**
+</span>     * Logs a message in DEBUG level and finished the time meassurment for the function.
+     *
+     * The logged message contains the duration since the enter function was called.
+     *
+     * @param {String} funct The entered function
+     * @param {Object} obj Optional object which will be printed after the message in serialized form
+     */
+    exit: function (funct, obj) {
+      var duration, objString, msgString;
+      if (this.debugEnabled) {
+        duration = this.doTiming(funct);
+        objString = this.stringify(obj);
+        msgString = this.pattern.exit.replace(&quot;{{scope}}&quot;, this.scope).replace(&quot;{{funct}}&quot;, funct).replace(&quot;{{time}}&quot;, duration).replace(&quot;{{object}}&quot;, objString).replace(/ : $/, &quot;&quot;);
+        this.logger.debug(msgString);
+      }
+    },
+
+<span id='sol-Logger-method-format'>    /**
+</span>     * @private
+     * If parameter is an Array, the first value will be treated as the String and all other elements will be inserted at the placeholder positions in that String, maintaining their order.
+     * @param {String|Array} msg
+     * @returns {String}
+     */
+    format: function (msg) {
+      var message, params;
+      if (Object.prototype.toString.call(msg) === &quot;[object Array]&quot;) {
+        message = msg[0];
+        params = msg.slice(1);
+
+        message = message.replace(/\{(\d+)\}/g, function (match, number) {
+          return (typeof params[number] !== &quot;undefined&quot;) ? params[number] : match;
+        });
+      } else {
+        message = msg;
+      }
+      return message;
+    },
+
+<span id='sol-Logger-method-stringify'>    /**
+</span>     * @private
+     * @param {String|Object} obj
+     * @returns {String}
+     */
+    stringify: function (obj) {
+      if (typeof obj === &quot;string&quot;) {
+        return obj;
+      }
+      try {
+        return JSON.stringify(obj) || &quot;&quot;; // to avoid returning &#39;undefined&#39;
+      } catch (ex) {
+        return typeof obj;
+      }
+    },
+
+<span id='sol-Logger-method-doTiming'>    /**
+</span>     * @private
+     * @param {String} func Name/Identifier for saving the start time
+     * @returns {Number}
+     */
+    doTiming: function (func) {
+      var now = Date.now(), timingKey = this.scope + func, timingValue = this.timings[timingKey], duration;
+
+      if (timingValue) {
+        this.timings[timingKey] = undefined;
+        duration = now - timingValue;
+        if (duration &lt; 0) {
+          duration = 0;
+        }
+        return duration;
+      } else {
+        this.timings[timingKey] = now;
+      }
+      return -1;
+    },
+
+<span id='sol-Logger-method-noop'>    /**
+</span>     * @private
+     */
+    noop: function () {}
+
+  });
+}
+
+if (!sol.ClassManager.getClass(&quot;sol.Base&quot;)) {
+<span id='sol-Base'>  /**
+</span>   * @class sol.Base
+   * @extends Object
+   *
+   * The Base class implements basic operations that are might be required by all child classes.
+   *
+   * It is always set as the root superclass for all class definitions if no inheritance was defined by &#39;extend&#39;.
+   *
+   *     // the following class definition ...
+   *     sol.define(&#39;sol.common.ix.DatabaseIterator&#39;, {  });
+   *     sol.define(&#39;sol.invoice.ix.dynkwl.Company&#39;, {
+   *       extend: &#39;sol.common.ix.DatabaseIterator&#39;
+   *     }
+   *
+   *     // ... will lead to following class inheritance structure
+   *     sol.Base
+   *       - sol.common.ix.DatabaseIterator
+   *          - sol.invoice.ix.dynkwl.Company
+   *
+   * The initialize function of the Base Class handles a couple of operations and should always be called if a child class
+   * overrides initialize:
+   *
+   * -   instantiates logger for class with the current child&#39;s class name as scope config.
+   * -   applies all config properties to the class instance.
+   * -   checks if required config properties (defined by requiredConfig) are set
+   *
+   * # A note on config properties and class inheritance
+   *
+   * Please mind that if config properties are different than class defaults that they get applied to the child class
+   * after calling $super(&#39;sol.Base&#39;, &#39;initialize&#39;).
+   *
+   *     sol.define(&#39;sol.invoice.ix.dynkwl.Company&#39;, {
+   *       extend: &#39;sol.common.ix.DatabaseIterator&#39;,
+   *
+   *       myConfig: &#39;not set yet&#39;,
+   *
+   *       initialize: function(config) {
+   *         var me = this;
+   *         // me.myConfig = &quot;not set yet&quot;
+   *         me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+   *         // me.myConfig = &quot;is now set&quot;
+   *       }
+   *     });
+   *
+   *     sol.create(&#39;sol.invoice.ix.dynkwl.Company&#39;, {
+   *       myConfig: &#39;is now set&#39;
+   *     });
+   *
+   * @author Pascal Zipfel, ELO Digital Office GmbH
+   * @version 1.0
+   *
+   * @eloall
+   */
+  sol.define(&quot;sol.Base&quot;, {
+
+<span id='sol-Base-property-logger'>    /**
+</span>     * @property {sol.Logger} logger
+     * @protected
+     * Logger for this class instance. This logger is created by sol.Base#initialize.
+     *
+     * Please see sol.Logger class documentation for more information.
+     */
+    logger: undefined,
+
+<span id='sol-Base-cfg-requiredConfig'>    /**
+</span>     * @property {Array} requiredConfig
+     * @cfg {Array} requiredConfig
+     * @protected
+     * List of required config properties. sol.Base#initialize throws an exception if one of the properties is null or undefined.
+     */
+    requiredConfig: undefined,
+
+<span id='sol-Base-property-S-className'>    /**
+</span>     * @property $className {String}
+     * @protected
+     * name of the class including its namespace.
+     */
+
+<span id='sol-Base-method-S-super'>    /**
+</span>     * @method $super
+     * @member sol.Base
+     * @private
+     *
+     * Calls a function of a superclass thanks to its name. Superclass must be part of the calling objects class hierarchy.
+     *
+     * &lt;b&gt;Please note that calling superclass functions might lead to an infinitive loop if misused. Please validate that none class other than the classes superclass is passed as the superclass parent.&lt;/b&gt;
+     *
+     *     me.$super(superClassName, functionName, attributesArray);
+     *
+     * A basic example of the initialize-function will look as followed.
+     *
+     *     me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+     *     me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, arguments);
+     *
+     * A word on performance: The superclass name must be passed since the js rhino engine does not allow accessing the caller of the callee due to performance reasons.
+     *
+     * @param {String} superClassName name of the super class.
+     * @param {String} functionName name of the function that should be called.
+     * @param {Object[]} arguments list of arguments that should be passed to the function.
+     */
+
+<span id='sol-Base-method-initialize'>    /**
+</span>     * @private
+     *
+     * Initialize class.
+     * This function is called after the class was instantiated.
+     *
+     * @param {Object} config parameters as defined. See documentation for more details.
+     */
+    initialize: function (config) {
+      var me = this, property;
+
+      me.logger = sol.create(&quot;sol.Logger&quot;, {
+        scope: me.$className
+      });
+
+      for (property in config) {
+        if (config.hasOwnProperty(property)) {
+          if (typeof me[property] === &quot;function&quot; &amp;&amp; typeof config[property] !== &quot;function&quot;) {
+            throw &quot;[&quot; + me.$className + &quot;] Illegal overriding internal function with a value: &quot; + property + &quot;. Existing functions cannot be overriden with non functional values using sol.create().&quot;;
+          } else if (property === &quot;extend&quot; || property === &quot;requiredConfig&quot; || property === &quot;singleton&quot; || property === &quot;$super&quot; || property === &quot;$className&quot; || property === &quot;$parent&quot; || property === &quot;CONST&quot;) {
+            throw &quot;[&quot; + me.$className + &quot;] Illegal overriding internal object value: &quot; + property + &quot;. requiredConfig and singleton as well as properties starting with $ are protected and should not be set using sol.create().&quot;;
+          }
+          me[property] = config[property];
+        }
+      }
+      if (me.requiredConfig) {
+        me.requiredConfig.forEach(function (requiredProperty) {
+          if (me[requiredProperty] === null || me[requiredProperty] === undefined) {
+            throw &quot;[&quot; + me.$className + &quot;] Could not create object. Missing config property: &quot; + requiredProperty + &quot;. Please ensure all required properties are set: &quot; + JSON.stringify(me.requiredConfig);
+          }
+        });
+      }
+    }
+  });
+}</pre>
+</body>
+</html>

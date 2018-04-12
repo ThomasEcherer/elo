@@ -1,0 +1,152 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Create this archive structure:
+	/// - s1 C# example MoveSord
+	///   - o1
+	///     - r1
+	///   - o2
+	/// 
+	/// Link R1 into O2
+	/// </summary>
+	public class CopySord
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// create Sord s1
+				IndexServer.Sord s1 = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+				s1.name = "s1 C# example MoveSord";
+				s1.id = ix.checkinSord(ci, s1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("s1.id=" + s1.id);
+
+				// create Sord o1
+				IndexServer.Sord o1 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o1.name = "o1";
+				o1.id = ix.checkinSord(ci, o1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o1.id=" + o1.id);
+
+				// create Sord r1
+				IndexServer.Sord r1 = ix.createSord(ci, o1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				r1.name = "r1";
+				r1.id = ix.checkinSord(ci, r1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("r1.id=" + r1.id);
+
+				// create Sord o2
+				IndexServer.Sord o2 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o2.name = "o2";
+				o2.id = ix.checkinSord(ci, o2, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o2.id=" + o2.id);
+
+				// VERIFY o1 contains r1
+				String childIdsO1 = internalFindSordIdsInParent(ix, ci, o1.guid);
+				String childIdsO2 = internalFindSordIdsInParent(ix, ci, o2.guid);
+				Logger.instance().log("before move: o1:(" + childIdsO1 + "), o2:(" + childIdsO2 + ")");
+
+				// LINK r1 -> o2
+				ix.copySord(ci, o2.guid, r1.guid, null, CONST.COPY_SORD.REFERENCE);
+
+				// VERIFY o2 contains r1
+				childIdsO1 = internalFindSordIdsInParent(ix, ci, o1.guid);
+				childIdsO2 = internalFindSordIdsInParent(ix, ci, o2.guid);
+				Logger.instance().log("after move: o1:(" + childIdsO1 + "), o2:(" + childIdsO2 + ")");
+
+				// VERIFY o2 contains r1 as reference (logical copy).
+				// In other words: r1.parentId != o2
+				IndexServer.Sord r1AfterLink = ix.checkoutSord(ci, r1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+				Logger.instance().log("parent of r1 is still o1, r1.parentId=" + r1AfterLink.parentId + ", o1.id=" + o1.id);
+
+				// Clean up?
+				bool cleanUp = true;
+				if (cleanUp) 
+				{
+          IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+          delOpts.deleteFinally = true;
+          ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, null);
+          ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, delOpts);
+				}
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		// Helper function to find the subentries of an object
+		private String internalFindSordIdsInParent(IXClient ix, 
+			IndexServer.ClientInfo ci, String parentId)
+		{
+			IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+			
+			IndexServer.FindInfo findInfo = new IndexServer.FindInfo();
+			findInfo.findChildren = new IndexServer.FindChildren();
+			findInfo.findChildren.parentId = parentId;
+			
+			IndexServer.FindResult findResult = ix.findFirstSords(ci, findInfo, 100, CONST.SORD.mbOnlyId);
+			if (findResult.ids == null) return "";
+
+			if (findResult.searchId != null) 
+			{
+				ix.findClose(ci, findResult.searchId);
+			}
+
+			String strList = "";
+			for (int i = 0; i < findResult.ids.Length; i++) 
+			{
+				if (i != 0) strList += ",";
+				strList += findResult.ids[i];
+			}
+            				
+			return strList;
+		}
+	}
+}
+

@@ -1,0 +1,222 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.UserTask;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.FindTasksInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFCollectNode;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example demontsrates how to find active nodes for a particular user with findFirstTask() and findNextTask().
+ * Three users with different access rights are used to demonstrate that only users 
+ * who own nodes in the workflow, or are members of a group that owns  a node/nodes can retrieve nodes using this method.
+ * (Main administrator does not have sufficient rights to retrieve nodes).
+ * The helper class is used to create the template with three nodes and the users.
+ * NOTE: Any other workflows using WF-Users 1 - 4 should be deleted before running this example.
+ * 
+ */
+
+public class FindUserNodes {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template and find nodes
+            createFindFromTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFindFromTemplate() throws RemoteException{
+        
+        // Create users
+        WFHelper.createNewUser(ix, "WF-User1", "elo", true);
+        WFHelper.createNewUser(ix, "WF-User2", "elo", false);
+        WFHelper.createNewUser(ix, "WF-User3", "elo", false);
+        WFHelper.createNewUser(ix, "WF-User4", "elo", false);
+        
+        String[] user = new String[] {"WF-User1", "WF-USer2", "WF-User3"};
+        String groupName = "Find User Nodes Demo";
+        WFHelper.createGroupWithUsers(ix, groupName, user);
+        
+        // Create workflow templates      
+        String[] templateName = new String[3];
+        WFDiagram[] wfd = new WFDiagram[3];
+        EditInfo[] ed = new EditInfo[3];
+        String[] sordName = new String[3];
+        int[] objId = new int[3];
+        
+        // Create templates and sords
+        for (int i = 0; i < 3; i++){
+            templateName[i] = "Find Demo Template " + (i + 1)  + (new Date());
+            sordName[i] = "Find Demo Sord " + (i + 1) + (new Date());
+            ed[i] = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+            ed[i].getSord().setName(sordName[i]);
+            objId[i] = ix.ix().checkinSord(ed[i].getSord(), SORD.getMbMin(), LOCK.getNO());
+        }
+        // Template 1 - 3 personal nodes & 4 users - user 4 has no nodes
+        // Only user1 has an active node and so users 2, 3 & 4 should not find the node
+        String[] users0 = new String[] {"WF-User1", "WF-User2", "WF-User3"};
+        wfd[0] = WFHelper.createSeqTemplateForUsers(ix, templateName[0], users0);
+        templateName[0] = wfd[0].getName();
+
+        // Template 2 - 2 personal nodes & 2 users - users 1 & 4 no nodes
+        // User3 does not have an active node and should not find node.
+        String[] users1 = new String[] {"WF-User2", "WF-User3"};
+        wfd[1] = WFHelper.createSeqTemplateForUsers(ix, templateName[1], users1);
+        templateName[1] = wfd[1].getName();
+
+        // Template 3 - 2 personal nodes with 1 user & 1 group - users 2, 3 & 4 no nodes
+        // Should be found by users 1, 2 & 3 as group contains all three users and 
+        // active node belongs to group.
+        String[] users2 = new String[] {groupName, "WF-User1"};
+        wfd[2] = WFHelper.createSeqTemplateForUsers(ix, templateName[2], users2);
+        templateName[2] = wfd[2].getName();
+
+        // Start workflows
+        String[] flowName = new String[3];
+        int[] flowId = new int[3];
+        for ( int i = 0; i < 3; i++){
+            flowName[i] = "WF-Find Demo " + (i + 1) + new Date();
+            flowId[i] = ix.ix().startWorkFlow(templateName[i], flowName[i], ed[i].getSord().getGuid());
+            System.out.println("Started WF: sordName= " + ed[i].getSord().getName() + 
+                ", flowId= " + flowId[i] + 
+                ", flowName= " + flowName[i]);
+        }
+        
+        // Display all nodes for users
+        readAllWFs("Administrator"); // Should not find any nodes
+        readAllWFs("WF-User1");
+        readAllWFs("WF-User2");
+        readAllWFs("WF-User3");
+        readAllWFs("WF-User4");
+
+
+        // Delete Sords
+        for (int i = 0; i < 3; i++){
+            ix.ix().deleteSord(null, Integer.toString(objId[i]), LOCK.getNO(), null);
+        }
+        
+    }
+    
+    
+    public static void readAllWFs(String userName) throws RemoteException {
+
+        FindResult fr = null;
+        IXConnection connUser = null;
+        int ix = 0; // makes sure that I do not use the connection of the class variable ix.
+        
+        try {
+            // login as given user - password is always "elo"
+            
+            connUser = connFact.create(userName, "elo", "IX-Workshop", null);
+            System.out.println("Logged in as " + userName);
+            
+            int nextTaskIdx = 0;
+            final int max = 10;
+
+            // Prepare a find object that describes a search for workflows
+            FindTasksInfo fi = new FindTasksInfo();
+            fi.setInclWorkflows(true);
+            fi.setInclGroup(true);
+            
+            // find tasks
+            fr = connUser.ix().findFirstTasks(fi, max);
+            UserTask[] tasks = fr.getTasks();
+            if (tasks.length == 0) System.out.println("    No nodes found!");
+           
+            while (tasks.length > 0) {
+                
+                // process results
+                for (int taskIdx = 0; taskIdx < tasks.length; taskIdx++) {
+                    
+                    // A task is either reminder, activity or wf-node.
+                    // Here, must be a wf-node.
+                    UserTask task = tasks[taskIdx];
+                    WFCollectNode wfc = task.getWfNode();
+                    
+                    System.out.println("    Found node: userName=" + userName + 
+                            ", flowName=" + wfc.getFlowName() +
+                            ", nodeName=" + wfc.getNodeName());
+                    
+
+                }
+                
+                // more results?
+                if (!fr.isMoreResults()) {
+                    break;
+                }
+                
+                // get next tasks
+                nextTaskIdx += tasks.length;
+                fr = connUser.ix().findNextTasks(fr.getSearchId(), nextTaskIdx, max);
+            }
+            
+        } finally {
+            if (connUser != null) {
+                if (fr != null) {
+                    connUser.ix().findClose(fr.getSearchId());
+                }
+                connUser.logout();
+            }
+        }
+    }
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+<span id='NotifyCallback'>/**
+</span> * @class NotifyCallback
+ */
+function NotifyCallback() {
+}
+
+var notifyCallback = new NotifyCallback();
+
+<span id='NotifyCallback-method-filterTask'>/**
+</span> * Meldet zurück, ob die angegebene Aufgabe die Filterkriterien erfüllt.
+ * 
+ * @param {Object} task Aufgabe
+ * @returns {Boolean} Aufgabe erfüllt die Filterkriterien
+ */
+NotifyCallback.prototype.filterTask = function(task) {
+  return true;
+};
+
+<span id='NotifyCallback-method-beforeSend'>/**
+</span> * Diese Funktion wird vor dem Versenden ausgeführt.
+ * 
+ * @param {String} text Text
+ * @returns {String}
+ */
+NotifyCallback.prototype.beforeSend = function(text) {
+  return text;
+};
+
+<span id='NotifyCallback-method-getTableLine'>/**
+</span> * Liefert eine Tabellenzeile zurück.
+ * 
+ * @param {Object} task Aufgabe
+ * @returns {Object} Tabellenzeile
+ */
+NotifyCallback.prototype.getTableLine = function(task) {
+  return null;
+};
+
+<span id='NotifyCallback-method-getMailUser'>/**
+</span> * Liefert den E-Mail Benutzer zurück.
+ * 
+ * @param {String} userName Benutzername
+ * @returns {Object} E-Mail Benutzer
+ */
+NotifyCallback.prototype.getMailUser = function(userName) {
+  return null;
+};
+
+<span id='NotifyCallback-method-formatMessage'>/**
+</span> * Liefert das formattierte Message zurück.
+ * 
+ * @param {Object} template Vorlage
+ * @param {Object} node Workflow-Knoten
+ * @param {Sord} sord Verschlagwortung des Archiveintrags
+ * @param {Sord} properties Properties
+ * @returns {unresolved}
+ */
+NotifyCallback.prototype.formatMessage = function(template, node, sord, properties) {
+  return null;
+};
+
+<span id='NotifyCallback-method-getSubject'>/**
+</span> * Liefert den Betreff aus den angegebenen Daten zurück.
+ * 
+ * @param {Object} node Workflow-Knoten
+ * @param {Sord} sord Archiveintrag
+ * @param {Object} properties Properties
+ * @returns {String} Betreff
+ */
+NotifyCallback.prototype.getSubject = function(node, sord, properties) {
+  return null;
+};
+
+</pre>
+</body>
+</html>

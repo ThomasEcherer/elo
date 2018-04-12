@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace mail
+<span id='mail'>/**
+</span> * @class mail
+ * @singleton
+ */
+var mail = new Object();
+mail = {
+
+<span id='mail-method-connectImap_GMAIL'> /**
+</span>  * Führt eine IMAP GMAIL Anmeldung durch.
+  */
+  connectImap_GMAIL: function () {
+    log.debug(&quot;Connect Mailbox GMAIL&quot;);
+    var props = new Properties();
+    props.setProperty(&quot;mail.imap.host&quot;, &quot;imap.gmail.com&quot;);
+    props.setProperty(&quot;mail.imap.port&quot;, &quot;993&quot;);
+    props.setProperty(&quot;mail.imap.connectiontimeout&quot;, &quot;5000&quot;);
+    props.setProperty(&quot;mail.imap.timeout&quot;, &quot;5000&quot;);
+    props.setProperty(&quot;mail.imap.socketFactory.class&quot;, &quot;javax.net.ssl.SSLSocketFactory&quot;);
+    props.setProperty(&quot;mail.imap.socketFactory.fallback&quot;, &quot;false&quot;);
+    props.setProperty(&quot;mail.store.protocol&quot;, &quot;imaps&quot;);
+
+    var session = Session.getDefaultInstance(props);
+    log.debug(&quot;Get Store&quot;);
+    MAIL_STORE = session.getStore(&quot;imaps&quot;);
+    log.debug(&quot;Connect elojforum&quot;);
+    MAIL_STORE.connect(&quot;imap.gmail.com&quot;, &quot;abc@gmail.com&quot;, &quot;1234&quot;);
+    var folder = MAIL_STORE.getDefaultFolder();
+    //MAIL_INBOX = folder.getFolder(&quot;INBOX&quot;);
+    MAIL_INBOX = folder.getFolder(&quot;[Google Mail]/Gesendet&quot;);
+    log.debug(&quot;Open folder&quot;);
+    MAIL_INBOX.open(Folder.READ_WRITE);
+    log.debug(&quot;Get Messages&quot;);
+    MAIL_MESSAGES = MAIL_INBOX.getMessages();
+    MAIL_DELETE_ARCHIVED = false;
+  },
+
+<span id='mail-method-finalizeImap_GMAIL'> /**
+</span>  * Beendet die IMAP-Initialisierung.
+  */
+  finalizeImap_GMAIL: function () {
+    if (MAIL_DELETE_ARCHIVED &amp;&amp; MAIL_ALLOW_DELETE) {
+      message.setFlag(Flags.Flag.SEEN, true);
+    }
+  },
+
+<span id='mail-method-nextImap_GMAIL'> /**
+</span>  * Meldet zurück, ob es weitere E-Mails gibt.
+  * 
+  * @return {Boolean} weitere E-Mails vorhanden
+  */
+  nextImap_GMAIL: function () {
+    for (;;) {
+      if (MAIL_POINTER &gt;= MAIL_MESSAGES.length) {
+        log.debug(&quot;No more Messages (&quot; + MAIL_MESSAGES.length + &quot;)&quot;);
+        return false;
+      }
+
+      MAIL_MESSAGE = MAIL_MESSAGES[MAIL_POINTER];
+      log.debug(&quot;Process Message: &quot; + MAIL_MESSAGE.subject);
+      var flags = MAIL_MESSAGE.getFlags();
+      if (flags.contains(Flags.Flag.SEEN)) {
+        MAIL_POINTER++;
+        continue;
+      }
+
+      MAIL_ALLOW_DELETE = false;
+      MAIL_POINTER++;
+      return true;
+    }
+
+    return false;
+  },
+
+<span id='mail-method-setSmtpHost'> /**
+</span>  * Setzt den angegebenen SMTP-Host.
+  * 
+  * @param {String} smtpHost SMTP-Host
+  */
+  setSmtpHost: function (smtpHost) {
+    if (MAIL_SMTP_HOST != smtpHost) {
+      MAIL_SMTP_HOST = smtpHost;
+      MAIL_SESSION = undefined;
+    }
+  },
+
+<span id='mail-method-startSession'> /**
+</span>  * Erstellt eine neue E-Mail Session.
+  */
+  startSession: function () {
+    if (MAIL_SESSION == undefined) {
+      var props = new Properties();
+      props.put(&quot;mail.smtp.host&quot;, MAIL_SMTP_HOST);
+      MAIL_SESSION = Session.getInstance(props, null);
+    }
+  },
+
+<span id='mail-method-sendMail'> /**
+</span>  * Versendet eine E-Mail mit den angegebenen Daten.
+  * 
+  * @param {String} addrFrom E-Mail Absender
+  * @param {String} addrTo E-Mail Empfänger
+  * @param {String} subject E-Mail Betreff
+  * @param {String} body E-Mail Body
+  */
+  sendMail: function (addrFrom, addrTo, subject, body) {
+    this.sendMailInternal(addrFrom, addrTo, subject, body, null);
+  },
+
+<span id='mail-method-sendHtmlMail'> /**
+</span>  * Versendet eine HTML E-Mail mit den angegebenen Daten.
+  * 
+  * @param {String} addrFrom E-Mail Absender
+  * @param {String} addrTo E-Mail Empfänger
+  * @param {String} subject E-Mail Betreff
+  * @param {type} body E-Mail Body
+  */
+  sendHtmlMail: function (addrFrom, addrTo, subject, body) {
+    this.sendMailInternal(addrFrom, addrTo, subject, null, body);
+  },
+
+<span id='mail-method-sendMailInternal'> /**
+</span>  * Versendet eine E-Mail mit den angegebenen Daten.
+  * 
+  * @param {String} addrFrom E-Mail Absender
+  * @param {String} addrTo E-Mail Empfänger
+  * @param {String} subject E-Mail Betreff
+  * @param {String} textBody E-Mail Text-Body
+  * @param {String} htmlBody E-Mail HTML-Body
+  */
+  sendMailInternal: function (addrFrom, addrTo, subject, textBody, htmlBody) {
+    mail.startSession();
+    var msg = new MimeMessage(MAIL_SESSION);
+    var inetFrom = new InternetAddress(addrFrom);
+    var inetTo = new InternetAddress(addrTo);
+    msg.setFrom(inetFrom);
+    msg.addRecipient(Message.RecipientType.TO, inetTo);
+    msg.setSubject(subject);
+    
+    if (textBody) {
+      msg.setText(textBody);
+    }
+    
+    if (htmlBody) {
+      msg.setContent(htmlBody, &quot;text/html; charset=utf-8&quot;);
+    }
+    
+    Transport.send(msg);
+  },
+  
+<span id='mail-method-sendMailWithAttachment'> /**
+</span>  * Versendet eine E-Mail mit dem angegebenen Anhang.
+  * 
+  * @param {String} addrFrom E-Mail Absender
+  * @param {String} addrTo E-Mail Empfänger
+  * @param {String} subject E-Mail Betreff
+  * @param {String} body E-Mail Body
+  * @param {Number} attachId ID des E-Mail Anhangs
+  * @param {Boolean} isHtml HTML Body
+  */ 
+  sendMailWithAttachment: function (addrFrom, addrTo, subject, body, attachId, isHtml) {
+    var tempFile = fu.getTempFile(attachId);
+    this.sendMailWithAttachmentFile(addrFrom, addrTo, subject, body, tempFile, isHtml);
+
+    tempFile[&quot;delete&quot;]();
+  },
+  
+<span id='mail-method-sendMailWithAttachmentFile'> /**
+</span>  * Versendet eine E-Mail mit dem angegebenen Anhang.
+  * 
+  * @param {String} addrFrom E-Mail Absender
+  * @param {String} addrTo E-Mail Empfänger
+  * @param {String} subject E-Mail Betreff
+  * @param {String} body E-Mail Body
+  * @param {File} file E-Mail Anhang
+  * @param {Boolean} isHtml HTML Body
+  */
+  sendMailWithAttachmentFile: function (addrFrom, addrTo, subject, body, file, isHtml) {
+    mail.startSession();
+    var msg = new MimeMessage(MAIL_SESSION);
+    var inetFrom = new InternetAddress(addrFrom);
+    msg.setFrom(inetFrom);
+
+    var parts = addrTo.split(&quot;;&quot;);
+    for (var i = 0; i &lt; parts.length; i++) {
+      var inetTo = new InternetAddress(parts[i]);
+      msg.addRecipient(Message.RecipientType.TO, inetTo);
+    }
+
+    msg.setSubject(subject);
+
+    var textPart = new MimeBodyPart();
+    if (isHtml) {
+      textPart.setContent(body, &quot;text/html; charset=utf-8&quot;);
+    } else {
+      textPart.setContent(body, &quot;text/plain&quot;);
+    }
+
+    var attachFilePart = new MimeBodyPart();
+    attachFilePart.attachFile(file);
+
+    var mp = new MimeMultipart();
+    mp.addBodyPart(textPart);
+    mp.addBodyPart(attachFilePart);
+    msg.setContent(mp);
+    Transport.send(msg);
+  },
+
+<span id='mail-method-connectImap'> /**
+</span>  * Setzt den angegebenen Verbindungsnamen.
+  * 
+  * @param {String} connectionName Verbindungsname
+  */
+  connectImap: function (connectionName) {
+    mail[&quot;connectImap_&quot; + connectionName]();
+    MAIL_POINTER = 0;
+    MAIL_CONNECT_NAME = connectionName;
+  },
+
+<span id='mail-method-nextMessage'> /**
+</span>  * Meldet zurück, ob es weitere E-Mails gibt.
+  * 
+  * @return {Boolean} weitere E-Mails vorhanden
+  */
+  nextMessage: function () {
+    if (mail[&quot;nextImap_&quot; + MAIL_CONNECT_NAME]) {
+      if (MAIL_POINTER &gt; 0) {
+        mail.finalizePreviousMessage(MAIL_MESSAGE);
+      }
+
+      return mail[&quot;nextImap_&quot; + MAIL_CONNECT_NAME]();
+    } else {
+      // default implementation
+      if (MAIL_POINTER &gt; 0) {
+        mail.finalizePreviousMessage(MAIL_MESSAGE);
+      }
+
+      if (MAIL_POINTER &gt;= MAIL_MESSAGES.length) {
+        return false;
+      }
+
+      MAIL_MESSAGE = MAIL_MESSAGES[MAIL_POINTER];
+      MAIL_ALLOW_DELETE = false;
+      MAIL_POINTER++;
+      return true;
+    }
+  },
+
+<span id='mail-method-finalizePreviousMessage'> /**
+</span>  * Beendet die Abarbeitung der vorherigen E-Mail.
+  * 
+  * @param {Object} message E-Mail
+  */
+  finalizePreviousMessage: function (message) {
+    if (mail[&quot;finalizeImap_&quot; + MAIL_CONNECT_NAME]) {
+      mail[&quot;finalizeImap_&quot; + MAIL_CONNECT_NAME]();
+    } else {
+      if (MAIL_DELETE_ARCHIVED &amp;&amp; MAIL_ALLOW_DELETE) {
+        message.setFlag(Flags.Flag.DELETED, true);
+      }
+    }
+  },
+
+<span id='mail-method-closeImap'> /**
+</span>  * Schließt die aktuelle IMAP Verbindung.
+  */
+  closeImap: function () {
+    if (mail[&quot;closeImap_&quot; + MAIL_CONNECT_NAME]) {
+      mail[&quot;closeImap_&quot; + MAIL_CONNECT_NAME]();
+    } else {
+      MAIL_INBOX.close(true);
+      MAIL_STORE.close();
+    }
+  },
+
+<span id='mail-method-getBodyText'> /**
+</span>  * Liefert den Body-Text zurück.
+  * 
+  * @param {Object} message E-Mail
+  * @return {String} E-Mail Inhalt
+  */
+  getBodyText: function (message) {
+    var content = message.content;
+    if (content instanceof String) {
+      return content;
+    } else if (content instanceof Multipart) {
+      var cnt = content.getCount();
+      for (var i = 0; i &lt; cnt; i++) {
+        var part = content.getBodyPart(i);
+        var ct = part.contentType;
+        if (ct.match(&quot;^TEXT/PLAIN&quot;) == &quot;TEXT/PLAIN&quot;) {
+          return part.content;
+        }
+      }
+    }
+
+    return &quot;&quot;;
+  },
+
+<span id='mail-method-getSender'> /**
+</span>  * Liefert den E-Mail Sender zurück.
+  * 
+  * @param {Object} message E-Mail
+  * @return {String} E-Mail Sender
+  */
+  getSender: function (message) {
+    var adress = message.sender;
+    return adress.toString();
+  },
+
+<span id='mail-method-getRecipients'> /**
+</span>  * Liefert eine Zeichenkette mit den E-Mail Empfängern zurück.
+  * 
+  * @param {Object} message E-Mail
+  * @param {String} delimiter Trennzeichen
+  * @return {String} Zeichenkette mit den E-Mail Empfängern
+  */
+  getRecipients: function (message, delimiter) {
+    var adresses = message.allRecipients;
+
+    var cnt = 0;
+    if (adresses) {
+      cnt = adresses.length;
+    }
+    var hasMany = cnt &gt; 1;
+
+    var result = &quot;&quot;;
+    for (var i = 0; i &lt; cnt; i++) {
+      if (hasMany) {
+        result = result + delimiter;
+      }
+      result = result + adresses[i].toString();
+    }
+
+    return result;
+  }
+
+}
+// end of namespace mail</pre>
+</body>
+</html>

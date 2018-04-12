@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+importPackage(Packages.de.elo.ix.client);
+
+<span id='sol-dev-jc-GotoId'>/**
+</span> * Tool to help finding objects and documents by ID/GUID
+ *
+ * (taken from ELO standard GotoId script)
+ *
+ * @author ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @elojc
+ *
+ */
+sol.define(&quot;sol.dev.jc.GotoId&quot;, {
+  singleton: true,
+  
+<span id='sol-dev-jc-GotoId-method-execute'>  /**
+</span>   * Excecuted from button event
+   * @return {Object}
+   */
+  execute: function () {
+    var mode = 1,
+        lastId = archive.getUserOption(&quot;EloJ.S.Script.ELOGotoId.LastId&quot;, &quot;&quot;),
+        result, isObjId, searchId, memoText, translate, intId, editInfo;
+    if ((lastId != &quot;&quot;) &amp;&amp; (lastId.charAt(0) == 42)) {
+      mode = 2;
+      lastId = lastId.substring(1);
+    }
+    
+    result = this.inputIdDlg(lastId, mode);
+    if (!result) {
+      return;
+    }
+    
+    isObjId = result.isObjId;
+    searchId = result.searchId;
+    
+    memoText = searchId;
+    if (!isObjId) {
+      memoText = &quot;*&quot; + memoText;
+    }
+    archive.setUserOption(&quot;EloJ.S.Script.ELOGotoId.LastId&quot;, memoText);
+    
+    if (searchId) {
+      if (this.isGuid(searchId)) {
+        try {
+          translate = ixConnect.ix().checkoutSord(searchId, EditInfoC.mbSord, LockC.NO);
+          searchId = translate.sord.id;
+          isObjId = true;
+        } catch(e) {
+          workspace.setFeedbackMessage(this.getText(&quot;sol.dev.GotoId.MsgNoGuid&quot;) + &quot; &quot; + searchId);
+          log.info(e);
+          return;
+        }
+      }
+      
+      intId = parseInt(searchId, 10);
+      if (isNaN(intId)) {
+        return undefined;
+      }
+      
+      if (!isObjId) {
+        try {
+          editInfo = ixConnect.ix().checkoutDoc(null, intId, EditInfoC.mbSord, LockC.NO);
+        } catch(e) {
+          workspace.setFeedbackMessage(this.getText(&quot;sol.dev.GotoId.MsgNoDoc&quot;) + &quot; &quot; + intId);
+          return;
+        }
+        
+        intId = editInfo.sord.id;
+      }
+      
+      if (!workspace.gotoId(parseInt(intId, 10))) {
+        workspace.setFeedbackMessage(this.getText(&quot;sol.dev.GotoId.MsgNoEntry&quot;) + &quot; &quot; + intId);
+      }
+    }
+  },
+
+<span id='sol-dev-jc-GotoId-method-inputIdDlg'>  /**
+</span>   * @private
+   * @param {String} lastId
+   * @param {Integer} mode
+   * @return {Object}
+   */
+  inputIdDlg: function (lastId, mode) {
+    var dialog = workspace.createGridDialog(&quot;GotoId&quot;, 10, 12),
+        panel = dialog.gridPanel,
+        ed, rb, item, sep, sord, label2, nextLine, doc, node, reminder, result;
+    
+    // haesslicher Work Around - die Textdateien duerfen keine = Zeichen enthalten.
+    // Ab Version 8.05 wird alles besser...
+    panel.addLabel(1, 1, 10, this.getText(&quot;sol.dev.GotoId.MsgInput&quot;) + &quot;=&quot; + this.getText(&quot;sol.dev.GotoId.MsgInput2&quot;));
+    
+    ed = panel.addTextField(1, 3, 10);
+    ed.text = lastId;
+    
+    rb = [];
+    rb[1] = panel.addRadioButton(1, 5, 10, this.getText(&quot;sol.dev.GotoId.BtnObjId&quot;), &quot;&quot;, &quot;ModeGroup&quot;);
+    rb[2] = panel.addRadioButton(1, 6, 10, this.getText(&quot;sol.dev.GotoId.BtnDocId&quot;), &quot;&quot;, &quot;ModeGroup&quot;);
+    rb[mode].selected = true;
+    
+    if (workspace.activeView &amp;&amp; workspace.activeView.firstSelected) {
+      item = workspace.activeView.firstSelected;
+      sep = new Packages.javax.swing.JSeparator();
+      panel.addComponent(1, 7, 10, 1, sep);
+      
+      sord = item.sord;
+      label2 = panel.addLabel(1, 8, 2, this.getText(&quot;sol.dev.GotoId.ActItem&quot;));
+      label2.bold = true;
+      label2 = panel.addLabel(3, 8, 7, item.name);
+      label2.bold = true;
+      
+      nextLine = 9;
+      panel.addLabel(1, nextLine, 2, this.getText(&quot;sol.dev.GotoId.ObjectId&quot;));
+      panel.addLabel(3, nextLine, 7, sord.id + &quot; : &quot; + this.asELOName(sord.id) + &quot; : &quot; + sord.guid);
+      nextLine++;
+      
+      doc = sord.docVersion;
+      if (doc) {
+        panel.addLabel(1, nextLine, 2, this.getText(&quot;sol.dev.GotoId.FileId&quot;));
+        panel.addLabel(3, nextLine, 7, doc.id + &quot; : &quot; + this.asELOName(doc.id) + &quot;.&quot; + doc.ext + &quot; : &quot; + doc.guid);
+        nextLine++;
+      }
+      
+      if (item.task &amp;&amp; item.task.wfNode) {
+        node = item.task.wfNode;
+        panel.addLabel(1, nextLine, 2, this.getText(&quot;sol.dev.GotoId.FlowId&quot;));
+        panel.addLabel(3, nextLine, 7, node.flowId + &quot;.&quot; + node.nodeId);
+        nextLine++;
+      }
+      
+      if (item.task &amp;&amp; item.task.reminder) {
+        reminder = item.task.reminder;
+        panel.addLabel(1, nextLine, 2, this.getText(&quot;sol.dev.GotoId.ReminderId&quot;));
+        panel.addLabel(3, nextLine, 7, reminder.id);
+        nextLine++;
+      }
+    }
+    
+    if (!dialog.show()) {
+      return undefined;
+    }
+
+    result = {
+      isObjId: rb[1].selected,
+      searchId: String(ed.text)
+    };
+    return result;
+  },
+
+<span id='sol-dev-jc-GotoId-method-isGuid'>  /**
+</span>   * @private
+   * @param {String} id
+   * @return {Boolean}
+   */
+  isGuid: function (id) {
+    if (id.length != 38) {
+      return false;
+    }
+    
+    if ((id.substring(0, 1) != &quot;(&quot;) || (id.substring(37) != &quot;)&quot;)) {
+      return false;
+    }
+    
+    return true;
+  },
+
+<span id='sol-dev-jc-GotoId-method-asELOName'>  /**
+</span>   * @private
+   * @param {Integer} number
+   * @return {String}
+   */
+  asELOName: function (number) {
+    var hexId = Number(number).toString(16);
+    if (hexId.length &lt; 8) {
+      hexId = &quot;00000000&quot;.substring(0, 8 - hexId.length) + hexId;
+    }
+    
+    return hexId;
+  },
+  
+<span id='sol-dev-jc-GotoId-method-getText'>  /**
+</span>   * @private
+   * @param {String} key
+   * @return {String}
+   */
+  getText: function (key) {
+    return utils.getText(&quot;sol.dev.client&quot;, key);
+  }
+  
+});
+</pre>
+</body>
+</html>

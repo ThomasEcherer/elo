@@ -1,0 +1,100 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.CheckoutUsersC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.UserName;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to list the user names and groups from ELO
+ * 
+ */
+
+public class ListUserNames {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static CheckoutUsersC CHECKOUT_USERS;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            listNames();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void listNames() throws RemoteException {
+        
+         // List all user names and groups
+         System.out.println("All users and groups:");
+         UserName[] allNames = ix.ix().getUserNames(null, CHECKOUT_USERS.getALL_USERS_AND_GROUPS());
+         internalDisplayUserNames("  ", CONS, allNames);
+     
+         // List all  groups
+         System.out.println("All groups:");
+         UserName[] groupNames = ix.ix().getUserNames(null, CHECKOUT_USERS.getALL_GROUPS());
+         internalDisplayUserNames("  ", CONS, groupNames);
+         
+         // List members of groups
+         for (int i = 0; i < groupNames.length; i++){
+             String name = groupNames[i].getName();
+             System.out.println("Users of group " + name + ":");
+             UserName[] memberNames = ix.ix().getUserNames(new String[] {name}, CHECKOUT_USERS.getMEMBERS_OF_GROUP());
+             internalDisplayUserNames("  ", CONS, memberNames);
+         }
+    }
+     
+     public static void internalDisplayUserNames(String indent, IXServicePortC CONS, UserName[] users){
+         for (int i = 0; i < users.length; i++){
+             String type = (users[i].getType() == CONS.getUSER_INFO().getTYPE_GROUP()) ? "group" : "user";
+             System.out.println(indent + type + ": name = " + users[i].getName() + " id = " + users[i].getId());
+         }
+     }
+
+ 
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        CHECKOUT_USERS = CONS.getCHECKOUT_USERS(); 
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

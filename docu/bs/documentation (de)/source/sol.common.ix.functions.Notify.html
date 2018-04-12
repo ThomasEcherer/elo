@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.HttpUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.AsUtils.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Notify&quot; });
+
+<span id='sol-common-ix-functions-Notify'>/**
+</span> * Internally triggers the ELOas function sol.common.as.functions.SendMail in order to execute a notification, e.g. by e-mail.
+ *
+ * This function won&#39;t stop the workflow execution if an email configuration isn&#39;t setup properly.
+ * Compared to the as function the workflow must not be forwarded by an AS rule after a defined period of time.
+ * Therefore it can be used if workflow processing times matters.
+ *
+ * # As workflow node
+ *
+ *     {
+ *       &quot;mode&quot;: &quot;run&quot;,
+ *       &quot;from&quot;: &quot;elo@contelo.com&quot;,
+ *       &quot;to&quot;: &quot;solutions@elo.com&quot;,
+ *       &quot;subject&quot;: &quot;Neue Aufgabe&quot;,
+ *       &quot;body&quot;: {
+ *       &quot;type&quot;: &quot;html&quot;,
+ *       &quot;tplObjId&quot;: &quot;ARCPATH:/Administration/Business Solutions Custom/notify/Configuration/Mail templates/Example&quot;,
+ *       &quot;data&quot;: {
+ *         &quot;person&quot;: {
+ *         &quot;salutation&quot;: &quot;Mr&quot;,
+ *           &quot;firstName&quot;: &quot;Peter&quot;,
+ *           &quot;lastName&quot;: &quot;Smith&quot;
+ *         }
+ *       }
+ *    }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_Notify&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       mode: &quot;run&quot;,
+ *       from: &quot;elo@contelo.com&quot;,
+ *       to: {´
+ *         type: &quot;CURRENT&quot;
+ *       },
+ *       subject: &quot;Neue Aufgabe&quot;,
+ *       body: {
+ *         type: &quot;html&quot;,
+ *         tplObjId: &quot;ARCPATH:/Administration/Business Solutions Custom/contract/Configuration/Mail templates/Notification&quot;
+ *       },
+ *       data: {
+ *         person&quot;: {
+ *           salutation: &quot;Mr&quot;,
+ *           firstName: &quot;Peter&quot;,
+ *           lastName: &quot;Smith&quot;
+ *         }
+ *       }
+ *     }
+ *
+ * For more details see {@link sol.common.as.functions.SendMail}
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.HttpUtils
+ * @requires sol.common.Template
+ * @requires sol.common.WfUtils
+ * @requires sol.common.AsUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.Notify&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Notify-cfg-type'>  /**
+</span>   * @cfg {String} type
+   * Notification type. Default is &quot;e-mail&quot;
+   */
+
+<span id='sol-common-ix-functions-Notify-cfg-config'>  /**
+</span>   * @cfg {Object} config
+   * Configuration object for the notification
+   * see {@link sol.common.as.Mail}
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-Notify-method-process'>  process: function () {
+</span>    var me = this,
+        config = {},
+        result, resultStr;
+
+    config.cmd = &quot;run&quot;;
+    config.ruleName = &quot;sol.common.as.SendMail&quot;;
+    config.param2Obj = me.param2Obj;
+
+    result = sol.common.AsUtils.callAs(config);
+
+    resultStr = sol.common.JsonUtils.stringifyAll(result);
+    return resultStr;
+  }
+});
+
+<span id='sol-common-ix-functions-Notify-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Notify
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var module, param2Obj;
+
+  logger.enter(&quot;onEnterNode_Notify&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  param2Obj = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+
+  param2Obj.objId = wfDiagram.objId;
+  param2Obj.flowId = wfDiagram.id;
+  param2Obj.nodeId = nodeId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Notify&quot;, { param2Obj: param2Obj });
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Notify&quot;);
+}
+
+<span id='sol-common-ix-functions-Notify-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Notify
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  var module, param2Obj;
+
+  logger.enter(&quot;onExitNode_Notify&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  param2Obj = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+
+  param2Obj.objId = wfDiagram.objId;
+  param2Obj.flowId = wfDiagram.id;
+  param2Obj.nodeId = nodeId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Notify&quot;, { param2Obj: param2Obj });
+  module.process();
+
+  logger.exit(&quot;onExitNode_CheckForward&quot;);
+}
+
+<span id='sol-common-ix-functions-Notify-static-method-RF_sol_function_Notify'>/**
+</span> * @member sol.common.ix.functions.Notify
+ * @method RF_sol_function_Notify
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Notify(ec, configAny) {
+  var module, param2Obj, result;
+
+  logger.enter(&quot;RF_sol_function_Notify&quot;, configAny);
+  param2Obj = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny);
+
+  module = sol.create(&quot;sol.common.ix.functions.Notify&quot;, { param2Obj: param2Obj });
+  result = module.process();
+
+  logger.exit(&quot;RF_sol_function_Notify&quot;);
+
+  return result;
+}
+</pre>
+</body>
+</html>

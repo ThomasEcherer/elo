@@ -1,0 +1,246 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.Note;
+import de.elo.ix.client.NoteC;
+import java.io.File;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how a note is added to a document
+ * 
+ * A Document object is created and checked in
+ * Various notes are created for the document.
+ * The notes are checked in which assigns the notes to the document.
+ * One of the notes is deleted and another is ammended.
+ * 
+ * NOTE: stamp notes (type  TYPE_STAMP)cannot be deleted.
+ * 
+ */
+
+
+public class AddNoteToDocument {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static NoteC NOTE;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            addDocNote();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static void addDocNote() throws RemoteException {
+        
+        // Create a document without an associated file
+        EditInfo ed = ix.ix().createDoc("1", "0", null, EDIT_INFO.getMbSordDocAtt());
+        Sord sord = ed.getSord();
+        sord.setName("Example AddDocNote");
+        System.out.println("Sord created with Id: " + sord.getId() + 
+                           " and name: " + sord.getName());
+                           
+        // Create test file 
+        String text = "AddDocNotes Example File";
+ 
+        File testFile = internalCreateTestFile(text, ".txt");
+            
+        // Supply the extension for the document
+        Document doc = ed.getDocument();
+        DocVersion dv = new DocVersion();
+        
+        // The document path must be set for the document version 
+        dv.setPathId(sord.getPath());
+        dv.setExt(ix.getFileExt(testFile.getName()));
+        doc.setDocs(new DocVersion[] {dv});
+        System.out.println("Document version created for " + testFile.getName());
+        
+        // The Index Server creates a URL where the document must be uploaded to
+        doc = ix.ix().checkinDocBegin(doc);
+        System.out.println("Prepared upload URL: " + doc.getDocs()[0].getUrl() + 
+                           " doc-guid: " + doc.getDocs()[0].getGuid());
+        
+        // Upload document. Use helper function from IXClient.
+        doc.getDocs()[0].setUploadResult(ix.upload(doc.getDocs()[0].getUrl(), testFile));
+        System.out.println("Document uploaded");
+        
+        // Commit document with checkinDocEnd method.
+        // uploadResult contains the document information from the ELODM -
+        // this must be passed to the Index Server
+        doc = ix.ix().checkinDocEnd(ed.getSord(), SORD.getMbAll(), doc, LOCK.getYES());
+        
+        System.out.println("Inserted document version:");
+        System.out.println("   objId = " + doc.getObjId());
+        System.out.println("   docId = " + doc.getDocs()[0].getId());
+        System.out.println("   doc Guid = " + doc.getDocs()[0].getGuid());
+        System.out.println("   doc url = " + doc.getDocs()[0].getUrl());
+        
+        // Check document out again
+        ed = ix.ix().checkoutDoc(ed.getSord().getGuid(), null, EDIT_INFO.getMbSordDocAtt(), LOCK.getNO());
+        sord = ed.getSord();
+        doc = ed.getDocument();
+        
+        // Create note object
+        Note[] sticky = new Note[3];
+        String objId = Integer.toString(sord.getId());
+        // Create normal note
+        // Note can be created using createNote() or can be created with default note 
+        // constructor. If using the default constructer the id must be manually set to "-1".
+        sticky[0] = ix.ix().createNote(objId);
+        //Assign data to note
+        sticky[0].setDesc("This is the text that will appear on the sticky note.\n Normal note");
+        sticky[0].setType(NOTE.getTYPE_NORMAL());
+
+        // Create Personal note
+        // Note can be created using createNote() or can be created with the default Note() 
+        // constructor. If using the default constructer the id must be manually set to "-1".
+        sticky[1] = new Note();
+        sticky[1].setId(-1);
+        // Assign data to note
+        sticky[1].setDesc("This is the text that will appear on the sticky note.\n Personal note");
+        sticky[1].setType(NOTE.getTYPE_PERSONAL());
+
+        // Create Stamp Note - Stamp notes cannot be deleted once assigned
+        sticky[2] = ix.ix().createNote(objId);
+        //Assign data to note
+        sticky[2].setDesc("This is the text that will appear on the sticky note.\n Stamp note");
+        sticky[2].setType(NOTE.getTYPE_STAMP());
+        
+        // Checkin notes - this adds the notes to the sord
+        int[] stickyId = ix.ix().checkinNotes(objId, sticky, NOTE.getMbAll(), LOCK.getYES());
+        
+        
+        // Create note to delete
+        Note[] delNote = new Note[1];
+        delNote[0] = ix.ix().createNote(objId);
+        //Assign data to note
+        delNote[0].setDesc("This is the text that will appear on the sticky note.\n Normal note - this note will be deleted");
+        delNote[0].setType(NOTE.getTYPE_NORMAL());
+
+        // Checkin note - this adds the note to the sord
+        int[] delId = ix.ix().checkinNotes(objId, delNote, NOTE.getMbAll(), LOCK.getYES());
+        
+        //checkout notes, list notes and then delete note
+        Note[] notes = ix.ix().checkoutNotes(objId, null, NOTE.getMbAll(), LOCK.getYES());
+        
+        for (int i = 0; i < notes.length; i++){
+            System.out.println("Note found with id = " + notes[i].getId());
+            if (notes[i].getId() == delId[0]){
+                // Delete node
+                String[] deletedNote = new String[] {notes[i].getGuid()};
+                ix.ix().deleteNotes(deletedNote, LOCK.getYES());
+                System.out.println("Note deleted with id " + notes[i].getId());
+            }
+            // Modify personal node
+            if (notes[i].getType() == NOTE.getTYPE_PERSONAL()){
+                String newText = notes[i].getDesc() + "\n\nModified text in personal node";
+                // Change some data - here the text
+                notes[i].setDesc(newText);
+                Note[] changedNote = new Note[] {notes[i]};
+                // Note must be checked in alone here - a stamp note exists which cannot be checked in again
+                ix.ix().checkinNotes(objId, changedNote, NOTE.getMbAll(), LOCK.getNO());
+            }
+        }
+        
+        // Checkin notes again - only use MbOnlyLock to checkin after deleting notes
+        // If notes are deleted and then MbAll is used to checkin the notes the isDeleted 
+        // property will be overwritten which reverses the delete of the notes and the 
+        // notes will still be visible.ix.ix().checkinNotes(objId, changedNote, NOTE.getMbAll(), LOCK.getNO());
+        ix.ix().checkinNotes(objId, notes, NOTE.getMbOnlyLock(), LOCK.getYES());
+        
+        
+        // Delete local file
+        testFile.delete();
+        System.out.println("File deleted");
+       
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        NOTE = CONS.getNOTE();
+    }
+    
+    // Write to temp file
+    public static File internalCreateTestFile(String text, String ext) {
+        File tempFile = null;
+        try{
+            tempFile = internalMakeTempFile(ext);
+            BufferedWriter out = new BufferedWriter(new FileWriter(tempFile));
+            out.write(text);
+            out.close();
+            
+        } catch (IOException ioe){
+            System.out.println(ioe.toString());
+        }
+        
+        return tempFile;
+    }
+    
+    
+    // Make file name and create temp file
+    public static File internalMakeTempFile(String ext) throws IOException {
+        
+        String tempFile = "Eloix";
+        File f = File.createTempFile(tempFile, ext);
+        System.out.println("File " + f.getName() + " created");
+        return f;
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

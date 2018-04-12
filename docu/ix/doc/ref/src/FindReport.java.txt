@@ -1,0 +1,150 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.ReportInfo;
+import de.elo.ix.client.FindReportInfo;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how the use of FindReport
+ * 
+ */
+
+public class FindReport {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Create sord and check out using index attributes
+            findReport();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void findReport() throws RemoteException {
+
+         int noOfSords = 30;
+         String searchTerm = "Order";
+        
+         // Create a sord object to generate some report information
+         // root folder
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord = ed.getSord();
+         sord.setName("FindReport Demo Folder");
+         sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + sord.getId() + " and name " + sord.getName());
+         
+         // Wait two seconds - report entries are written with a delay after the action
+         try{
+             Thread.sleep(2000);
+         } catch (Exception e){
+             System.out.print("Sleep interrupted!");
+         }
+         
+         System.out.println("Sleeping two seconds!");
+         
+         // Find report entries for sord
+         FindReportInfo findReport = new FindReportInfo();
+         findReport.setObjId(sord.getGuid());
+         FindResult findResult = ix.ix().findFirstReportInfos(findReport, 10);
+         
+         int idx = 0;
+         while (true){
+             ReportInfo[] rinfos = findResult.getReportInfos();
+             System.out.println("Find report ok, " + rinfos.length + "objects found");
+             
+             // Display report information
+             // It is possible that extra information is returned as previosly 
+             //deleted sords could have had the same id as the current sord
+             for (int i = 0; i < rinfos.length; i++){
+                 System.out.println("    Action = " + rinfos[i].getAction());
+                 System.out.println("      Time = " + rinfos[i].getActTimeISO());
+                 System.out.println("      User = " + rinfos[i].getUserId());
+                 System.out.println("      Text = " + rinfos[i].getText()); 
+             }
+             
+             if (!findResult.isMoreResults()){
+                 break;
+             }
+             
+             idx += rinfos.length;
+             findResult = ix.ix().findNextReportInfos(findResult.getSearchId(), idx, 10);
+         }
+         
+         
+         // Release find result buffer in Index Server
+         ix.ix().findClose(findResult.getSearchId());
+         System.out.println("Find successfully executed");
+        
+         // Delete sord objects
+         Boolean delete = false;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

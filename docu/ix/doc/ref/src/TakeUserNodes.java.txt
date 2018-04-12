@@ -1,0 +1,210 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFNode;
+import de.elo.ix.client.WFTakeNodeC;
+import de.elo.ix.client.WFEditNode;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example demontsrates the use of the takeWorkFlowNode(...) method.
+ * Three users are created within a group. A workflow template is created with sequential 
+ * nodes - one for each user. The nodes are then either 'given' to other users or the group, 
+ * or taken from the group, before being forwarded
+ * The helper class is used to create the template with the nodes and the users/group.
+ *  node    |  user
+ *  ---------------------
+ *  starter | Forwarded automatically when workflow is started
+ *  1       | WF-User10
+ *  2       | WF-User11
+ *  3       | WF-User12
+ */
+
+public class TakeUserNodes {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static WFTakeNodeC TAKE_NODE;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template and find nodes
+            createFromTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFromTemplate() throws RemoteException{
+        
+        // Create three users without admin rights
+        String[] userNames = new String[] {"WF-User10", "WF-User11", "WF-User12"};
+        int[] userIds = new int[3];
+        for (int i = 0; i < userNames.length; i++){
+           userIds[i] = WFHelper.createNewUser(ix, userNames[i], "elo", false);
+        }
+        
+        // Add new users to group
+        WFHelper.createGroupWithUsers(ix, "DemoGroup1", userNames);
+        
+        // Prepare a workfow template. One node for each user - joined sequentially
+        String templateName = "WF Take Node Demo" + new Date();
+        WFDiagram wf = WFHelper.createSeqTemplateForUsers(ix, templateName, userNames);
+        
+         // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("WF-Sord " + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+       
+        // Start workflow
+        String flowName = "Take Node Demo " + (new Date());
+        int flowId = ix.ix().startWorkFlow(templateName, flowName, ed.getSord().getGuid());                 
+
+        System.out.println("Started WF: sordName= " + ed.getSord().getName() + 
+                ", flowId= " + flowId + 
+                ", flowName= " + flowName);
+        
+        // Node 1 is assigned to WF-User10
+        // WF-User10 'gives' the node to WF-User11
+        // Login as WF-User10
+        IXConnection connUser = connFact.create("WF-User10", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User10");
+        
+        // Supply username to give node to another user or group
+        connUser.ix().takeWorkFlowNode(flowId, 1, "WF-User11", TAKE_NODE.getRESET_IN_USE_DATE(), LOCK.getNO());
+        System.out.println("Node 1 given to user WF-User11 by user WF-User10");
+        
+        // log WF-User10 out
+        connUser.ix().logout();
+        
+        // Login as WF-User11 and forward node
+        connUser = connFact.create("WF-User11", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User11");
+        
+        //Forward node 1 
+        forwardNode(connUser, flowId, wf.getNodes()[1], "Forward node 1");
+        
+        // Give node 2 to another user
+        connUser.ix().takeWorkFlowNode(flowId, 2, "DemoGroup1", TAKE_NODE.getRESET_IN_USE_DATE(), LOCK.getNO());
+        System.out.println("Node 2 given to user DemoGroup1 by user WF-User11");
+        
+        // log WF-User11 out
+        connUser.ix().logout();
+        
+        // Login as WF-User12    
+        connUser = connFact.create("WF-User12", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User12");
+        // Node 2 taken by user WF-Demo12 who is a member of the group
+        connUser.ix().takeWorkFlowNode(flowId, 2, null, TAKE_NODE.getRESET_IN_USE_DATE(), LOCK.getNO());
+        System.out.println("Node 2 taken by user WF-User12");
+        
+        //Forward node 2 
+        forwardNode(connUser,flowId, wf.getNodes()[2], "Forward node 2");
+        
+        // Give node 3 to another user
+        connUser.ix().takeWorkFlowNode(flowId, 3, "WF-User10", TAKE_NODE.getRESET_IN_USE_DATE(), LOCK.getNO());
+        System.out.println("Node 3 given to user WF-User10");
+        
+        // log WF-User12 out
+        connUser.ix().logout();
+        
+        // Login as WF-User10    
+        connUser = connFact.create("WF-User10", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User10");
+        //Forward node 3 
+        forwardNode(connUser, flowId, wf.getNodes()[3], "Forward node 3");
+        
+        // log WF-User10 out
+        connUser.ix().logout();
+    }
+    
+    public static void forwardNode(IXConnection connUser, int flowId, WFNode node, String comment) throws RemoteException{
+        
+        // Lock the node
+        WFEditNode editNode = connUser.ix().beginEditWorkFlowNode(
+                                                          flowId, 
+                                                          node.getId(),
+                                                          CONS.getLOCK().getYES());
+        
+        // Find successor
+        WFNode[] succNodes = editNode.getSuccNodes();
+        int [] arrEnterNodesIds = null;
+        if (succNodes.length > 0) {
+            arrEnterNodesIds = new int[1];
+            arrEnterNodesIds[0] = succNodes[0].getId();
+        }
+                 
+        // forward
+        connUser.ix().endEditWorkFlowNode(
+                flowId, 
+                node.getId(), 
+                false,                 // do not terminate flow
+                false,                 // do not cancel editing
+                editNode.getNode().getName(), // new node name = old name
+                comment,
+                arrEnterNodesIds
+                );
+        System.out.println("Forwarded node " + node.getId());
+    }
+    
+    
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        TAKE_NODE = CONS.getTAKE_NODE();
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

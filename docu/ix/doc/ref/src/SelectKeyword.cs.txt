@@ -1,0 +1,61 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für SelectKeyword.
+	/// </summary>
+  public class SelectKeyword
+  {
+    // URL to IndexServer
+    public String url;
+
+    // [X] Account to authenticate 
+    public String userName = "Administrator"; 
+    public String userPwd = "";					
+
+    public void run()
+    {
+      // IndexServer stub
+      IXClient ix = null;
+      try 
+      {
+        // Create IndexServer object
+        Logger.instance().log("create IX...");
+        ix = new IXClient(url);
+        Logger.instance().log("create IX OK");
+
+        // Prepare ClientInfo object with language and country
+        IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+        ci.language = "de";
+        ci.country = "DE";
+
+        // LOGIN
+        Logger.instance().log("login...");
+        IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+        ci = loginResult.clientInfo;
+        Logger.instance().log("login OK");
+      
+        SelectKeywordDlg dlg = new SelectKeywordDlg(ix, ci);
+        dlg.ShowDialog();
+
+
+      } 
+      catch (Exception e) 
+      {
+        throw e;
+      } 
+      finally 
+      {
+        // Always release IXClient object to make sure 
+        // that all all open sessions are closed on exit
+        if (ix != null) 
+        {
+          Logger.instance().log("IX done...");
+          ix.done();
+          Logger.instance().log("IX done OK");
+        }
+      }
+    }
+  }
+}

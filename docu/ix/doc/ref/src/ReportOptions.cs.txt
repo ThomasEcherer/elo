@@ -1,0 +1,103 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// This example shows how to view report options
+	/// </summary>
+	public class ReportOptions
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+				
+				// checkout report options
+				Logger.instance().log("checkout ...");
+				IndexServer.ReportOptions reportOptions = ix.checkoutReportOptions(ci, CONST.LOCK.YES);
+				Logger.instance().log("checkout OK");
+
+				// log report mode
+				String strMode = "";
+				if (reportOptions.mode.bset == CONST.REPORT_MODE.NO.bset) 
+				{
+					strMode = "NO";
+				} 
+				else if (reportOptions.mode.bset == CONST.REPORT_MODE.LIMITED.bset)
+				{
+					strMode = "LIMITED";
+				}
+				else if (reportOptions.mode.bset == CONST.REPORT_MODE.VERBOSE.bset)
+				{
+					strMode = "VERBOSE";
+				}
+				else if (reportOptions.mode.bset == CONST.REPORT_MODE.FULL.bset)
+				{
+					strMode = "FULL";
+				}
+				Logger.instance().log("mode=" + strMode);
+
+				// list 
+				Logger.instance().log("Report actions: ");
+				for (int i = 0; i < reportOptions.erpCodes.Length; i++) 
+				{
+					IndexServer.ReportErpCode erp = reportOptions.erpCodes[i];
+					Logger.instance().log("  id=" + erp.id + ", name=" + erp.name + ", verbose=" + erp.verbose + ", limited=" + erp.limited);
+				}
+
+				// unlock report data
+				Logger.instance().log("unlock...");
+				ix.checkinReportOptions(ci, null, CONST.LOCK.YES);
+				Logger.instance().log("unlock OK");
+								
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

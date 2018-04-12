@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.ChangeColor&quot; });
+
+<span id='sol-common-ix-functions-ChangeColor'>/**
+</span> * Changes the color of an archive element.
+ *
+ * Additionally the old color can be saved to a map field, from where is can be restored later
+ *
+ *     { color: &quot;red&quot;, save: &quot;OLD_COLOR&quot; }
+ *     { color: &quot;blue&quot;, restore: &quot;OLD_COLOR&quot; }
+ *
+ * `save` and `restore` are both optional, but if `restore` is defined, it always wins over `color`.
+ * If there is no color found in the map field `OLD_COLOR` the `color` will be used as fallback.
+ *
+ * # As workflow node
+ *
+ * `ObjId` is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;color&quot;: &quot;blue&quot;
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_ChangeColor&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       color: &quot;blue&quot;
+ *     });
+ *
+ * @author Pascal Zipfel, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ *
+ * @requires  sol.Logger
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.ChangeColor&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-ChangeColor-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-ChangeColor-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   */
+
+<span id='sol-common-ix-functions-ChangeColor-cfg-color'>  /**
+</span>   * @cfg {String} color Tries to find a color which was defined in ELO
+   */
+
+<span id='sol-common-ix-functions-ChangeColor-cfg-save'>  /**
+</span>   * @cfg {String} save Saves the old color to a map field
+   */
+
+<span id='sol-common-ix-functions-ChangeColor-cfg-restore'>  /**
+</span>   * @cfg {String} restore Restores the old color from a map filed
+   */
+
+<span id='sol-common-ix-functions-ChangeColor-property-colorCache'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.ColorData[]} colorCache
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-ChangeColor-method-process'>  /**
+</span>   * Changes the color of the element.
+   */
+  process: function () {
+    var me = this,
+        sord, oldColorId, newColorId, lookupColor, lookedupColor;
+
+    sord = ixConnect.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+    oldColorId = sord.kind;
+    newColorId = 0;
+    lookupColor = me.restoreFromMap() || me.color;
+
+    if (lookupColor) {
+      lookedupColor = me.getColor(lookupColor);
+      if (lookedupColor) {
+        newColorId = lookedupColor.id;
+      }
+    }
+
+    if (oldColorId != newColorId) {
+      sord.kind = newColorId;
+      ixConnect.ix().checkinSord(sord, SordC.mbAll, LockC.NO);
+      me.logger.info([&quot;changed object color from &#39;{0}&#39; to &#39;{1}&#39;&quot;, oldColorId, newColorId]);
+    }
+
+    me.saveToMap(me.getColor(oldColorId));
+  },
+
+<span id='sol-common-ix-functions-ChangeColor-method-getColors'>  /**
+</span>   * @private
+   * @return {de.elo.ix.client.ColorData[]} colorCache
+   */
+  getColors: function () {
+    var me = this;
+    if (!me.colorCache) {
+      me.colorCache = ixConnect.ix().checkoutColors(LockC.NO);
+    }
+    return me.colorCache;
+  },
+
+<span id='sol-common-ix-functions-ChangeColor-method-getColor'>  /**
+</span>   * @private
+   * @param {String|Number} color Name or ID of the color
+   * @return {de.elo.ix.client.ColorData}
+   */
+  getColor: function (color) {
+    var me = this,
+        colors = me.getColors(),
+        ignoreCase = !!color.toUpperCase,
+        result = null;
+    colors.some(function (c) {
+      var hit = ((c.id == color) || ((ignoreCase) ? (c.name.toUpperCase() == color.toUpperCase()) : (c.name == color)));
+      if (hit) {
+        result = c;
+      }
+      return hit;
+    });
+    return result;
+  },
+
+<span id='sol-common-ix-functions-ChangeColor-method-restoreFromMap'>  /**
+</span>   * @private
+   * @return {String}
+   */
+  restoreFromMap: function () {
+    var me = this,
+        color = null,
+        mapdata;
+    if (me.restore) {
+      try {
+        mapdata = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, me.objId, [me.restore], LockC.NO);
+        if (!mapdata || !mapdata.items || (mapdata.items.length &lt;= 0)) {
+          throw &quot;no map entry found&quot;;
+        }
+        color = mapdata.items[0].value;
+        me.logger.debug([&quot;restore color &#39;{0}&#39; from map&quot;, color]);
+        ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.objId, me.objId, [new KeyValue(me.restore, null)], LockC.NO);
+      } catch (ex) {
+        me.logger.warn([&quot;could not restore color from map field &#39;{0}&#39;&quot;, me.restore], ex);
+      }
+    }
+    return color;
+  },
+
+<span id='sol-common-ix-functions-ChangeColor-method-saveToMap'>  /**
+</span>   * @private
+   * @param {String} color
+   */
+  saveToMap: function (color) {
+    var me = this;
+    if (me.save &amp;&amp; color) {
+      try {
+        ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.objId, me.objId, [new KeyValue(me.save, color.name)], LockC.NO);
+        me.logger.debug([&quot;saved color to map field &#39;{0}&#39; -&gt; &#39;{1}&#39;&quot;, color, me.save]);
+      } catch (ex) {
+        me.logger.warn([&quot;could not save color to map field &#39;{0}&#39;&quot;, me.restore], ex);
+      }
+    }
+  }
+});
+
+
+<span id='sol-common-ix-functions-ChangeColor-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.ChangeColor
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_ChangeColor&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.ChangeColor&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_ChangeColor&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ChangeColor-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.ChangeColor
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_ChangeColor&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.ChangeColor&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_ChangeColor&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ChangeColor-static-method-RF_sol_function_ChangeColor'>/**
+</span> * @member sol.common.ix.functions.ChangeColor
+ * @method RF_sol_function_ChangeColor
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_ChangeColor(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_function_ChangeColor&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.ChangeColor&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_ChangeColor&quot;);
+}
+
+</pre>
+</body>
+</html>

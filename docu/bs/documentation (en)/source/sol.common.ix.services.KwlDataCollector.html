@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.KwlDataCollector&quot; });
+
+<span id='sol-common-ix-services-KwlDataCollector'>/**
+</span> * Collects dynamic keyword list and/or keyword list entries
+ * and delivers the data as compact JSON objects
+ * e.g. for dashboards
+ *
+ * # Example
+ *
+ *     var result = sol.common.IxUtils.execute(&quot;RF_sol_common_services_kwlDataCollector&quot;, {
+ *       kwlConfig: [
+ *         {
+ *           id: &quot;INVOICE_STATUS&quot;
+ *         }
+ *       ],
+ *       dynKwlConfig: [
+ *         {
+ *           scriptName: &quot;sol.invoice.ix.dynkwl.Currency&quot;,
+ *           focusFieldName: &quot;INVOICE_CURRENCY_CODE&quot;,
+ *           keyFieldName: &quot;INVOICE_CURRENCY_CODE&quot;,
+ *           valueFieldName: &quot;IX_MAP_INVOICE_CURRENCY_SYMBOL&quot;
+ *         }
+ *       ]
+ *     });
+ *
+ * # Result
+ *
+ *     {
+ *       &quot;version&quot;: &quot;1&quot;,
+ *       &quot;kwls&quot;: {
+ *         &quot;INVOICE_STATUS&quot;: {
+ *           &quot;formatter&quot;: &quot;sol.common.ix.services.KwlDataCollector.FlatKwl&quot;,
+ *           &quot;values&quot;: [&quot;1 Erfassung&quot;,
+ *           &quot;2 Formelle Prüfung&quot;,
+ *           &quot;3 Fachliche Prüfung&quot;]
+ *         }
+ *       },
+ *       &quot;dynKwls&quot;: {
+ *         &quot;sol.invoice.ix.dynkwl.Currency&quot;: {
+ *           &quot;formatter&quot;: &quot;sol.common.ix.services.KwlDataCollector.SimpleKeyMapDynKwl&quot;,
+ *           &quot;values&quot;: {
+ *             &quot;EUR&quot;: &quot;€&quot;,
+ *             &quot;USD&quot;: &quot;$&quot;,
+ *           }
+ *         }
+ *       }
+ *     }
+ *
+ * # Example for a localized keyword list
+ *
+ *     result = sol.common.IxUtils.execute(&quot;RF_sol_common_services_KwlDataCollector&quot;, {
+ *       dynKwlConfig: [
+ *         {
+ *           scriptName: &quot;sol.contract.ix.localizedKwl.Status&quot;,
+ *           focusFieldName: &quot;CONTRACT_STATUS&quot;,
+ *           keyFieldName: &quot;$KEY&quot;,
+ *           valueFieldName: &quot;$VALUE&quot;
+ *          }
+ *     });
+ *
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.KwlDataCollector&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-KwlDataCollector-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.ec = config.ec;
+
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.kwlConfig = config.kwlConfig;
+    me.dynKwlConfig = config.dynKwlConfig;
+
+    me.data = {
+      version: &quot;1.00.000&quot;
+    };
+  },
+
+<span id='sol-common-ix-services-KwlDataCollector-method-execute'>  /**
+</span>   * Starts the collection of the desired data
+   * @return {String}
+   */
+  execute: function () {
+    var me = this;
+    me.rfUtils = sol.common.ix.RfUtils;
+
+    if (me.kwlConfig) {
+      me.addKeywordListData();
+    }
+    if (me.dynKwlConfig) {
+      me.addDynKeywordListData();
+    }
+
+    return me.rfUtils.stringify(me.data);
+  },
+
+
+<span id='sol-common-ix-services-KwlDataCollector-method-addKeywordListData'>  /**
+</span>   * @private
+   */
+  addKeywordListData: function () {
+    var me = this,
+        kwl;
+    me.data.kwls = {};
+    me.kwlConfig.forEach(function (config) {
+      kwl = sol.create(&quot;sol.common.ix.services.KwlDataCollector.FlatKwl&quot;, {
+        data: &quot;&quot;,
+        config: config
+      });
+      me.data.kwls[config.id] = kwl.build();
+    });
+  },
+
+
+<span id='sol-common-ix-services-KwlDataCollector-method-addDynKeywordListData'>  /**
+</span>   * @private
+   */
+  addDynKeywordListData: function () {
+    var me = this,
+        dynKwl;
+    me.data.dynKwls = {};
+    me.dynKwlConfig.forEach(function (config) {
+      dynKwl = sol.create(&quot;sol.common.ix.services.KwlDataCollector.SimpleKeyMapDynKwl&quot;, {
+        data: &quot;&quot;,
+        config: config
+      });
+      me.data.dynKwls[config.scriptName] = dynKwl.build();
+    });
+  }
+});
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseKwl'>/**
+</span> * @private
+ * Retrieves data which is provided by keyword list
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @elojc
+ * @eloas
+ */
+sol.define(&quot;sol.common.ix.services.KwlDataCollector.BaseKwl&quot;, {
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseKwl-cfg-scriptName'>  /**
+</span>   * @cfg {String} scriptName
+   * Script name of the dynamic keyword list
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseKwl-cfg-formatter'>  /**
+</span>   * @cfg {String} formatter
+   * Class name of the task formatter
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseKwl-method-getValues'>  /**
+</span>   * @private
+   * Retrieves data from a dynamic keyword list by the ELO index server
+   */
+  getValues: function () {
+    var me = this,
+        rootKeyword;
+    me.result = {
+      formatter: me.config.formatter
+    };
+
+    me.keywordLists = {};
+
+    rootKeyword = ixConnect.ix().checkoutKeywords([me.config.id], KeywordC.mbEdit, -1, LockC.NO)[0];
+    if (rootKeyword) {
+      me.processChildren(rootKeyword, me.keywordLists, rootKeyword.id);
+    }
+  },
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseKwl-method-processChildren'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Keyword} keyword
+   * @param {Object} parentDataRef
+   * @param {String} keywordName
+   */
+  processChildren: function (keyword, parentDataRef, keywordName) {
+    var me = this,
+        dataRef;
+    parentDataRef[String(keywordName)] = {};
+    dataRef = parentDataRef[keywordName];
+    if (keyword.children) {
+      keyword.children.forEach(function (word) {
+        me.processChildren(word, dataRef, word.text);
+      });
+    }
+  }
+});
+
+
+<span id='sol-common-ix-services-KwlDataCollector-FlatKwl'>/**
+</span> * @private
+ * Formats the result of a dynamic keyword list processing to
+ * a simple key-value list
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @elojc
+ * @eloas
+ *
+ * # Sample result
+ *
+ *    &quot;kwls&quot;: {
+ *      &quot;INVOICE_STATUS&quot;: {
+ *        &quot;formatter&quot;: &quot;sol.common.ix.services.JsonDataCollector.FlatKwl&quot;,
+ *        &quot;values&quot;: [&quot;1 Erfassung&quot;,
+ *          &quot;2 Formelle Prüfung&quot;,
+ *          &quot;3 Fachliche Prüfung]
+ *        }
+ *     }
+ */
+sol.define(&quot;sol.common.ix.services.KwlDataCollector.FlatKwl&quot;, {
+
+  extend: &quot;sol.common.ix.services.KwlDataCollector.BaseKwl&quot;,
+
+<span id='sol-common-ix-services-KwlDataCollector-FlatKwl-cfg-keyFieldName'>  /**
+</span>   * @cfg {Array} keyFieldName
+   * Name of the field that should be used as key.
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-FlatKwl-cfg-valueFieldName'>  /**
+</span>   * @cfg {Array} valueFieldName
+   * Name of the field that should be used as value.
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-FlatKwl-method-build'>  /**
+</span>   * @private
+   * @return {Object} result
+   */
+  build: function () {
+    var me = this,
+        listKey, listObj, entryKey;
+    me.getValues();
+
+    for (listKey in me.keywordLists) {
+      me.result.values = [];
+      listObj = me.keywordLists[listKey];
+      for (entryKey in listObj) {
+        me.result.values.push(entryKey);
+      }
+      break;
+    }
+
+    return me.result;
+  }
+});
+
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseDynKwl'>/**
+</span> * @private
+ * Retrieves data which is provided by dynamic keyword list
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @elojc
+ * @eloas
+ */
+sol.define(&quot;sol.common.ix.services.KwlDataCollector.BaseDynKwl&quot;, {
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseDynKwl-cfg-scriptName'>  /**
+</span>   * @cfg {String} scriptName
+   * Script name of the dynamic keyword list
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseDynKwl-cfg-formatter'>  /**
+</span>   * @cfg {String} formatter
+   * Class name of the task formatter
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseDynKwl-method-getValues'>  /**
+</span>   * @private
+   * Retrieves data from a dynamic keyword list by the ELO index server
+   */
+  getValues: function () {
+    var me = this,
+        keywordsDynamicInfo, keywordsDynamicResult, linesIterator;
+    me.result = {
+      formatter: me.config.formatter,
+      values: {}
+    };
+
+    keywordsDynamicInfo = new KeywordsDynamicInfo();
+    keywordsDynamicInfo.mapScriptName = me.config.scriptName;
+    keywordsDynamicInfo.mapLineFocus = me.config.focusFieldName;
+    keywordsDynamicInfo.mapData = {};
+    keywordsDynamicResult = ixConnect.ix().checkoutKeywordsDynamic(keywordsDynamicInfo);
+    me.keyNames = me.listToJsArray(keywordsDynamicResult.keyNames);
+    me.lines = [];
+    linesIterator = keywordsDynamicResult.table.iterator();
+    while (linesIterator.hasNext()) {
+      me.lines.push(me.listToJsArray(linesIterator.next()));
+    }
+  },
+
+<span id='sol-common-ix-services-KwlDataCollector-BaseDynKwl-method-listToJsArray'>  /**
+</span>   * @private
+   * Converts a Java list to a JavaScript array
+   * @param {java.util.List} list
+   * @return {Array}
+   */
+  listToJsArray: function (list) {
+    var arr = [],
+        iterator = list.iterator();
+    while (iterator.hasNext()) {
+      arr.push(String(iterator.next()));
+    }
+    return arr;
+  }
+});
+
+
+<span id='sol-common-ix-services-KwlDataCollector-SimpleKeyMapDynKwl'>/**
+</span> * @private
+ *
+ * Formats the result of a dynamic keyword list processing to
+ * a simple key-value list
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @elojc
+ * @eloas
+ *
+ * # Sample result
+ *
+ *    &quot;dynKwls&quot;: {
+ *      &quot;sol.invoice.ix.dynkwl.Currency&quot;: {
+ *        &quot;formatter&quot;: &quot;sol.common.ix.services.JsonDataCollector.SimpleKeyMapDynKwl&quot;,
+ *        &quot;values&quot;: {
+ *          &quot;EUR&quot;: &quot;€&quot;,
+ *          &quot;USD&quot;: &quot;$&quot;
+ *        }
+ *      }
+ *    }
+ */
+sol.define(&quot;sol.common.ix.services.KwlDataCollector.SimpleKeyMapDynKwl&quot;, {
+
+  extend: &quot;sol.common.ix.services.KwlDataCollector.BaseDynKwl&quot;,
+
+<span id='sol-common-ix-services-KwlDataCollector-SimpleKeyMapDynKwl-cfg-keyFieldName'>  /**
+</span>   * @cfg {Array} keyFieldName
+   * Name of the field that should be used as key.
+   */
+
+<span id='sol-common-ix-services-KwlDataCollector-SimpleKeyMapDynKwl-cfg-valueFieldName'>  /**
+</span>   * @cfg {Array} valueFieldName
+   * Name of the field that should be used as value.
+   */
+
+  build: function () {
+    var me = this,
+        keyColumnIndex, valueColumnIndex, i, line, key, value;
+
+    me.config = me.config || {};
+    me.config.keyFieldName = me.config.keyFieldName || &quot;$KEY&quot;;
+    me.config.valueFieldName = me.config.valueFieldName || &quot;$VALUE&quot;;
+
+    me.getValues();
+
+    keyColumnIndex = me.keyNames.indexOf(me.config.keyFieldName);
+    valueColumnIndex = me.keyNames.indexOf(me.config.valueFieldName);
+    me.result.orderedEntries = [];
+
+    for (i = 0; i &lt; me.lines.length; i++) {
+      line = me.lines[i];
+
+      key = line[keyColumnIndex];
+      value = line[valueColumnIndex];
+
+      me.result.values[key] = value;
+      me.result.orderedEntries.push({ key: key, value: value });
+    }
+    return me.result;
+  }
+});
+
+<span id='sol-common-ix-services-KwlDataCollector-static-method-RF_sol_common_services_KwlDataCollector'>/**
+</span> * @member sol.common.ix.services.KwlDataCollector
+ * @method RF_sol_common_services_KwlDataCollector
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_services_KwlDataCollector(ec, configAny) {
+  var rfUtils = sol.common.ix.RfUtils,
+      config, jsonDataCollector, result;
+
+  logger.enter(&quot;RF_sol_common_services_KwlDataCollector&quot;, configAny);
+
+  config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny);
+
+  config.ec = ec;
+  jsonDataCollector = sol.create(&quot;sol.common.ix.services.KwlDataCollector&quot;, config);
+  result = jsonDataCollector.execute();
+
+  logger.exit(&quot;RF_sol_common_services_KwlDataCollector&quot;, result);
+
+  return result;
+}</pre>
+</body>
+</html>

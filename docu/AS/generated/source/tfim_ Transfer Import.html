@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace tfim
+<span id='tfim'>/**
+</span> * @class tfim
+ */
+var tfim = new Object();
+tfim = {
+  pendingFlowData: null,
+  importAlways: false,
+  
+<span id='tfim-method-checkForImport'>  /**
+</span>   * Importiert die angegebene Datei (falls die Datei existiert).
+   * 
+   * @param {String} fileName Dateiname
+   */
+  checkForImport: function(fileName) {
+    var file = new File(fileName);
+    if (file.exists()) {
+      log.info(&quot;Transfer file found: &quot; + fileName);
+      var tempName = fileName + &quot;-&quot; + fu.fileNameDate(new Date()) + &quot;.zip&quot;;
+      fu.rename(fileName, tempName);
+      log.info(&quot;Process temp file: &quot; + tempName);
+      
+      try {
+        log.info(&quot;Start check loop&quot;);
+        this.doImport(tempName, false, true);
+      } catch(e) {
+        log.error(&quot;Check failed: &quot; + e);
+        fu.rename(fileName, fileName + &quot;-ERRORCHECK.zip&quot;);
+        throw e;
+      }
+      
+      this.clear();
+      
+      log.info(&quot;Start import&quot;);
+      try {
+        this.doImport(tempName, false, false);
+        log.info(&quot;Import done.&quot;);
+      } catch(e) {
+        log.warn(&quot;Abort import with error: &quot; + e);
+        fu.rename(fileName, fileName + &quot;-ERROR.zip&quot;);
+      }
+    }
+  },
+  
+<span id='tfim-method-checkForImportDir'>  /**
+</span>   * Importiert das angegebene Verzeichnis.
+   * 
+   * @param {String} dirName Verzeichnisname
+   */
+  checkForImportDir: function(dirName) {
+    var dir = new File(dirName);
+    var items = dir.list();
+    if (!items) {
+      // nothing to do
+      return;
+    }
+    
+    for (var i = 0; i &lt; items.length; i++) {
+      var name = items[i];
+      var tempName = dirName + &quot;\\Processing&quot; + name;
+      try {
+        if (name.startsWith(&quot;EX&quot;)) {
+          fu.rename(dirName + &quot;\\&quot; + name, tempName);
+          log.info(&quot;Process temp file: &quot; + tempName);
+          this.doImport(tempName, false, false);
+          fu.deleteFile(new File(tempName));
+          log.info(&quot;WF-Import done.&quot;);
+        }
+      } catch(e) {
+        var errorName = dirName + &quot;\\ERROR_&quot; + name;
+        fu.rename(tempName, errorName);
+        log.warn(&quot;Abort import with error: &quot; + errorName + &quot; : &quot; + e);
+      }
+    }
+  },
+  
+<span id='tfim-method-doImport'>  /**
+</span>   * Führt einen Importvorgang durch.
+   * 
+   * @param {String} fileName Dateiname
+   * @param {Boolean} withDelete Inklusive gelöschte Einträge
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  doImport: function(fileName, withDelete, onlyCheck) {
+    var hasError = false;
+    var errorMessage;
+    
+    var zipi = new ZipParts(fileName, ZipParts.ReadWrite.Read);
+    this.pendingFlowData = null;
+    
+    for (;;) {
+      var txt = zipi.getUtf8Part();
+      if (txt == null) {
+        break;
+      }
+      
+      try {
+        this.processPart(zipi, txt, onlyCheck);
+      } catch(e) {
+        hasError = true;
+        errorMessage = e;
+        log.error(&quot;Error reading transfer file: &quot; + e);
+        break;
+      }
+    }
+    
+    zipi.close();
+    
+    if (this.pendingFlowData) {
+      var scriptName = this.pendingFlowData.scriptAfterReturn;
+      if (scriptName &amp;&amp; wftransport[scriptName]) {
+        log.debug(&quot;callback started: &quot; + scriptName);
+        try {
+          wftransport[scriptName](this.pendingFlowData);
+          log.debug(&quot;callback done: &quot; + scriptName);
+        } catch(e) {
+          log.warn(&quot;Error in callback function: &quot; + scriptName);
+          hasError = true;
+        }
+      }
+
+      wf.createOrConfirmFlowFromZip(this.pendingFlowData, hasError, errorMessage);
+      log.debug(&quot;Workflow started or confirmed.&quot;);
+    }
+    
+    if (withDelete &amp;&amp; !hasError) {
+      var file = new File(fileName);
+      fu.deleteFile(file);
+    }
+    
+    if (hasError) {
+      throw e;
+    }
+  },
+  
+<span id='tfim-method-processPart'>  /**
+</span>   * Importiert den angegebenen Import-Teil.
+   * 
+   * @param {ZipParts} zipi Import-Teil
+   * @param {Object} part Zu importierender UTF8-Teil
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processPart: function(zipi, part, onlyCheck) {
+    log.info(((onlyCheck) ? &quot;checkPart&quot; : &quot;processPart: &quot;) + part.substring(0,100));
+  
+    var jsonObj = JSON.parse(part);
+    var jsonClass = jsonObj.jsonClass;
+    if (jsonClass == &quot;TfColors&quot;) {
+      this.processColors(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfSord&quot;) {
+      this.processSord(zipi, jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfMask&quot;) {
+      this.processMask(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfWorkflow&quot;) {
+      this.processWorkflow(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfUser&quot;) {
+      this.processUser(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfKeywords&quot;) {
+      this.processKeywords(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfFlowData&quot;) {
+      this.processFlowData(jsonObj, onlyCheck);
+    } else if (jsonClass == &quot;TfMapData&quot;) {
+      this.processMapData(jsonObj, onlyCheck);
+    }
+  },
+  
+<span id='tfim-method-processMapData'>  /**
+</span>   * Importiert die angegebenen Map-Daten.
+   * 
+   * @param {Object} jmapData Map-Daten
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processMapData: function(jmapData, onlyCheck) {
+    if (onlyCheck) {
+      
+    } else {
+      jmapData.fillup = TfMapData.prototype.fillup;
+      var mapData = new MapData();
+      jmapData.fillup(mapData);
+      
+      if (jmapData.objGuid == this.lastWrittenSordGuid) {
+        ixConnect.ix().checkinMap(mapData.domainName, this.lastWrittenSordId, this.lastWrittenSordId, mapData.items, LockC.NO);
+      } else {
+        log.warn(&quot;Unrelated MapData ignored. Found: &quot; + mapData.guid + &quot;, expected: &quot; + this.lastWrittenSordGuid);
+      }
+    }
+  },
+  
+<span id='tfim-method-processFlowData'>  /**
+</span>   * Importiert die angegebenen Workflows.
+   * 
+   * @param {Object} flowData Workflow-Daten
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processFlowData: function(flowData, onlyCheck) {
+    if (onlyCheck) {
+    } else {
+      this.pendingFlowData = flowData;
+    }
+  },
+  
+<span id='tfim-method-processSord'>  /**
+</span>   * Importiert den angegebenen Archiveintrag.
+   * 
+   * @param {ZipParts} zipi Import-Teil
+   * @param {Object} jsord Verschlagwortung des archiveintrags
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processSord: function(zipi, jsord, onlyCheck) {
+    if (onlyCheck) {
+      var flags = this.getFlags();
+      if ((flags &amp; AccessC.FLAG_EDITSTRUCTURE) == 0) {
+        throw &quot;Missing Edit Structure Access Right, cannot import folders or documents.&quot;;
+      }
+      
+      if (!jsord.rootNode) {
+        jsord.parentGuid = this.rootId;
+      }
+    }
+    if (!this.translator) {
+      this.translator = new TfUserIdTranslator();
+    }
+    
+    var docFile;
+    if (jsord.docExt) {
+      docFile = File.createTempFile(&quot;docfile&quot;, &quot;.&quot; + jsord.docExt);
+      log.debug(&quot;Temp file: &quot; + docFile.getAbsolutePath());
+
+      zipi.getFilePart(docFile);
+    }
+
+    jsord.fillup = TfSord.prototype.fillup;
+    var editInfo;
+    try {
+      editInfo = ixConnect.ix().checkoutDoc(jsord.guid, null, EditInfoC.mbAll, LockC.NO);
+      log.debug(&quot;Read existing Sord: &quot; + jsord.guid + &quot; : &quot; + editInfo.sord.name);
+      if (onlyCheck &amp;&amp; jsord.rootNode) {
+        this.rootId = jsord.guid;
+        log.info(&quot;Root sord loaded: &quot; + jsord.name + &quot; at &quot; + jsord.guid);
+      }
+    } catch(e) {
+      var dest = jsord.parentGuid;
+      if (jsord.createPath &amp;&amp; (jsord.createPath != &quot;ARCPATH:&quot;)) {
+        dest = jsord.createPath;
+      }
+      
+      if (onlyCheck) {
+        if (jsord.rootNode) {
+          this.rootId = dest;
+          log.info(&quot;Root sord loaded: &quot; + jsord.name + &quot; at &quot; + dest);
+        }
+        return;
+      }
+      
+      log.info(&quot;Create new Sord at &quot; + dest);
+      try {
+        if (jsord.docExt) {
+          editInfo = ixConnect.ix().createDoc(dest, jsord.maskName, null, EditInfoC.mbAll);
+        } else {
+          editInfo = ixConnect.ix().createSord(dest, jsord.maskName, EditInfoC.mbAll);
+        }
+      } catch(e) {
+        log.info(&quot;Cannot create new entry at: &quot; + dest + &quot;, reason: &quot; + e);
+        if (this.pendingFlowData) {
+          dest = this.pendingFlowData.eloObjGuid;
+          if (jsord.docExt) {
+            editInfo = ixConnect.ix().createDoc(dest, jsord.maskName, null, EditInfoC.mbAll);
+          } else {
+            editInfo = ixConnect.ix().createSord(dest, jsord.maskName, EditInfoC.mbAll);
+          }
+        } else {
+          throw(e);
+        }
+      }
+    }
+    
+    jsord.fillup(editInfo.sord, this.translator);
+    
+    if (onlyCheck) {
+      if (((editInfo.sord.access &amp; AccessC.LUR_WRITE) == 0) &amp;&amp; (editInfo.sord.id != -1)) {
+        throw (&quot;Missing write access at object: &quot; + editInfo.sord.name);
+      }
+      
+      if (jsord.docExt) {
+      }
+    } else {
+      var id = ixConnect.ix().checkinSord(editInfo.sord, SordC.mbAll, LockC.NO);
+      log.debug(&quot;Sord written: &quot; + id);
+      
+      this.lastWrittenSordId = id;
+      this.lastWrittenSordGuid = editInfo.sord.guid;
+      
+      editInfo.sord.id = id;
+      
+      if (jsord.docExt) {
+        if (this.checkForMd5Version(editInfo, docFile)) {
+          log.info(&quot;DocVersion is available, not import needed.&quot;);
+        } else {
+          log.info(&quot;Update sord document file: &quot; + jsord.docExt);
+          var doc = new Document();
+          var dv = new DocVersion();
+          dv.pathId = editInfo.sord.path;
+          dv.ext = jsord.docExt;
+          dv.encryptionSet = editInfo.sord.details.encryptionSet;
+          doc.docs = [dv];
+          doc = ixConnect.ix().checkinDocBegin(doc);
+          dv = doc.docs[0];
+          var url = dv.url;
+          log.debug(&quot;Upload file: &quot; + url);
+          var uploadResult = ixConnect.upload(url, docFile);
+          dv.uploadResult = uploadResult;
+          doc = ixConnect.ix().checkinDocEnd(editInfo.sord, SordC.mbAll, doc, LockC.NO);
+        }
+        
+        log.debug(&quot;Delete temp file: &quot; + docFile.name);
+        fu.deleteFile(docFile);
+        log.debug(&quot;Update done.&quot;);
+      }
+    }
+  },
+  
+<span id='tfim-method-checkForMd5Version'>  /**
+</span>   * Überprüft, ob im Archiv eine Datei mit derselben MD5-Summe vorhanden ist.
+   * 
+   * @param {EditInfo} editInfo Verschlagwortung eines Archiveintrags
+   * @param {File} file Datei
+   * @returns {Boolean} Datei ist im Archiv vorhanden
+   */
+  checkForMd5Version: function(editInfo, file) {
+    if (this.importAlways) {
+      log.debug(&quot;Import always, no md5 check&quot;);
+      return false;
+    }
+    
+    try {
+      var md5 = ixConnect.getFileMd5(file);
+      log.debug(&quot;Search for md5 version: &quot; + md5);
+      var docs = editInfo.document.docs;
+      
+      if (docs.length &gt; 0) {
+        var doc = docs[0];
+        log.debug(&quot;Active version, MD: &quot; + doc.md5);
+        if (doc.md5 == md5) {
+          log.debug(&quot;Md5 version found.&quot;);
+          return true;
+        }
+      }
+    } catch(e) {
+      log.info(&quot;Error searching md5 Version: &quot; + e);
+    }
+    
+    log.debug(&quot;New document: &quot; + editInfo.sord.id);
+    return false;
+  },
+  
+<span id='tfim-method-processColors'>  /**
+</span>   * Importiert die angegebenen Farben.
+   * 
+   * @param {Object} jsonObj Farbenobjekt
+   * @param {type} onlyCheck Nur überprüfen
+   */
+  processColors: function(jsonObj, onlyCheck) {
+    if (onlyCheck) {
+      var flags = this.getFlags();
+      if ((flags &amp; AccessC.FLAG_EDITCONFIG) == 0) {
+        throw &quot;Missing EditConfig Access Right, cannot import color marker.&quot;;
+      }
+      
+      return;
+    }
+    
+    var cols = new Array();
+    jsonObj.fillup = TfColors.prototype.fillup;
+    jsonObj.fillup(cols);
+    
+    ixConnect.ix().checkinColors(cols, LockC.NO);
+  },
+  
+<span id='tfim-method-processUser'>  /**
+</span>   * Importiert die angegebenen Benutzer.
+   * 
+   * @param {Object} juser Benutzerobjekt
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processUser: function(juser, onlyCheck) {
+    var checkOwner = true;
+    if (onlyCheck) {
+      var flags = this.getFlags();
+      if ((flags &amp; AccessC.FLAG_SUBADMIN) == 0) {
+        throw &quot;Missing Edit User Access Right, cannot import users or groups.&quot;;
+      }
+      if ((flags &amp; AccessC.FLAG_ADMIN) != 0) {
+        checkOwner = false;
+      }
+    }
+    
+    if (!this.translator) {
+      this.translator = new TfUserIdTranslator();
+    }
+    
+    var user;
+    try {
+      user = ixConnect.ix().checkoutUsers([juser.guid], CheckoutUsersC.BY_IDS_RAW, LockC.NO)[0];
+    } catch(e) {
+      user = new Packages.de.elo.ix.client.UserInfo();
+      user.id = -1;
+    }
+    
+    juser.fillup = TfUser.prototype.fillup;
+    juser.fillup(user, this.translator);
+  
+    if (onlyCheck) {
+      if (checkOwner) {
+        if (user.parent != this.userId) {
+          throw &quot;Cannot edit user: &quot; + user.name;
+        }
+      }
+      this.translator.addItem(user.id, user.guid, user.name);
+    } else {
+      var ids = ixConnect.ix().checkinUsers([user], CheckinUsersC.WRITE, LockC.NO);
+      
+      var profile = new UserProfile();
+      profile.excludeDefaultValues = true;
+      profile.excludeGroupValues = true;
+      profile.userId = ids[0];
+      var items = new Array();
+      var joptions = juser.options;
+      joptions.fillup = TfUserOptions.prototype.fillup;
+      joptions.fillup(items);
+      profile.options = items;
+      ixConnect.ix().checkinUserProfile(profile, LockC.NO);
+      
+      this.translator.addItem(ids[0], user.guid, user.name);
+    }
+  },
+  
+<span id='tfim-method-processWorkflow'>  /**
+</span>   * Importiert die angegebenen Workflows.
+   * 
+   * @param {Object} jworkflow Workflow-Daten
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processWorkflow: function(jworkflow, onlyCheck) {
+    if (onlyCheck) {
+      var flags = this.getFlags();
+      if ((flags &amp; AccessC.FLAG_EDITWF) == 0) {
+        throw &quot;Missing Edit Workflow Access Right, cannot import workflow templates.&quot;;
+      }
+    }
+
+    if (!this.translator) {
+      this.translator = new TfUserIdTranslator();
+    }
+  
+    if (!this.wfTranslator) {
+      this.wfTranslator = new TfWorkflowTranslator();
+    }
+    
+    var workflow;
+    try {
+      workflow = ixConnect.ix().checkoutWorkflowTemplate(jworkflow.guid, null, WFDiagramC.mbAll, LockC.NO);
+    } catch(e) {
+      log.info(e);
+      workflow = new WFDiagram();
+      workflow.id = -1;
+    }
+    
+    jworkflow.fillup = TfWorkflow.prototype.fillup;
+    jworkflow.fillup(workflow, this.translator);
+    
+    if (onlyCheck) {
+      this.wfTranslator.addItem(workflow.id, workflow.name);
+    } else {
+      ixConnect.ix().checkinWorkflowTemplate(workflow, WFDiagramC.mbAll, LockC.NO);
+    }
+  },
+  
+<span id='tfim-method-processKeywords'>  /**
+</span>   * Importiert die angegebenen Stichwortlisten.
+   * 
+   * @param {Object} jkeywords Objekt für die Stichwortlisten
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processKeywords: function(jkeywords, onlyCheck) {
+    if (onlyCheck) {
+      return;
+    }
+    
+    if (!this.keywordsProvider) {
+      this.keywordsProvider = new TfKeywordsProvider();
+    }
+    
+    var keywords = new KeywordList();
+    jkeywords.fillup = TfKeywords.prototype.fillup;
+    jkeywords.fillupChildren = TfKeywords.prototype.fillupChildren;
+    jkeywords.fillup(keywords);
+    if (keywords.id != &quot;&quot;) {
+      this.keywordsProvider.saveList(keywords);
+    }
+    
+  },
+  
+<span id='tfim-method-processMask'>  /**
+</span>   * Importiert die angegeben Verschlagwortungsmasken.
+   * 
+   * @param {Object} jmask Masken-Objekt
+   * @param {Boolean} onlyCheck Nur überprüfen
+   */
+  processMask: function(jmask, onlyCheck) {
+    if (onlyCheck) {
+      var flags = this.getFlags();
+      if ((flags &amp; AccessC.FLAG_EDITMASK) == 0) {
+        throw &quot;Missing Edit Mask Access Right, cannot import masks.&quot;;
+      }
+      
+      return;
+    }
+
+    if (!this.wfTranslator) {
+      this.wfTranslator = new TfWorkflowTranslator();
+    }
+    
+    if (!this.keywordsProvider) {
+      this.keywordsProvider = new TfKeywordsProvider();
+    }
+    
+    var mask;
+    var id = jmask.guid;
+    try {
+      log.debug(&quot;Try read mask: &quot; + id);
+      mask = ixConnect.ix().checkoutDocMask(id, DocMaskC.mbAll, LockC.NO);
+      log.debug(&quot;Mask found&quot;);
+    } catch(e) {
+      log.info(&quot;Create new mask: &quot; + id);
+      mask = new DocMask();
+      mask.id = -1;
+    }
+    
+    jmask.fillup = TfMask.prototype.fillup;
+    jmask.fillup(mask, this.wfTranslator, this.keywordsProvider);
+    
+    ixConnect.ix().checkinDocMask(mask, DocMaskC.mbAll, LockC.NO);
+    log.debug(&quot;Update mask: &quot; + mask.name);
+  },
+  
+<span id='tfim-method-getFlags'>  /**
+</span>   * Liefert die Benutzer-Flags zurück.
+   * 
+   * @returns {Number} Benutzer-Flags
+   */
+  getFlags: function() {
+    if (!this.flags) {
+      this.flags = ixConnect.loginResult.user.flags;
+    }
+    
+    return this.flags;
+  },
+  
+<span id='tfim-method-getUser'>  /**
+</span>   * Liefert die ID vom aktuellen Benutzer zurück.
+   * 
+   * @returns {Number} Benutzer ID
+   */
+  getUser: function() {
+    if (!this.userId) {
+      this.userId = ixConnect.loginResult.user.id;
+    }
+    
+    return this.userId;
+  },
+  
+<span id='tfim-method-clear'>  /**
+</span>   * Löscht die belegten Ressourcen.
+   */
+  clear: function() {
+    this.translator = null;
+    this.wfTranslator = null;
+    this.keywordsProvider = null;
+  }
+}
+
+
+</pre>
+</body>
+</html>

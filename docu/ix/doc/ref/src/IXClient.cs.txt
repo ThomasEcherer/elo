@@ -1,0 +1,433 @@
+using System;
+using System.Net;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Collections;
+using System.Security.Cryptography;
+
+namespace Examples
+{
+	/// <summary>
+	/// Helper class to access IndexServer
+	/// </summary>
+	public class IXClient : IndexServer.IndexServer
+	{
+		private AliveThread aliveThread;
+    
+		public IXClient(String url)
+		{
+			if (url != null && url.Length != 0) 
+			{
+				base.Url = url;
+			}
+      base.CookieContainer = new CookieContainer();
+		}
+
+		public void download(String url, String fileName) 
+		{
+			download(url, 0, -1, fileName);
+		}
+
+		public void download(String url, long offset, long length, String fileName) 
+		{
+			url += "&offset=" + offset + "&length=" + length;
+			Stream strm = null;
+			FileStream fstrm = null;
+      HttpWebResponse resp = null;
+			try 
+			{
+				HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(url);
+
+        resp = (HttpWebResponse)req.GetResponse();
+
+				strm = resp.GetResponseStream();
+				fstrm = new FileStream(fileName, FileMode.Create, FileAccess.Write);
+
+				long contentLength = resp.ContentLength;
+				if (contentLength <= 0) return;
+				byte[] buf = new byte[4096 * 32];
+				do 
+				{
+					int r = strm.Read(buf, 0, buf.Length);
+					if (r <= 0) break;
+					fstrm.Write(buf, 0, r);
+				} while (true);
+			} 
+			finally 
+			{
+				if (strm != null) strm.Close();
+				if (fstrm != null) fstrm.Close();
+        if (resp != null) resp.Close();
+			}
+		}
+
+		public static String CONTENT_TYPE_ELODM = "application/elodm-";
+
+		public static String getFileExt(String fileName) 
+		{
+			String ext = "";
+			int p = fileName.LastIndexOf(".");
+			if (p >= 0) ext = fileName.Substring(p+1, fileName.Length-p-1);
+			return ext;
+		}
+
+		public String upload(String url, String fileName) 
+		{
+			String ret = "";
+			Stream strm = null;
+			FileStream fstrm = null;
+      HttpWebResponse resp = null;
+			try 
+			{
+				HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(url);
+				req.Method = "POST";
+
+				fstrm = new FileStream(fileName, FileMode.Open, FileAccess.Read);
+				
+				req.ContentLength = fstrm.Length;
+				req.ContentType = CONTENT_TYPE_ELODM + getFileExt(fileName);
+				strm = req.GetRequestStream();
+
+				byte[] buf = new byte[4096 * 32];
+				do 
+				{
+					int r = fstrm.Read(buf, 0, buf.Length);
+					if (r <= 0) break;
+					strm.Write(buf, 0, r);
+				} while (true);
+
+				strm.Close();
+				strm = null;
+
+				resp = (HttpWebResponse)req.GetResponse();
+				strm = resp.GetResponseStream();
+					
+				ASCIIEncoding encoding = new ASCIIEncoding();
+				do 
+				{
+					int r = strm.Read(buf, 0, buf.Length);
+					if (r <= 0) break;
+					ret += encoding.GetString(buf, 0, r);
+				} while (true);
+
+			} 
+			finally 
+			{
+				if (strm != null) strm.Close();
+				if (fstrm != null) fstrm.Close();
+        if (resp != null) resp.Close();
+			}
+
+			return ret;
+		}
+
+		public IndexServer.LoginResult login2(IndexServer.ClientInfo ci, 
+			String userName, String userPwd, String computerName, String runAs) 
+		{
+			IndexServer.LoginResult lr = null;
+			Monitor.Enter(this);
+			try 
+			{
+        // encrypt password
+        userPwd = encryptPassword(userPwd);
+
+        // Login 
+				lr = base.login(ci, userName, userPwd, computerName, runAs);
+				if (aliveThread == null) 
+				{
+					aliveThread = new AliveThread(this);
+				}
+
+				aliveThread.addSession(lr);
+			} 
+			finally 
+			{
+				Monitor.Exit(this);
+			}
+			return lr;
+		}
+
+		public void logout2(IndexServer.ClientInfo ci) 
+		{
+			Monitor.Enter(this);
+			try
+			{
+				base.logout(ci);
+			} 
+			finally 
+			{
+				if (aliveThread != null) 
+				{
+					if (aliveThread.removeSessionReturnIsEmpty(ci)) 
+					{
+						aliveThread.done();
+						aliveThread = null;
+					}
+				}
+				Monitor.Exit(this);
+			}
+		}
+
+		private static IndexServer.IXServicePortC CONST;
+
+		public IndexServer.IXServicePortC getCONST(IndexServer.ClientInfo ci) 
+		{
+			Monitor.Enter(this);
+			try
+			{
+				if (CONST == null) 
+				{
+					CONST = base.getConstants(ci);
+				}
+			} 
+			finally 
+			{
+				Monitor.Exit(this);
+			}
+			return CONST;
+		}
+
+		public void done() 
+		{
+			Monitor.Enter(this);
+			try
+			{
+				if (aliveThread != null) 
+				{
+					aliveThread.removeAllSessionsAndLogout();
+				}
+			} 
+			finally 
+			{
+				Monitor.Exit(this);
+			}
+		}
+        
+		private class AliveThreadSession 
+		{
+			public IndexServer.LoginResult lr;
+			private long bestBefore;
+			
+			public AliveThreadSession(IndexServer.LoginResult lr) 
+			{
+				this.lr = lr;
+				makeBestBefore();
+			}
+
+			public void makeBestBefore() 
+			{
+				long s = lr.ticketLifetime;
+				long ms = s * 1000;
+				long us = ms * 1000;
+				long ns100 = us * 10;
+				bestBefore = DateTime.Now.Ticks;
+        bestBefore += ns100 / 10 * 9;
+			}
+
+			public bool needAlive() 
+			{
+				long dt = bestBefore - DateTime.Now.Ticks;
+        return dt < 0;
+			}
+		}
+
+		private class AliveThread 
+		{
+			private IndexServer.IndexServer ix;
+			private Thread thread;
+			private ArrayList sessions;
+			public Exception lastException;
+			
+			public AliveThread(IndexServer.IndexServer ix) 
+			{
+				this.ix = ix;
+				this.thread = new Thread(new ThreadStart(alive));
+				this.sessions = new ArrayList();
+        this.thread.Start();
+			}
+
+			public void done() 
+			{
+				this.thread.Interrupt();
+				this.thread = null;
+			}
+
+			public void addSession(IndexServer.LoginResult lr) 
+			{
+				Monitor.Enter(sessions);
+				try 
+				{
+					AliveThreadSession als = new AliveThreadSession(lr);
+					sessions.Add(als);
+				} 
+				finally 
+				{
+					Monitor.Exit(sessions);
+				}
+			}
+            
+			public bool removeSessionReturnIsEmpty(IndexServer.ClientInfo ci) 
+			{
+				Monitor.Enter(sessions);
+				try 
+				{
+					IEnumerator it = sessions.GetEnumerator();
+					while (it.MoveNext())
+					{
+						AliveThreadSession als = (AliveThreadSession)it.Current;
+						if (als.lr.clientInfo.ticket.Equals(ci.ticket)) 
+						{
+							sessions.Remove(als);
+							break;
+						}
+					}
+					return sessions.Count == 0;
+				} 
+				finally 
+				{
+					Monitor.Exit(sessions);
+				}
+			}
+
+			public void removeAllSessionsAndLogout()
+			{
+				Monitor.Enter(sessions);
+				try 
+				{
+					IEnumerator it = sessions.GetEnumerator();
+					while (it.MoveNext())
+					{
+						try
+						{
+							AliveThreadSession als = (AliveThreadSession)it.Current;
+							ix.logout(als.lr.clientInfo);
+						} 
+						catch (Exception e)
+						{
+							lastException = e;
+						}
+					}
+				} 
+				finally 
+				{
+					Monitor.Exit(sessions);
+				}
+			}
+
+			private void alive() 
+			{
+				try
+				{
+					while (true) 
+					{
+						Thread.Sleep(1000);
+						if (Monitor.TryEnter(sessions)) 
+						{
+							try 
+							{
+								IEnumerator it = sessions.GetEnumerator();
+								while (it.MoveNext())
+								{
+									AliveThreadSession als = (AliveThreadSession)it.Current;
+									if (als.needAlive()) 
+									{
+										try 
+										{
+											ix.alive(als.lr.clientInfo);
+											als.makeBestBefore();
+										} 
+										catch (Exception e) 
+										{
+                      IndexServer.IXExceptionData ex = null;
+                      try
+                      {
+                        ex = ix.parseException(als.lr.clientInfo, e.Message);
+                      }
+                      catch (Exception ignored) { }
+
+                      if (ex != null && ex.exceptionType == CONST.IXEXCEPTION.INVALID_SESSION)
+                      {
+                        sessions.Remove(als);
+                        it = sessions.GetEnumerator();
+                        lastException = e;
+                      }
+                    }
+									}
+								}
+							} 
+							finally 
+							{
+								Monitor.Exit(sessions);
+							}
+						}
+					}
+				} 
+				catch (ThreadInterruptedException e) 
+				{
+					lastException = e;
+				}
+			}
+		}
+
+    private static byte[] stripLeadingZeros(byte[] a)
+    {
+      int firstByte = 0;
+      for (; firstByte < a.Length && a[firstByte] == 0; firstByte++) { }
+
+      if (firstByte == 0) return a;
+
+      byte[] result = new byte[a.Length - firstByte];
+      for (int i = 0; i < result.Length; i++)
+      {
+        result[i] = a[firstByte + i];
+      }
+      return result;
+    }
+
+    private static RSAParameters publicKeyFromString(string s)
+    {
+      int p = s.IndexOf(" ");
+      if (p < 0) throw new InvalidOperationException("Invalid format.");
+      string mod = s.Substring(0, p);
+      string exp = s.Substring(p);
+      RSAParameters keyInfo = new RSAParameters();
+
+      byte[] modBytes = Convert.FromBase64String(mod);
+      keyInfo.Modulus = stripLeadingZeros(modBytes);
+      keyInfo.Exponent = Convert.FromBase64String(exp);
+      return keyInfo;
+    }
+
+    private RSAParameters providePublicKey()
+    {
+      // Hack: get public encryption key from IndexServer.
+      // This should be a separate function in future versions.
+      IndexServer.LoginResult lr = base.login(new IndexServer.ClientInfo(), "PUBLIC_ENCR_KEY", null, null, null);
+      RSAParameters publicKey = publicKeyFromString(lr.clientInfo.ticket);
+      return publicKey;
+    }
+
+    /// <summary>
+    /// Use this helper function to encrypt short strings (e. g. passwords). 
+    /// The encryption key is provided by the IX when IXClient.login is called. 
+    /// Only this IX is able to decrypt the string.
+    /// </summary>
+    /// <param name="s">String (password) to be encrypted. Maximum length is 117 characters. resp. 117 UTF-8 bytes.</param>
+    /// <returns>Encrypted String</returns>
+    public string encryptPassword(string s)
+    {
+      RSACryptoServiceProvider RSA = new RSACryptoServiceProvider();
+
+      RSAParameters publicKey = providePublicKey();
+      RSA.ImportParameters(publicKey);
+
+      byte[] plainText = Encoding.UTF8.GetBytes(s);
+      byte[] encrText = RSA.Encrypt(plainText, false);
+
+      string ret = "##RSA##" + Convert.ToBase64String(encrText);
+      return ret;
+    }
+
+	}
+}

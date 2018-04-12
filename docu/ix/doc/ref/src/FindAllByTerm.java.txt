@@ -1,0 +1,160 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.FindInfo;
+
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.FindByIndex;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.ObjKey;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to search the index values using a search term
+ * 
+ * Create test sords with search term in name
+ * Execute find
+ * 
+ * @author Shipton
+ */
+
+public class FindAllByTerm {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Create sord and check out using index attributes
+            findTerm();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void findTerm() throws RemoteException {
+         
+         String searchAllFor = "Find All";
+        
+         // Create Sord objects with search term in name, desc and index data
+         // sord1 has search term in name
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord1 = ed.getSord();
+         sord1.setName("Find All Demo Sord1");
+         sord1.setId(ix.ix().checkinSord(sord1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + sord1.getId() + " and name " + sord1.getName());
+         
+         // sord2 has search term in desc attribute
+         ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord2 = ed.getSord();
+         sord2.setName("Find All Demo Sord2");
+         sord2.setDesc(searchAllFor);
+         sord2.setId(ix.ix().checkinSord(sord2, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord2 created Id = " + sord2.getId() + " and name " + sord2.getName());
+         
+         // sord3 has search term in index attribute
+         ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord3 = ed.getSord();
+         sord3.setName("Find All Demo Sord3");
+         ObjKey okey = new ObjKey();
+         okey.setId(0);
+         okey.setName("IX EXAMPLE");
+         okey.setData(new String[] {"find " + searchAllFor + " in index line"});
+         sord3.setId(ix.ix().checkinSord(sord3, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord3 created Id = " + sord3.getId() + " and name " + sord3.getName());
+         
+         // Execute search
+         
+         // Prepare a FindInfo object
+         FindInfo findInfo = new FindInfo();
+         findInfo.setFindByIndex(new FindByIndex());
+         findInfo.getFindByIndex().setName("#" + searchAllFor);
+         
+         
+         // Find objects
+         FindResult findResult = ix.ix().findFirstSords(findInfo, 1000, SORD.getMbAll());
+         if (findResult.getSords() != null){
+             
+             System.out.println("found #= " + findResult.getSords().length + " results.");
+             for (int i = 0; i < findResult.getSords().length; i++){
+                System.out.println("sord.id = " + findResult.getSords()[i].getId() + 
+                                   ", name = " + findResult.getSords()[i].getName()); 
+             }
+         }
+         
+         ix.ix().findClose(findResult.getSearchId());
+         System.out.println("Find successfully executed");
+        
+         // Delete sord objects
+         Boolean delete = false;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, sord1.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sord2.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sord3.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sord1.getGuid(), LOCK.getNO(), delOpts);
+            ix.ix().deleteSord(null, sord2.getGuid(), LOCK.getNO(), delOpts);
+            ix.ix().deleteSord(null, sord2.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+         
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        
+        System.out.println("Logged on as " + ix.getLogin().lr().getUser().getName());
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

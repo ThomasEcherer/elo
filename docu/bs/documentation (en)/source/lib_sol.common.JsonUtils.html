@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-JsonUtils'>/**
+</span> * Helper functions for JSON processing
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloall
+ * @requires sol
+ */
+sol.define(&quot;sol.common.JsonUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-JsonUtils-method-stringifyAll'>  /**
+</span>  * Stringify JavaScript objects and handles Java objects
+  * @param {Object} obj Object to stringify
+  * @param {Object} objFormat Object formatting stringify e.g. objFormat = {tabStop: 2}
+  * @return {String} string value of object 
+  */
+  stringifyAll: function (obj, objFormat) {
+    var tabStop = null;
+    if (objFormat) {
+      if (objFormat.tabStop) {
+        tabStop = objFormat.tabStop;
+      }
+    }
+    return JSON.stringify(obj, function (key, value) {
+      if (value instanceof java.lang.String) {
+        return String(value);
+      }
+      if (value &amp;&amp; value.getClass) {
+        return String(value.toString());
+      }
+      return value;
+    }, tabStop);
+  }
+});
+</pre>
+</body>
+</html>

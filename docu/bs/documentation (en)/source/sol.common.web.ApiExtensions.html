@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+api.require({
+  namespace: [&quot;sol&quot;]
+}, function () {
+
+
+<span id='sol-common-web-ApiUtils'>	/**
+</span>	 * This is a utility class for user interaction.
+	 */
+  sol.define(&quot;sol.common.web.ApiUtils&quot;, {
+    singleton: true,
+<span id='sol-common-web-ApiUtils-method-getWfNode'>    /**
+</span>     * Finds a users workflow node based on its flowId and nodeId.
+     * Since collecting tasks is expensive, the guid should be passed in order to limit search results.
+     * A maximum of 100 tasks is retrieved in order to find the required node.
+ *
+     * @param {String} guid
+     * @param {String} flowId
+     * @param {String} nodeId
+     * @param {Object} successFct
+     * @param {Object} failureFct
+     */
+    getWfNode: function (guid, flowId, nodeId, successFct, failureFct) {
+      var findTaskInfo = new de.elo.ix.client.FindTasksInfo();
+      findTaskInfo.allUsers = false;
+      findTaskInfo.inclWorkflows = true;
+      findTaskInfo.objId = guid;
+      findTaskInfo.highestPriority = elo.CONST.USER_TASK_PRIORITY.HIGHEST;
+      findTaskInfo.lowestPriority = elo.CONST.USER_TASK_PRIORITY.LOWEST;
+      findTaskInfo.sortOrder = elo.CONST.USER_TASK_SORT_ORDER.PRIORITY_DATE_NAME_INV;
+
+      elo.IX.ix().findFirstTasks(findTaskInfo, 100, new de.elo.ix.client.AsyncCallback(function (findResult) {
+        // success
+        var tasks = findResult.tasks,
+            task, i;
+        for (i = 0; i &lt; tasks.length; i++) {
+          task = tasks[i];
+          if (task.wfNode.flowId === flowId &amp;&amp; task.wfNode.nodeId === nodeId) {
+            successFct.call(this, task.wfNode);
+            return;
+          }
+        }
+        if (failureFct) {
+          failureFct.call(this, &quot;Workflow node not found.&quot;);
+        }
+      }, function (ex) {
+        if (failureFct) {
+          failureFct.call(this, ex);
+        }
+      }));
+    },
+
+<span id='sol-common-web-ApiUtils-method-showInfoMessage'>    /**
+</span>     * Displays an info box.
+     * @param {String} msg
+     */
+    showInfoMessage: function (msg) {
+      elo.ModelRegistry.setDataInstance({
+        scope: this,
+        id: elo.ModelRegistry.getModelConstant(&quot;logMessage&quot;),
+        obj: {
+          displayType: &quot;window&quot;,
+          type: &quot;info&quot;,
+          title: &quot;&quot;,
+          bodyTitle: msg
+        }
+      });
+    },
+
+<span id='sol-common-web-ApiUtils-method-showPopupMessage'>    /**
+</span>     * Displays a toast/ message popup.
+     * @param {String} msg
+     */
+    showPopupMessage: function (msg) {
+      var me = this;
+
+      elo.ModelRegistry.setDataInstance({
+        scope: me,
+        id: elo.ModelRegistry.getModelConstant(&quot;logMessage&quot;),
+        obj: {
+          displayType: &quot;popup&quot;,
+          bodyTitle: msg
+        }
+      });
+    }
+  });
+});
+
+//# sourceURL=sol.common.web.ApiExtensions.js</pre>
+</body>
+</html>

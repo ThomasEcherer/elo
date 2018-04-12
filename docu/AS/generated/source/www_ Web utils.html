@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace www
+
+<span id='www'>/**
+</span> * @class www
+ * @singleton
+ */
+var www = new Object();
+www = {
+
+<span id='www-method-get'>/**
+</span> * Liefert den Inhalt als Text aus der angegebenen URL zurück.
+ * 
+ * @param {String} url URL
+ * @returns {String} URL Inhalt
+ */
+get: function(url) {
+    var client = new Packages.org.apache.http.impl.client.DefaultHttpClient();
+    var method = new Packages.org.apache.http.client.methods.HttpGet(url);
+
+    var response = client.execute(method);
+    var content = Packages.org.apache.http.util.EntityUtils.toString( response.entity );
+    
+    return content;
+},
+
+<span id='www-method-toHtml'>/**
+</span> * Liefert einen HTML-Text mit den ersetzten Sonderzeichen aus dem angegebenen Text zurück.
+ * 
+ * @param {String} text
+ * @returns {String} Text mit ersetzten Sonderzeichen
+ */
+toHtml: function(text) {
+  text = String(text).replace(&quot;&amp;&quot;, &quot;&amp;amp;&quot;);
+  text = text.replace(&quot;&lt;&quot;, &quot;&amp;lt;&quot;);
+  text = text.replace(&quot;&gt;&quot;, &quot;&amp;gt;&quot;);
+  
+  return text;
+}
+
+}; // end of namespace www</pre>
+</body>
+</html>

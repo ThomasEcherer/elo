@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_decimal-light.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.HttpUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common_fx.ix.FxUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common_fx.ix.services.ForeignExchangeRates&quot; });
+
+<span id='sol-common_fx-ix-services-ForeignExchangeRates'>/**
+</span> * @class sol.common_fx.ix.services.ForeignExchangeRates
+ * @extends sol.common.ix.FunctionBase
+ * Functions for loading exchange rates or convert amounts.
+ *
+ * # Load exchange rates
+ * Loads the exchange rates from an external service and updates the database if persist is true.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_fx_service_LoadExchangeRates&#39;, {
+ *       persist: true
+ *     });
+ *
+ * Result object:
+ *
+ *     {
+ *       &quot;USD&quot;: &quot;1.1389&quot;,
+ *       &quot;JPY&quot;: &quot;136.33&quot;,
+ *       &quot;BGN&quot;: &quot;1.9558&quot;,
+ *       ...
+ *     }
+ *
+ * # Convert currencies
+ * Converts an amount from one currency to another.
+ * &#39;to&#39; parameter is optional, if it&#39;s empty, the base currency will be used.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_fx_service_ConvertCurrencies&#39;, {
+ *       amount: &quot;47.11&quot;,
+ *       from: &quot;USD&quot;,
+ *       to: &quot;GBP&quot;
+ *     });
+ *
+ * Result object:
+ *
+ *     {
+ *       amount: &quot;47.11&quot;,
+ *       from: &quot;USD&quot;,
+ *       to: &quot;GBP&quot;,
+ *       result: &quot;30.0719&quot;
+ *     }
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common_fx.ix.FxUtils
+ *
+ */
+
+<span id='sol-common_fx-ix-services-ForeignExchangeRates-static-method-RF_sol_common_fx_service_LoadExchangeRates'>/**
+</span> * @member sol.common_fx.ix.services.ForeignExchangeRates
+ * @method RF_sol_common_fx_service_LoadExchangeRates
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_common_fx_service_LoadExchangeRates(ec, jsonParams) {
+  logger.enter(&quot;RF_sol_common_fx_service_LoadExchangeRates&quot;, jsonParams);
+  var params, result, errorMsg;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, jsonParams, &quot;persist&quot;),
+
+  logger.info(&quot;load exchange rates&quot;);
+
+  try {
+    result = sol.common_fx.ix.FxUtils.loadExchangeRates(params.persist);
+  } catch (e) {
+    errorMsg = &quot;error loading exchange rates: &quot; + e;
+    logger.warn(errorMsg);
+    result.error = errorMsg;
+  }
+  result = sol.common.ix.RfUtils.stringify(result);
+  logger.exit(&quot;RF_sol_common_fx_service_LoadExchangeRates&quot;, result);
+  return result;
+}
+
+<span id='sol-common_fx-ix-services-ForeignExchangeRates-static-method-RF_sol_common_fx_service_ConvertCurrencies'>/**
+</span> * @member sol.common_fx.ix.services.ForeignExchangeRates
+ * @method RF_sol_common_fx_service_ConvertCurrencies
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_common_fx_service_ConvertCurrencies(ec, jsonParams) {
+  logger.enter(&quot;RF_sol_common_fx_service_ConvertCurrencies&quot;, jsonParams);
+
+  var result = {},
+      params, errorMsg;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, jsonParams, &quot;amount&quot;, &quot;from&quot;),
+
+  logger.info(&quot;convert amount&quot;);
+
+  try {
+    result = sol.common_fx.ix.FxUtils.convertAmount(params.amount, params.from, params.to);
+  } catch (e) {
+    errorMsg = &quot;error converting amount: &quot; + e;
+    logger.error(errorMsg);
+    result.error = errorMsg;
+  }
+  result = sol.common.ix.RfUtils.stringify(result);
+  logger.exit(&quot;RF_sol_common_fx_service_ConvertCurrencies&quot;, result);
+  return result;
+}</pre>
+</body>
+</html>

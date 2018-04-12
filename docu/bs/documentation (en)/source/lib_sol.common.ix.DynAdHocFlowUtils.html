@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-ix-DynAdHocFlowUtils'>/**
+</span> * Helper functions for dynamic ad-hoc workflows
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ *
+ * @requires sol.common.UserUtils
+ * @requires sol.common.WfMap
+ * @requires sol.common.MapTable
+ */
+sol.define(&quot;sol.common.ix.DynAdHocFlowUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-ix-DynAdHocFlowUtils-property-logger'>  /**
+</span>   * @private
+   */
+  logger: sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.DynAdHocFlowUtils&quot; }),
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-createDynAdHocFlow'>  /**
+</span>   * Creates a new routing
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Array} userEntries User entries
+   * @param {Object} config Configuration
+   * @param {String} config.userNameKey User name key
+   * @param {String} config.userIdKey User ID key
+   * @param {String} config.append Append users
+   */
+  createDynAdHocFlow: function (flowId, objId, userEntries, config) {
+    var me = this,
+        wfMapTable;
+
+    if (!flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    if (!userEntries) {
+      throw &quot;User entries are empty&quot;;
+    }
+
+    config = config || {};
+    config.reset = false;
+
+    config = me.buildConfig(config);
+    wfMapTable = me.loadTable(flowId, objId, !config.append, config);
+
+    userEntries.forEach(function (userEntry) {
+      var userInfos, userInfo;
+      if (!userEntry.name) {
+        return;
+      }
+      userInfos = sol.common.UserUtils.getUserInfos([userEntry.name]);
+      if (!userInfos || (userInfos.length == 0)) {
+        return;
+      }
+      userInfo = userInfos[0];
+      wfMapTable.appendRow();
+      wfMapTable.setValue(config.userNameKey, userInfo.name);
+      wfMapTable.setValue(config.userIdKey, userInfo.id);
+      wfMapTable.setValue(config.mandatoryKey, userEntry.mandatory ? &quot;1&quot; : &quot;0&quot;);
+    });
+    wfMapTable.write();
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-loadTable'>  /**
+</span>   * Loads the routing table
+   * @private
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Boolean} initEmpty
+   * @param {Object} config Configuration
+   * @param {Object} config.reset Reset iterator
+   * @return {sol.common.MapTable}
+   */
+  loadTable: function (flowId, objId, initEmpty, config) {
+    var wfMap, wfMapTable;
+
+    if (!flowId) {
+      throw &quot;Flow ID is emtpy&quot;;
+    }
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    if (!config) {
+      throw &quot;Configuration is empty&quot;;
+    }
+
+    config = config || {};
+    config.reset = (config.reset == false) ? false : true;
+
+    wfMap = sol.create(&quot;sol.common.WfMap&quot;, { flowId: flowId, objId: objId });
+
+    wfMapTable = sol.create(&quot;sol.common.MapTable&quot;, { map: wfMap, reset: config.reset, columnNames: [config.userNameKey, config.userIdKey, config.mandatoryKey], initEmpty: initEmpty });
+
+    return wfMapTable;
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-buildConfig'>  /**
+</span>   * @private
+   * Builds the DynAdHocFlow configuration
+   * @param {Object} config Configuration
+   * @return {Object} Complete configuration
+   */
+  buildConfig: function (config) {
+    config = config || {};
+    config.userNameKey = config.userNameKey || &quot;USER&quot;;
+    config.userIdKey = config.userNameKey + &quot;_ID&quot;;
+    config.mandatoryKey = config.userNameKey + &quot;_MANDATORY&quot;;
+    config.currentUserKey = config.currentUserKey || &quot;CURRENT_USER&quot;;
+    config.previousUserKey = config.previousUserKey || &quot;PREVIOUS_USER&quot;;
+    config.append = (config.append == true) ? true : false;
+    return config;
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-shiftUser'>  /**
+</span>   * Returns the first user and removes the first row of the user table
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {String} config.currentUserKey
+   * @return {String} userName User name
+   */
+  shiftUser: function (flowId, objId, config) {
+    var me = this,
+        userName = &quot;&quot;,
+        wfMapTable, currentUser;
+
+    if (!flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    config = me.buildConfig(config);
+
+    wfMapTable = me.loadTable(flowId, objId, false, config);
+    wfMapTable.map.read();
+
+    currentUser = wfMapTable.map.getValue(config.currentUserKey);
+    if (currentUser) {
+      wfMapTable.map.setValue(config.currentUserKey, &quot;&quot;);
+      wfMapTable.map.write();
+      return currentUser;
+    }
+
+    if (wfMapTable.hasNextRow()) {
+      wfMapTable.nextRow();
+      userName = wfMapTable.getValue(config.userNameKey);
+      wfMapTable.shift();
+    }
+    wfMapTable.write();
+
+    wfMapTable.map.setValue(config.currentUserKey, userName);
+    wfMapTable.map.write();
+
+    return userName;
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-hasNextUser'>  /**
+</span>   * Checks whether there is a next user in the table
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {String} config.userNameKey
+   * @return {Boolean}
+   */
+  hasNextUser: function (flowId, objId, config) {
+    var me = this,
+        wfMapTable, userName;
+
+    config = me.buildConfig(config);
+
+    wfMapTable = me.loadTable(flowId, objId, false, config);
+    if (wfMapTable.hasNextRow()) {
+      wfMapTable.nextRow();
+      userName = wfMapTable.getValue(config.userNameKey);
+      if (userName) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-hasCurrentUser'>  /**
+</span>   * Checks whether a current user is set
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {String} config.currentUserKey
+   * @return {Boolean}
+   */
+  hasCurrentUser: function (flowId, objId, config) {
+    var me = this,
+        wfMap, currentUser, hasCurrentUser;
+
+    config = me.buildConfig(config);
+
+    wfMap = sol.create(&quot;sol.common.WfMap&quot;, { flowId: flowId, objId: objId });
+    wfMap.read();
+    currentUser = wfMap.getValue(config.currentUserKey);
+    hasCurrentUser = !!currentUser;
+
+    return hasCurrentUser;
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-clearCurrentUser'>  /**
+</span>   * Clears the current user
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {String} config.currentUserKey
+   */
+  clearCurrentUser: function (flowId, objId, config) {
+    var me = this,
+        wfMap, previousUserName;
+
+    config = me.buildConfig(config);
+
+    wfMap = sol.create(&quot;sol.common.WfMap&quot;, { flowId: flowId, objId: objId });
+    wfMap.read();
+    previousUserName = wfMap.getValue(config.currentUserKey);
+    wfMap.setValue(config.previousUserKey, previousUserName);
+    wfMap.setValue(config.currentUserKey, &quot;&quot;);
+    wfMap.write();
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-setCurrentUser'>  /**
+</span>   * Sets the current user
+   * @param {String} objId Object ID
+   * @param {String} flowId Flow ID
+   * @param {String} userName User name
+   * @param {Object} config Configuration
+   * @param {String} config.currentUserKey
+   */
+  setCurrentUser: function (objId, flowId, userName, config) {
+    var me = this,
+        wfMap;
+
+    if (!flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    if (!userName) {
+      throw &quot;Username is empty&quot;;
+    }
+
+    config = me.buildConfig(config);
+
+    wfMap = sol.create(&quot;sol.common.WfMap&quot;, { flowId: flowId, objId: objId });
+    wfMap.setValue(config.currentUserKey, userName);
+    wfMap.write();
+  },
+
+<span id='sol-common-ix-DynAdHocFlowUtils-method-backToPreviousUser'>  /**
+</span>   * Back to previous user
+   * @param {String} flowId Flow ID
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {String} config.userNameKey User name key
+   * @param {String} config.currentUserKey Current user key
+   * @param {String} config.previousUserKey Previous user key
+   */
+  backToPreviousUser: function (flowId, objId, config) {
+    var me = this,
+        wfMapTable, currentUserName, previousUserName;
+
+    config = me.buildConfig(config);
+
+    wfMapTable = me.loadTable(flowId, objId, false, config);
+    wfMapTable.map.read();
+
+    previousUserName = wfMapTable.map.getValue(config.previousUserKey);
+    if (previousUserName) {
+      wfMapTable.insertRow();
+      wfMapTable.nextRow();
+      wfMapTable.setValue(config.userNameKey, previousUserName);
+    }
+
+    currentUserName = wfMapTable.map.getValue(config.currentUserKey);
+    wfMapTable.insertRow();
+    wfMapTable.nextRow();
+    wfMapTable.setValue(config.userNameKey, currentUserName);
+    wfMapTable.write();
+  }
+});
+</pre>
+</body>
+</html>

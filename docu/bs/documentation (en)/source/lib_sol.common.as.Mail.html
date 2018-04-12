@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(javax.mail);
+importPackage(javax.mail.internet);
+
+<span id='sol-common-as-functions-SendMail'>/**
+</span> * Sends an email
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloas
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.Template
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.UserUtils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.as.FunctionBase
+ * @requires sol.common.as.Mail
+ * @requires sol.common.as.Utils
+ *
+ * The SMTP configuration is read from
+ *   /Administration/Business Solutions Custom/common/Configuration/mail.config
+ *
+ * # SMTP sample configuration:
+ *     {
+ *        &quot;smtpHost&quot;: &quot;smtp.elo.local&quot;
+ *     }
+ *
+ * # Usage:
+ *
+ *     var sendMail = sol.create(&quot;sol.common.as.functions.SendMail&quot;, {
+ *       solutionNameForAsConfig: &quot;contract&quot;,
+ *       mode: &quot;run&quot;,
+ *       from: &quot;EloService@elo.local&quot;,
+ *       to: &quot;test@elo.local&quot;,
+ *       subject: &quot;Test1&quot;,
+ *       body: {
+ *         type: &quot;html&quot;,
+ *         tplObjId: &quot;ARCPATH:/Administration/Business Solutions/contract/Configuration/Mail templates/Notification&quot;,
+ *       },
+ *       objId: &quot;ARCPATH:/Contracts/Test contract&quot;,
+ *       flowId: &quot;620&quot;,
+ *       nodeId: 1,
+ *       data: { person: { salutation: &quot;Mr&quot;, firstName: &quot;Peter&quot;, lastName: &quot;Smith&quot; } },
+ *       atts: [{ objId: &quot;ARCPATH:/Contracts/Test contract/Document1&quot; },
+ *              { objId: &quot;ARCPATH:/Contracts/Test contract/Document1&quot;, convertToPdf: true }],
+ *       user: &quot;user1&quot;,
+ *       password: &quot;elo&quot;,
+ *       debug: true
+ *     });
+ *     sendMail.process();
+ *
+ * # Examples of the property &#39;to&#39;:
+ *
+ *   - &quot;to&quot;: &quot;user@domain.com&quot;
+ *     Send the email to the email adress &quot;user@domain.com&quot;
+ *
+ *   - &quot;to&quot;: { type: &quot;GRP&quot;, key: &quot;CONTRACT_RESPONSIBLE&quot; }
+ *     Take the user or email adress from the index field &quot;CONTRACT_RESPONSIBLE&quot;
+ *
+ *   - &quot;to&quot;: { type: &quot;MAP&quot;, key: &quot;USER&quot; }
+ *     Take the user or email adress from the map field &quot;USER&quot;
+ *
+ *   - &quot;to&quot;: { type: &quot;WFMAP&quot;, key: &quot;USER&quot; }
+ *     Take the user or email adress from the workflow map field &quot;USER&quot;
+ *
+ *   - &quot;to&quot;: { type: &quot;CURRENT&quot; }
+ *     Send the email to the current node user
+ *
+ *   - &quot;to&quot;: { type: &quot;NEXT&quot;, key: &quot;USER&quot; }
+ *     Send the email to the user of the next person node
+ *
+ *   - &quot;to&quot;: { type: &quot;WFOWNER&quot; }
+ *     Send the email to the workflow owner
+ *
+ *   - &quot;to&quot;: { type: &quot;SORDOWNER&quot; }
+ *     Send the email to the object owner
+ *
+ * If a field contains a &quot;@&quot; char, it&#39;s interpreted as an email address, otherwise it is
+ * interpreted as an ELO user and the email adress will be retrieved from the user
+ * profile.
+ *
+ * # Sample ELOas node configuration:
+ *
+ *     {
+ *       &quot;$directRule&quot;: &quot;sol.common.as.SendMail&quot;,
+ *       &quot;mode&quot;: &quot;run&quot;,
+ *       &quot;from&quot;: &quot;elo@contelo.com&quot;,
+ *       &quot;to&quot;: &quot;solutions@elo.com&quot;,
+ *       &quot;subject&quot;: &quot;Neue Aufgabe&quot;,
+ *       &quot;body&quot;: {
+ *         &quot;type&quot;: &quot;html&quot;,
+ *         &quot;tplObjId&quot;: &quot;ARCPATH:/Administration/Business Solutions Custom/notify/Configuration/Mail templates/Example&quot;,
+ *         &quot;data&quot;: {
+ *           &quot;person&quot;: {
+ *             &quot;salutation&quot;: &quot;Mr&quot;,
+ *             &quot;firstName&quot;: &quot;Peter&quot;,
+ *             &quot;lastName&quot;: &quot;Smith&quot;
+ *           }
+ *         }
+ *       }
+ *     }
+ */
+sol.define(&quot;sol.common.as.functions.SendMail&quot;, {
+
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+<span id='sol-common-as-functions-SendMail-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.config = config;
+  },
+
+<span id='sol-common-as-functions-SendMail-method-process'>  /**
+</span>   * Sends an email
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        mail;
+    mail = sol.create(&quot;sol.common.as.Mail&quot;, me.config);
+    mail.send();
+
+    return { passOn: true };
+  }
+});
+
+<span id='sol-common-as-Mail'>/**
+</span> * This class allows sending E-Mails by using templates that are stored in the ELO repository.
+ */
+sol.define(&quot;sol.common.as.Mail&quot;, {
+
+<span id='sol-common-as-Mail-cfg-smtpHost'>  /**
+</span>   * @cfg {String} smtpHost
+   * SMTP host
+   */
+
+<span id='sol-common-as-Mail-cfg-from'>  /**
+</span>   * @cfg {String} from
+   * Sender
+   */
+
+<span id='sol-common-as-Mail-cfg-to'>  /**
+</span>   * @cfg {String} to
+   * Recipients
+   */
+
+<span id='sol-common-as-Mail-cfg-subject'>  /**
+</span>   * @cfg {String} subject
+   * Subject
+   */
+
+<span id='sol-common-as-Mail-cfg-body'>  /**
+</span>   * @cfg {Object} body
+   * Body configuration
+   *
+   * @cfg {Object} body.type
+   * Body type &quot;html&quot; or &quot;text&quot;. Default is &quot;text&quot;
+   *
+   * @cfg {Object} body.tplObjId
+   * Object ID of the body template
+   */
+
+<span id='sol-common-as-Mail-cfg-data'>  /**
+</span>   * @cfg {Object} data
+   * This Object will be provided for the template processing.
+   */
+
+<span id='sol-common-as-Mail-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * The data of this sord object will be provided for the template processing.
+   */
+
+<span id='sol-common-as-Mail-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId
+   * The data of this workflow will be provided for the template processing.
+   */
+
+<span id='sol-common-as-Mail-cfg-nodeId'>  /**
+</span>   * @cfg {String} nodeId
+   * The data of this workflow node will be provided for the template processing.
+   */
+
+<span id='sol-common-as-Mail-cfg-user'>  /**
+</span>   * @cfg {String} user
+   * SMTP user
+   */
+
+<span id='sol-common-as-Mail-cfg-password'>  /**
+</span>   * @cfg {String} password
+   * SMTP password
+   */
+
+<span id='sol-common-as-Mail-cfg-debug'>  /**
+</span>   * @cfg {Boolean} debug
+   * True if the SMTP debug information should be written into the log
+   */
+
+<span id='sol-common-as-Mail-cfg-atts'>  /**
+</span>   * @cfg {Array} atts
+   * Attachments
+   *
+   * # Example:
+   *     &quot;atts&quot;: [{&quot;objId&quot;: &quot;4309&quot;},
+   *              {&quot;objId&quot;: &quot;4309&quot;, &quot;convertToPdf&quot;: true}]
+   */
+
+<span id='sol-common-as-Mail-cfg-noWorkflowInfo'>  /**
+</span>   * @cfg {Boolean} noWorkflowInfo
+   * If true, the workflow information will not be loaded
+   */
+
+<span id='sol-common-as-Mail-method-initialize'>  /**
+</span>   * @private
+   * @param {Object} config Configuration
+   */
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.logger.debug(&quot;config={{object}}&quot;, config);
+  },
+
+<span id='sol-common-as-Mail-method-transferConfigs'>  /**
+</span>   * @private
+   * Transfers the properties of the given configs into the current context
+   * @param {Array} configs Configuations
+   */
+  transferConfigs: function () {
+    var me = this,
+        config, prop, i;
+    for (i = 0; i &lt; arguments.length; i++) {
+      config = arguments[i];
+      for (prop in config) {
+        me[prop] = config[prop];
+      }
+    }
+  },
+<span id='sol-common-as-Mail-method-initSession'>  /**
+</span>   * @private
+   * Initiates a SMTP session
+   */
+  initSession: function () {
+    var me = this,
+        socketFactory, props = new java.util.Properties(),
+        authenticator = null,
+        mailConfig;
+
+    if (!me.smtpHost) {
+      if (me.solutionNameForAsConfig) {
+        mailConfig = me.loadMailConfig(&quot;/Administration/Business Solutions/&quot; + me.solutionNameForAsConfig + &quot;/Configuration/mail.config&quot;);
+      }
+      if (!mailConfig) {
+        mailConfig = me.loadMailConfig(&quot;/Administration/Business Solutions/common/Configuration/mail.config&quot;);
+      }
+    }
+
+    mailConfig = mailConfig || {};
+
+    me.smtpHost = me.smtpHost || mailConfig.smtpHost;
+    me.port = me.port || mailConfig.port;
+    me.user = me.user || mailConfig.user;
+    me.password = me.password || mailConfig.password;
+    me.useSsl = (typeof me.useSsl != &quot;undefined&quot;) ? me.useSsl : mailConfig.useSsl;
+
+    if (!me.smtpHost) {
+      throw &quot;SMTP host must be set.&quot;;
+    }
+    props.put(&quot;mail.smtp.host&quot;, me.smtpHost);
+    props.put(&quot;mail.smtp.localhost&quot;, java.net.InetAddress.localHost.hostName);
+    if (me.password) {
+      props.put(&quot;mail.smtp.auth&quot;, &quot;true&quot;);
+      authenticator = new javax.mail.Authenticator(me);
+    }
+    if (me.useSsl) {
+      me.port = me.port || &quot;465&quot;;
+      props.put(&quot;mail.smtp.ssl.enable&quot;, &quot;true&quot;);
+      socketFactory = new Packages.com.sun.mail.util.MailSSLSocketFactory();
+      socketFactory.trustAllHosts = true;
+      props.put(&quot;mail.smtp.ssl.socketFactory&quot;, socketFactory);
+    }
+    props.put(&quot;mail.smtp.port&quot;, me.port);
+
+    me.logger.debug(&quot;Start SMTP session: &quot; + props);
+    me.session = javax.mail.Session.getInstance(props, authenticator);
+    if (me.debug) {
+      me.session.debug = true;
+      me.outputStream = new ByteArrayOutputStream();
+      me.session.setDebugOut(new PrintStream(me.outputStream));
+    }
+  },
+
+<span id='sol-common-as-Mail-method-loadMailConfig'>  /**
+</span>   * Loads the mail configuration
+   * @param {String} repoPath
+   * @return {Object} Mail configuration
+   */
+  loadMailConfig: function (repoPath) {
+    var objId = sol.common.RepoUtils.getObjId(repoPath);
+    if (!objId) {
+      return;
+    }
+    return sol.create(&quot;sol.common.Config&quot;, { compose: objId }).config;
+  },
+
+<span id='sol-common-as-Mail-method-getData'>  /**
+</span>   * @private
+   * Retrieves the data that is provided for templating
+   */
+  getData: function () {
+    var me = this,
+        wfDiagram;
+
+    me.data = me.data || {};
+
+    if (me.objId) {
+      me.sord = ixConnect.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+      me.data.sord = sol.common.SordUtils.getTemplateSord(me.sord).sord;
+    }
+
+    if (me.flowId &amp;&amp; me.nodeId &amp;&amp; !me.noWorkflowInfo) {
+      wfDiagram = ixConnect.ix().checkoutWorkFlow(String(me.flowId), WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+      me.data.node = sol.common.WfUtils.getTemplateWfDiagramNode(wfDiagram, String(me.nodeId)).node;
+    }
+  },
+
+<span id='sol-common-as-Mail-method-getRecipient'>  /**
+</span>   * @private
+   * Retrieves the recipient of the mail
+   * @param {Object|String} to Recipient definition
+   * @return {String} recipient
+   */
+  getRecipient: function (to) {
+    var me = this,
+        recipient, wfDiagram, wfNode, successorNodes;
+
+    if (sol.common.ObjectUtils.isObject(to)) {
+      if (!to.type) {
+        throw &quot;to.type is empty&quot;;
+      }
+
+      me.logger.debug(&quot;recipientConfig=&quot; + JSON.stringify(to));
+
+      switch (String(to.type).toUpperCase()) {
+
+        case &quot;GRP&quot;:
+          me.checkKey(to);
+          recipient = sol.common.SordUtils.getValue(me.sord, to);
+          break;
+
+        case &quot;MAP&quot;:
+          me.checkKey(to);
+          recipient = sol.common.SordUtils.getValue(me.sord, to);
+          break;
+
+        case &quot;SORDOWNER&quot;:
+          recipient = me.sord.ownerName;
+          break;
+
+        case &quot;WFMAP&quot;:
+          me.checkKey(to);
+          me.checkWorkflowProps();
+          recipient = sol.common.WfUtils.getWfMapValue(me.flowId, to.key);
+          break;
+
+        case &quot;CURRENT&quot;:
+          wfDiagram = me.getWorkflow();
+          wfNode = sol.common.WfUtils.getNode(wfDiagram, me.nodeId);
+          recipient = wfNode.userName;
+          break;
+
+        case &quot;NEXT&quot;:
+          wfDiagram = me.getWorkflow();
+          successorNodes = sol.common.WfUtils.getSuccessorNodes(wfDiagram, me.nodeId, WFNodeC.TYPE_PERSONNODE);
+          if (!successorNodes || (successorNodes.length == 0)) {
+            throw &quot;No appropriate successor node found&quot;;
+          }
+          if (successorNodes.length &gt; 1) {
+            throw &quot;Successor node is ambiguous&quot;;
+          }
+          recipient = successorNodes[0].userName;
+          break;
+
+        case &quot;WFOWNER&quot;:
+          wfDiagram = me.getWorkflow();
+          recipient = wfDiagram.ownerName;
+          break;
+
+        default:
+          throw &quot;to.type=&quot; + to.type + &quot; is unsupported&quot;;
+      }
+    } else {
+      recipient = to;
+    }
+
+    if (!recipient) {
+      throw &quot;Recipient user is empty&quot;;
+    }
+
+    if (recipient.indexOf(&quot;@&quot;) == -1) {
+      recipient = sol.common.UserUtils.getMailAddress(recipient);
+    }
+
+    if (!recipient) {
+      throw &quot;Recipient is empty&quot;;
+    }
+
+    return recipient;
+  },
+
+<span id='sol-common-as-Mail-method-checkKey'>  /**
+</span>   * @private
+   * @param {Object} to Recipient configuration
+   * Checks the key value
+   */
+  checkKey: function (to) {
+    if (!to.key) {
+      throw &quot;to.key is empty&quot;;
+    }
+  },
+
+<span id='sol-common-as-Mail-method-getWorkflow'>  /**
+</span>   * @private
+   * Returns the workflow diagram
+   * @return {de.elo.ix.client.WFDiagram}
+   */
+  getWorkflow: function () {
+    var me = this;
+    if (!me.flowId) {
+      throw &quot;flowId is empty&quot;;
+    }
+    if (!me.nodeId) {
+      throw &quot;nodeId is empty&quot;;
+    }
+    return ixConnect.ix().checkoutWorkFlow(me.flowId, WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+  },
+
+<span id='sol-common-as-Mail-method-getPasswordAuthentication'>  /**
+</span>   * @private
+   * @return {javax.mail.PasswordAuthentication} Authententication
+   */
+  getPasswordAuthentication: function () {
+    var me = this;
+    return new javax.mail.PasswordAuthentication(me.user, me.password);
+  },
+
+<span id='sol-common-as-Mail-method-send'>  /**
+</span>   * Sends an email
+   */
+  send: function () {
+    var me = this,
+        message, multiPart;
+    if (!me.from) {
+      throw &quot;&#39;From&#39; is empty.&quot;;
+    }
+    me.initSession();
+    me.getData();
+    me.recipient = me.getRecipient(me.to);
+
+    if (!me.recipient) {
+      throw &quot;Recipient is empty.&quot;;
+    }
+
+    try {
+      message = new MimeMessage(me.session);
+      message.setFrom(new InternetAddress(me.from));
+      me.recipient.split(&quot;;&quot;).forEach(function (toPart) {
+        message.addRecipient(Message.RecipientType.TO, new InternetAddress(toPart));
+      });
+      message.subject = me.subject || &quot;&quot;;
+      multiPart = new MimeMultipart();
+      me.addBody(multiPart);
+      if (me.atts) {
+        me.atts.forEach(function (attConfig) {
+          var sord, attInputStream, dataSource, attPart;
+          sord = ixConnect.ix().checkoutSord(attConfig.objId, EditInfoC.mbSordDoc, LockC.NO).sord;
+          attConfig.extension = sord.docVersion.ext;
+          attInputStream = me.getAttAsStream(attConfig);
+          dataSource = new javax.mail.util.ByteArrayDataSource(attInputStream, &quot;application/octet-stream&quot;);
+          attInputStream.close();
+          attPart = new MimeBodyPart();
+          attPart.dataHandler = new javax.activation.DataHandler(dataSource);
+          attPart.fileName = sol.common.FileUtils.sanitizeFilename(sord.name) + &quot;.&quot; + attConfig.extension;
+          multiPart.addBodyPart(attPart);
+        });
+      }
+      message.setContent(multiPart);
+      me.logger.info([&quot;Send mail: recipient={0}, subject={1}&quot;, me.recipient, me.subject]);
+      Transport.send(message);
+    } catch (ex) {
+      sol.common.ExceptionUtils.logAsException(ex, { logger: me.logger });
+    }
+    me.logJavaMailInfo();
+  },
+
+<span id='sol-common-as-Mail-method-addBody'>  /**
+</span>   * @private
+   * @param {javax.mail.Multipart} multiPart MultiPart
+   */
+  addBody: function (multiPart) {
+    var me = this,
+        bodyContent, template, bodyPart;
+    me.body = me.body || {};
+    bodyContent = me.body.content || &quot;&quot;;
+    if (me.body.tplObjId) {
+      template = sol.create(&quot;sol.common.Template&quot;, {});
+      template.load(me.body.tplObjId);
+      bodyContent = template.apply(me.data);
+    }
+    bodyPart = new MimeBodyPart();
+    if (me.body.type == &quot;html&quot;) {
+      bodyPart.setContent(bodyContent, &quot;text/html; charset=utf-8&quot;);
+    } else {
+      bodyPart.setContent(bodyContent, &quot;text/plain&quot;);
+    }
+    multiPart.addBodyPart(bodyPart);
+  },
+
+<span id='sol-common-as-Mail-method-logJavaMailInfo'>  /**
+</span>   * @private
+   */
+  logJavaMailInfo: function () {
+    var me = this;
+    if (me.debug) {
+      me.logger.info(me.outputStream);
+    }
+  },
+
+<span id='sol-common-as-Mail-method-getAttAsStream'>  /**
+</span>   * @private
+   * @param {object} attConfig Attachment configuration
+   * @return {java.io.InputStream} Attachment input stream
+   */
+  getAttAsStream: function (attConfig) {
+    var officeConverter, inputStream;
+    if (attConfig.objId) {
+      if (attConfig.convertToPdf) {
+        officeConverter = sol.create(&quot;sol.common.as.functions.OfficeConverter&quot;, {
+          openFromRepo: {
+            objId: attConfig.objId
+          },
+          saveToStream: {
+            format: &quot;pdf&quot;
+          }
+        });
+        if (officeConverter.isSupported(attConfig.extension)) {
+          inputStream = officeConverter.execute();
+          attConfig.extension = &quot;pdf&quot;;
+          return inputStream;
+        }
+      }
+    }
+    return sol.common.RepoUtils.downloadToStream(attConfig.objId);
+  }
+});</pre>
+</body>
+</html>

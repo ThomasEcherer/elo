@@ -1,0 +1,144 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.FindInfo;
+import de.elo.ix.client.FindChildren;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to browse through the archive heirachy
+ * 
+ * Create root folder with 30 children
+ * List children in root folder
+ */
+
+public class FindChildEntries {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Create sord and check out using index attributes
+            findTerm();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void findTerm() throws RemoteException {
+         
+         int noOfChildren = 30;
+        
+         // Create archive heirachy
+         // root folder
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sordRoot = ed.getSord();
+         sordRoot.setName("Find Children Root Folder");
+         sordRoot.setId(ix.ix().checkinSord(sordRoot, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + sordRoot.getId() + " and name " + sordRoot.getName());
+         
+         // Create sords
+         for ( int i = 0; i < noOfChildren; i++){
+             
+             String namePrefix = "" + i;
+             while (namePrefix.length() < 4){
+                 namePrefix = "0" + namePrefix;
+             }
+                 
+             Sord sord = ix.ix().createSord(sordRoot.getGuid(), null,EDIT_INFO.getMbSord()).getSord();
+             sord.setName(namePrefix + "-o-" + namePrefix);
+             sord.setId(ix.ix().checkinSord(sord,SORD.getMbAll(), LOCK.getNO()));
+             
+         }
+         System.out.println("Created sords OK");
+         
+         // List heirachy
+         // Prepare findInfo object
+         FindInfo findInfo = new FindInfo();
+         findInfo.setFindChildren(new FindChildren());
+         findInfo.getFindChildren().setParentId(sordRoot.getGuid());
+
+         // Find objects
+         FindResult findResult = ix.ix().findFirstSords(findInfo, 1000, SORD.getMbAll());
+         if (findResult.getSords() != null){
+             
+             System.out.println("found #= " + findResult.getSords().length + " results.");
+             for (int i = 0; i < findResult.getSords().length; i++){
+                System.out.println("sord.id = " + findResult.getSords()[i].getId() + 
+                                   ", name = " + findResult.getSords()[i].getName()); 
+             }
+         }
+         
+         ix.ix().findClose(findResult.getSearchId());
+         System.out.println("Find successfully executed");
+        
+         // Delete sord objects
+         Boolean delete = false;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, sordRoot.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sordRoot.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

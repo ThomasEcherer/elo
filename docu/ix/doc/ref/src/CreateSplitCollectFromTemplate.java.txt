@@ -1,0 +1,172 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFDiagramC;
+import de.elo.ix.client.WFCollectNode;
+import de.elo.ix.client.WFTypeC;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example shows how a workflow with a splitter and collector nodes is 
+ * started from a template. The template is created by using the WFHelper class method
+ * createSplitterTemplate(...).
+ */
+public class CreateSplitCollectFromTemplate {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static WFDiagramC WF_DIAGRAM;
+    private static WFTypeC WF_TYPE;
+
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            createFromTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFromTemplate() throws RemoteException{
+        
+        // Create workflow template
+        String templateName = "Splitter Demo Template" + (new Date());
+        WFHelper.createSplitterTemplate(ix, templateName);
+        // templateName = wfd.getName();
+        
+        // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("WF-Splitter-Sord " + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+       
+        // Start workflow
+        String flowName = "Splitter WF-" + (new Date());
+        int flowId = ix.ix().startWorkFlow(templateName, flowName, ed.getSord().getGuid());  
+        System.out.println("started WF: sordName=" + ed.getSord().getName() + 
+                ", flowId=" + flowId + 
+                ", flowName=" + flowName);
+        
+        
+        //Checkout workflow(now active)
+        WFDiagram wfd = ix.ix().checkoutWorkFlow(Integer.toString(flowId), WF_TYPE.getACTIVE(), WF_DIAGRAM.getMbAll(), LOCK.getNO());
+  
+        // Find splitter node
+        // Search for active and inactive workflow node(s)
+        
+        WFCollectNode[] nodes = ix.ix().collectWorkFlowNodes(
+                                                           flowName,        // Name of workflow
+                                                           null,            // WF type - null = active
+                                                           null,            // Node name
+                                                           0,               // Node type - 0 = all
+                                                           Integer.toString(objId), // objId for object
+                                                           null,            // Enter date
+                                                           null,            // Exit date
+                                                           null,            // User ids
+                                                           false,            // Only active nodes
+                                                           false);          // Only start nodes
+        
+        // Print list of nodes
+        for (int i = 0; i < nodes.length; i++){
+            for (int j = 0; j < wfd.getNodes().length; j++){
+                if (nodes[i].getNodeId() == wfd.getNodes()[j].getId()){
+                    System.out.println("Node " + (i + 1) + 
+                                       ", type " + wfd.getNodes()[j].getType() + 
+                                       ", active = " + nodes[i].isActive());
+                }
+            }
+        }
+        
+        // Search for active workflow node(s) with workflow name
+        
+        nodes = ix.ix().collectWorkFlowNodes(
+                                           flowName,        // Name of workflow
+                                           null,            // WF type - null = active
+                                           null,            // Node name
+                                           0,               // Node type - 0 = all nodes
+                                           Integer.toString(objId), // objId for object
+                                           null,            // Enter date
+                                           null,            // Exit date
+                                           null,            // User ids
+                                           true,            // Only active nodes
+                                           false);          // Only start nodes
+        
+        // List all found nodes - two should be found in this case
+        for (int i = 0; i < nodes.length; i++){
+            
+            System.out.println("forward: userName= " + nodes[i].getUserName() + 
+                            ", flowName= " + nodes[i].getFlowName() +
+                            ", nodeName= " + nodes[i].getNodeName());
+            
+            
+            // Forward node
+            WFHelper.forwardNode(connFact, nodes[i], "");
+        }
+
+        // Checkin workflow so changes to splitter node comment can be seen
+        ix.ix().checkinWorkFlow(wfd, WF_DIAGRAM.getMbAll(), LOCK.getYES());
+        // Delete Sord
+        ix.ix().deleteSord(null, Integer.toString(objId), LOCK.getNO(), null);
+    }
+    
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        WF_DIAGRAM = CONS.getWORKFLOW();
+        WF_TYPE = CONS.getWORKFLOW_TYPE();
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

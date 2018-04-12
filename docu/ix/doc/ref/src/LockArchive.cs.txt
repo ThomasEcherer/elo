@@ -1,0 +1,83 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Locks the archive with a key.
+	/// </summary>
+	public class LockArchive
+	{
+		// URL to IndexServer
+		public String url;
+
+		// Account to authenticate
+		public String userName = "Administrator";
+		public String userPwd = "";
+
+		// [X] This key is used to lock the archive. 
+		// Make sure that it exists before your run the example.
+		public String lockKey = "mykey";
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// Get the current archive key
+				int keyIdBeforeLock = ix.lockArchive(ci, null);
+				Logger.instance().log("key before lock=" + keyIdBeforeLock);
+
+				// LOCK
+				int keyIdBeforeLock2 = ix.lockArchive(ci, lockKey);
+
+				// Get the current archive key
+				int keyIdAfterLock = ix.lockArchive(ci, null);
+				Logger.instance().log("key after lock=" + keyIdAfterLock);
+
+				// UNLOCK
+				int keyIdBeforeUnlock = ix.lockArchive(ci, "0");
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

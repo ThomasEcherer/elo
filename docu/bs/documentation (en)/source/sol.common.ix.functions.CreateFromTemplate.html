@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_handlebars.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.function.CreateFromTemplate&quot; });
+
+<span id='sol-common-ix-functions-CreateFromTemplate'>/**
+</span> * Renders a template string or template document
+ *
+ * # As IX function call:
+ *   Loads a template from the repository, applys the data of a given sord and
+ *   saves the result as a new document into the repository.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_functions_CreateFromTemplate&quot;, {
+ *       templateObjId: &quot;111&quot;,
+*        objId: &quot;222&quot;,
+ *       saveToRepoConfig: { parentId: &quot;ARCPATH:/Test&quot;, &quot;name&quot;: &quot;FilledTemplate1&quot; }
+ *     });
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.Logger
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.CreateFromTemplate&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-CreateFromTemplate-cfg-templateObjId'>  /**
+</span>   * @cfg {String} templateObjId (required)
+   * Object ID of the template
+   */
+
+<span id='sol-common-ix-functions-CreateFromTemplate-cfg-templateString'>  /**
+</span>   * @cfg {String} templateString (required)
+   * String that contains placeholders
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-CreateFromTemplate-method-process'>  /**
+</span>   * Fills the template
+   * @return {Object}
+   * @return {String} return.result Result
+   */
+  process: function () {
+    var me = this,
+        json = sol.common.JsonUtils,
+        template, result;
+    if (!me.templateObjId &amp;&amp; !me.templateString) {
+      throw &quot;Template object ID or template string must be set.&quot;;
+    }
+    template = sol.create(&quot;sol.common.Template&quot;, {});
+    if (me.templateObjId) {
+      template.load(me.templateObjId);
+    } else {
+      template.setSource(me.templateString);
+    }
+    if (me.objId) {
+      template.applySord(me.objId);
+    } else {
+      template.apply(me.data);
+    }
+    result = template.getResult();
+    if (me.saveToRepoConfig) {
+      return json.stringifyAll(me.saveResult(result, me.saveToRepoConfig));
+    } else {
+      return json.stringifyAll({ result: result });
+    }
+  },
+
+<span id='sol-common-ix-functions-CreateFromTemplate-method-saveResult'>  saveResult: function (result, saveToRepoConfig) {
+</span>    var objId;
+    saveToRepoConfig = saveToRepoConfig || {};
+    saveToRepoConfig.ext = saveToRepoConfig.ext || &quot;.txt&quot;;
+    saveToRepoConfig.file = java.io.File.createTempFile(&quot;Template_&quot;, saveToRepoConfig.ext);
+    Packages.org.apache.commons.io.FileUtils.writeStringToFile(saveToRepoConfig.file, result, &quot;UTF-8&quot;);
+    objId = sol.common.RepoUtils.saveToRepo(saveToRepoConfig);
+    return { objId: objId };
+  }
+});
+
+
+<span id='sol-common-ix-functions-CreateFromTemplate-static-method-RF_sol_common_CreateFromTemplate'>/**
+</span> * @member sol.common.ix.functions.CreateFromTemplate
+ * @method RF_sol_common_CreateFromTemplate
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_common_functions_CreateFromTemplate(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_common_functions_CreateFromTemplate&quot;, args);
+  var params, module, result;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args);
+  module = sol.create(&quot;sol.common.ix.functions.CreateFromTemplate&quot;, params);
+  result = module.process();
+  logger.exit(&quot;RF_sol_common_CreateFromTemplate&quot;);
+  return result;
+}
+</pre>
+</body>
+</html>

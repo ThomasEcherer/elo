@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-SordTypeUtils'>/**
+</span> * This class provides basic functionality for sord types.
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloas
+ * @eloix
+ *
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ * @requires sol.common.FileUtils
+ *
+ */
+sol.define(&quot;sol.common.SordTypeUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-SordTypeUtils-method-getSordTypes'>  /**
+</span>   * Returns the sord types
+   * @return {Object}
+   */
+  getSordTypes: function () {
+    var me = this;
+    me.logger.enter(&quot;getSordTypes&quot;, arguments);
+    me.readSordTypes();
+    me.logger.exit(&quot;getSordTypes&quot;, me.sordTypesObj);
+
+    return me.sordTypesObj;
+  },
+
+<span id='sol-common-SordTypeUtils-method-readSordTypes'>  /**
+</span>   * @private
+   * Reads the sord types
+   */
+  readSordTypes: function () {
+    var me = this,
+        sordTypes, i, sordType;
+
+    if (me.sordTypesObj) {
+      return;
+    }
+
+    sordTypes = ixConnect.ix().checkoutSordTypes(null, Packages.de.elo.ix.client.SordTypeC.mbNoIcons, LockC.NO);
+
+    for (i = 0; i &lt; sordTypes.length; i++) {
+      sordType = sordTypes[i];
+      me.insertSordTypeIntoCache(sordType.id, sordType.name);
+    }
+  },
+
+<span id='sol-common-SordTypeUtils-method-getSordTypeId'>  /**
+</span>   * Returns the sord type ID
+   * @param {String} name
+   * @return {String} Sord type ID
+   */
+  getSordTypeId: function (name) {
+    var me = this;
+
+    me.readSordTypes();
+    if (!me.sordTypeExists(name)) {
+      throw &quot;Sord type &#39;&quot; + name + &quot;&#39; doesn&#39;t exist&quot;;
+    }
+    return parseInt(me.sordTypesObj[name].id, 10);
+  },
+
+<span id='sol-common-SordTypeUtils-method-insertSordTypeIntoCache'>  /**
+</span>   * @private
+   * Inserts a sord type into the local sord types cache
+   * @param {String} id
+   * @param {String} name
+   */
+  insertSordTypeIntoCache: function (id, name) {
+    var me = this,
+        kind;
+
+    if (!id) {
+      throw &quot;Sord type ID is empty&quot;;
+    }
+    if (!name) {
+      return;
+    }
+    if (!me.sordTypesObj) {
+      me.sordTypesObj = {};
+      me.folderSordTypeMaxId = 0;
+      me.docSordTypeMaxId = 0;
+    }
+
+    kind = me.determinateSordTypeKind(id);
+    me.sordTypesObj[name] = { id: id, kind: kind };
+
+    if (kind == &quot;FOLDER&quot;) {
+      if (id &gt; me.folderSordTypeMaxId) {
+        me.folderSordTypeMaxId = id;
+      }
+    } else if (kind == &quot;DOCUMENT&quot;) {
+      if (id &gt; me.docSordTypeMaxId) {
+        me.docSordTypeMaxId = id;
+      }
+    }
+  },
+
+<span id='sol-common-SordTypeUtils-method-determinateSordTypeKind'>  /**
+</span>   * Determinates the sord type kind (folder/document) of a sord type
+   * @param {type} id
+   * @returns {undefined}
+   */
+  determinateSordTypeKind: function (id) {
+    if (typeof id == &quot;undefined&quot;) {
+      throw &quot;Sord type ID is empty&quot;;
+    }
+
+    if (id == &quot;9999&quot;) {
+      return &quot;REPOSITORY&quot;;
+    } else if (id &lt;= 253) {
+      return &quot;FOLDER&quot;;
+    } else if (id &lt;= 9998) {
+      return &quot;DOCUMENT&quot;;
+    }
+  },
+
+<span id='sol-common-SordTypeUtils-method-sordTypeExists'>  /**
+</span>   * Checks wether a sord type exists
+   * @param {String} name
+   * @returns {Boolean}
+   */
+  sordTypeExists: function (name) {
+    var me = this;
+    return !!me.sordTypesObj[name];
+  },
+
+<span id='sol-common-SordTypeUtils-method-createSordType'>  /**
+</span>   * Create sord type
+   * @param {String} id ID
+   * @param {String} name Name
+   * @param {String} kind, e.g. &quot;FOLDER&quot;, &quot;DOCUMENT&quot;
+   * @param {Array} iconFileDataArray Array of file data for icons
+   * @param {Array} disabledIconFileDataArray Array of file data for disabled icons
+   * @param {Array} linkIconFileDataArray Array of file data for link icons
+   * @param {Array} extensions
+   * @param {Array} force Force
+   * @return {Boolean} If true the sord type was installed
+   */
+  createSordType: function (id, name, kind, iconFileDataArray, disabledIconFileDataArray, linkIconFileDataArray, extensions, force) {
+    var me = this,
+        sordTypes, i;
+
+    me.logger.enter(&quot;createSordType&quot;, arguments);
+    sordTypes = [];
+
+    me.readSordTypes();
+    if (!name) {
+      throw &quot;Sord type name is empty&quot;;
+    }
+    if (!kind) {
+      throw &quot;sord type kind (folder/document) is empty&quot;;
+    }
+
+    if (me.sordTypeExists(name) &amp;&amp; !force) {
+      me.logger.debug([&quot;Sord type &#39;{0}&#39; already exists.&quot;, name]);
+      return false;
+    }
+
+    if (!id) {
+      switch (kind) {
+        case &quot;FOLDER&quot;:
+          id = me.folderSordTypeMaxId + 1;
+          break;
+
+        case &quot;DOCUMENT&quot;:
+          id = me.docSordTypeMaxId + 1;
+          break;
+
+        default:
+          throw &quot;Unsupported sord type kind: &quot; + kind;
+      }
+    }
+
+    if ((kind == &quot;DOCUMENT&quot;) &amp;&amp; !extensions) {
+      throw &quot;config.extensions must not be empty for document types&quot;;
+    }
+
+    extensions = extensions || [];
+
+    for (i = 0; i &lt; iconFileDataArray.length; i++) {
+      sordTypes.push(me.buildSordType(id, name, iconFileDataArray[i], disabledIconFileDataArray[i], linkIconFileDataArray[i], extensions));
+    }
+
+    ixConnect.ix().checkinSordTypes(sordTypes, LockC.NO);
+
+    me.insertSordTypeIntoCache(id, name);
+
+    return true;
+  },
+
+<span id='sol-common-SordTypeUtils-method-buildSordType'>  /**
+</span>   * @private
+   * Build sord type
+   * @param {String} id
+   * @param {String} name
+   * @param {de.elo.ix.client.FileData} iconFileData
+   * @param {de.elo.ix.client.FileData} disabledIconFileData
+   * @param {de.elo.ix.client.FileData} linkIconFileData
+   * @param {Array} extensions
+   * @return {de.elo.ix.client.SordType}
+   */
+  buildSordType: function (id, name, iconFileData, disabledIconFileData, linkIconFileData, extensions) {
+    var sordType = new SordType();
+
+    if (!id) {
+      throw &quot;Sord type ID is empty&quot;;
+    }
+    if (!name) {
+      throw &quot;Sord type name is empty&quot;;
+    }
+    if (!iconFileData) {
+      throw &quot;Sord type icon file data is empty&quot;;
+    }
+    if (!disabledIconFileData) {
+      throw &quot;Sord type disabled icon file data is empty&quot;;
+    }
+    if (!linkIconFileData) {
+      throw &quot;Sord type link icon file data is empty&quot;;
+    }
+
+    sordType.id = id;
+    sordType.name = name;
+    sordType.extensions = extensions || [];
+    sordType.icon = iconFileData;
+    sordType.disabledIcon = disabledIconFileData;
+    sordType.workflowIcon = linkIconFileData;
+
+    return sordType;
+  },
+
+<span id='sol-common-SordTypeUtils-property-sordTypeIconConfigs'>  sordTypeIconConfigs: {
+</span>    bmp: { contentType: &quot;image/bmp&quot;, sordTypeZ: Packages.de.elo.ix.client.SordTypeC.mbAllBMP },
+    ico: { contentType: &quot;image/x-ico&quot;, sordTypeZ: Packages.de.elo.ix.client.SordTypeC.mbAllICO },
+    jpg: { contentType: &quot;image/jpeg&quot;, sordTypeZ: Packages.de.elo.ix.client.SordTypeC.mbAllJPG },
+    png: { contentType: &quot;image/png&quot;, sordTypeZ: Packages.de.elo.ix.client.SordTypeC.mbAllPNG }
+  },
+
+<span id='sol-common-SordTypeUtils-property-sordTypeIconExtensions'>  sordTypeIconExtensions: [&quot;bmp&quot;, &quot;ico&quot;, &quot;jpg&quot;, &quot;png&quot;],
+</span>
+<span id='sol-common-SordTypeUtils-method-exportSordTypes'>  /**
+</span>   * Export a sord type to the file system
+   * @param {Array} names Names of the sord type
+   * @param {String} dirPath Path of the destination folder
+   */
+  exportSordTypes: function (names, dirPath) {
+    var me = this,
+        name, i, j;
+
+    me.logger.enter(&quot;exportSordTypes&quot;, arguments);
+    if (!names) {
+      throw &quot;Sord type names are empty&quot;;
+    }
+
+    if (!dirPath) {
+      throw &quot;config.folderTypesDirPath is empty&quot;;
+    }
+
+    for (i = 0; i &lt; names.length; i++) {
+      name = names[i];
+      for (j = 0; j &lt; me.sordTypeIconExtensions.length; j++) {
+        me.exportSordType(name, me.sordTypeIconExtensions[j], dirPath, (j == 0));
+      }
+    }
+    me.logger.exit(&quot;exportSordTypes&quot;);
+  },
+
+
+
+<span id='sol-common-SordTypeUtils-method-exportSordType'>  /**
+</span>   * Export a sord types icons
+   * @param {String} name Name of the sord type
+   * @param {String} iconExtension Icon extension
+   * @param {String} baseDirPath Path of the destination folder
+   * @param {Boolean} exportConfig the configuration to a JSON file
+   */
+  exportSordType: function (name, iconExtension, baseDirPath, exportConfig) {
+    var me = this,
+        sordTypeId, sordTypeZ, sordTypeKind,
+        sordTypeDirPath, sordTypeDir, sordType,
+        iconFilePath, disabledIconFilePath, linkIconFilePath,
+        configFilePath, config, extensions, i;
+
+    if (!name) {
+      throw &quot;Sord type name is empty&quot;;
+    }
+
+    if (!baseDirPath) {
+      throw &quot;Destination folder path is empty&quot;;
+    }
+
+    sordTypeId = me.getSordTypeId(name);
+
+    sordTypeZ = me.sordTypeIconConfigs[iconExtension].sordTypeZ;
+
+    sordType = ixConnect.ix().checkoutSordTypes([sordTypeId], sordTypeZ, LockC.NO)[0];
+
+    sordTypeKind = me.determinateSordTypeKind(sordType.id);
+
+    sordTypeDirPath = baseDirPath + File.separator + name;
+    sordTypeDir = new File(sordTypeDirPath);
+    sordTypeDir.mkdirs();
+
+    iconFilePath = sordTypeDirPath + File.separator + &quot;Icon.&quot; + iconExtension;
+    sol.common.FileUtils.saveFileData(sordType.icon, iconFilePath);
+
+    disabledIconFilePath = sordTypeDirPath + File.separator + &quot;Disabled icon.&quot; + iconExtension;
+    sol.common.FileUtils.saveFileData(sordType.disabledIcon, disabledIconFilePath);
+
+    linkIconFilePath = sordTypeDirPath + File.separator + &quot;Link icon.&quot; + iconExtension;
+    sol.common.FileUtils.saveFileData(sordType.workflowIcon, linkIconFilePath);
+
+    if (exportConfig) {
+      configFilePath = sordTypeDirPath + File.separator + &quot;config.json&quot;;
+      extensions = [];
+      if (sordType.extensions) {
+        for (i = 0; i &lt; sordType.extensions.length; i++) {
+          extensions.push(sordType.extensions[i] + &quot;&quot;);
+        }
+      }
+      config = {
+        id: sordTypeId,
+        name: name,
+        kind: sordTypeKind,
+        extensions: extensions
+      };
+      sol.common.FileUtils.writeConfigToFile(configFilePath, config);
+    }
+  },
+
+<span id='sol-common-SordTypeUtils-method-setSordType'>  /**
+</span>   * Set sord type
+   * @param {String} objId Object ID
+   * @param {String} sordTypeName Sord type name
+   */
+  setSordType: function (objId, sordTypeName) {
+    var me = this,
+        sordZ, sord, sordType;
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    if (!sordTypeName) {
+      throw &quot;Sord type name is empty&quot;;
+    }
+
+    sordType = me.getSordTypeId(sordTypeName);
+
+    sordZ = new SordZ(ObjDataC.mbType);
+    sord = ixConnect.ix().checkoutSord(objId, sordZ, LockC.NO);
+    sord.type = sordType;
+    ixConnect.ix().checkinSord(sord, sordZ, LockC.NO);
+  }
+});</pre>
+</body>
+</html>

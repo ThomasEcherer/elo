@@ -1,0 +1,196 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// This example shows how to search for objects by a given index value range.
+	/// 
+	/// 1. Create archive entries:
+	///   s1 
+	///     d1, name=The Inner Circle,		AUTHOR=T. Coraghessan Boyle,	PRICE=39
+	///     d2  name=The Shifting Tide,		AUTHOR=Anne Perry,				PRICE=37
+	///     d3  name=Feel,					AUTHOR=Robbie Williams,			PRICE=42
+	///     d4	name=The Da Vinci Code,     AUTHOR=Dan Brown,				PRICE=32
+	///     
+	/// 2. Find books from Authors with names from "A" to "J"
+	///     
+	/// </summary>
+	public class FindByIndexRange
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator";
+		public String userPwd = "";
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// 1. Create archive structure
+				Logger.instance().log("create structure...");
+
+				// create root folder s1
+				IndexServer.EditInfo ed = ix.createSord(ci, "1", "0", CONST.EDIT_INFO.mbAll);
+				IndexServer.Sord s1 = ed.sord;
+				s1.name = "s1 C# example FindByIndexValues";
+				s1.id = ix.checkinSord(ci, s1, CONST.SORD.mbAll, CONST.LOCK.NO);
+
+				///     d1, name=The Inner Circle,		AUTHOR=T. Coraghessan Boyle,	PRICE=039
+				///     d2  name=The Shifting Tide,		AUTHOR=Anne Perry,				PRICE=037
+				///     d3  name=Feel,					AUTHOR=Robbie Williams,			PRICE=142
+				///     d4	name=The Da Vinci Code,     AUTHOR=Dan Brown,				PRICE=032
+				///     
+				IndexServer.Sord d1 = internalCreateBook(ix, ci, CONST, s1.guid, "The Inner Circle", "T. Coraghessan Boyle", "039");
+				IndexServer.Sord d2 = internalCreateBook(ix, ci, CONST, s1.guid, "The Shifting Tide", "Anne Perry", "037");
+				IndexServer.Sord d3 = internalCreateBook(ix, ci, CONST, s1.guid, "Feel", "Robbie Williams", "142");
+				IndexServer.Sord d4 = internalCreateBook(ix, ci, CONST, s1.guid, "The Da Vinci Code", "Dan Brown", "032");
+
+				Logger.instance().log("create structure OK");
+
+				// 2. Find books from Authors with names from "A" to "J"
+				internalFindBooks(ix, ci, CONST, s1.guid, "A* ... J*", "");
+					// Finds: The Da Vinci Code,The Shifting Tide
+
+				// 3. Find books from Authors with names from "J"
+				internalFindBooks(ix, ci, CONST, s1.guid, "J*...*", "");
+					// Finds: Feel,The Inner Circle
+
+				// 4. Find books from Authors with names from "J" and price higher than 100
+				internalFindBooks(ix, ci, CONST, s1.guid, "J*...", "100...*");
+					// Finds: Feel
+
+				bool cleanUp = true;
+				if (cleanUp)
+				{
+					Logger.instance().log("clean up...");
+					ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, null);
+					Logger.instance().log("clean up OK");
+				}
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+
+		}
+
+		private IndexServer.Sord internalCreateBook(IXClient ix, IndexServer.ClientInfo ci, 
+			IndexServer.IXServicePortC CONST, String parentId, String name, String author, String price) 
+		{
+			IndexServer.Sord d1 = ix.createDoc(ci, parentId, "0", null, CONST.EDIT_INFO.mbSord).sord;
+			d1.name = name;
+			d1.objKeys = new IndexServer.ObjKey[2];
+			d1.objKeys[0] = new IndexServer.ObjKey();
+			d1.objKeys[0].id = 0;
+			d1.objKeys[0].name = "AUTHOR";
+			d1.objKeys[0].data = new String[] {author};
+			d1.objKeys[1] = new IndexServer.ObjKey();
+			d1.objKeys[1].id = 1;
+			d1.objKeys[1].name = "PRICE";
+			d1.objKeys[1].data = new String[] {price};
+			d1.id = ix.checkinSord(ci, d1, CONST.SORD.mbAll, CONST.LOCK.NO);
+			Logger.instance().log("name=" + name + ", author=" + author);
+			return d1;
+		}
+
+		private IndexServer.FindInfo internalMakeFindInfo(String parentId, 
+			String author, String price)
+		{
+			IndexServer.FindInfo findInfo = new IndexServer.FindInfo();
+
+			// constrain results to children of s1
+			findInfo.findChildren = new IndexServer.FindChildren();
+			findInfo.findChildren.parentId = parentId;
+
+			findInfo.findByIndex = new IndexServer.FindByIndex();
+
+			IndexServer.ObjKey okeyAuthor = null;
+			if (author.Length != 0) 
+			{
+				okeyAuthor = new IndexServer.ObjKey();
+				okeyAuthor.name = "AUTHOR";
+				okeyAuthor.data = new String[] {author};
+			}
+
+			IndexServer.ObjKey okeyPrice = null;
+			if (price.Length != 0)
+			{
+				okeyPrice = new IndexServer.ObjKey();
+				okeyPrice.name = "PRICE";
+				okeyPrice.data = new String[] {price};
+			}
+
+			int n = ((okeyAuthor != null) ? 1 : 0) + ((okeyPrice != null) ? 1 : 0);
+			findInfo.findByIndex.objKeys = new IndexServer.ObjKey[n];
+			int i = 0;
+			if (okeyAuthor != null) 
+			{
+				findInfo.findByIndex.objKeys[i++] = okeyAuthor;
+			}
+			if (okeyPrice != null) 
+			{
+				findInfo.findByIndex.objKeys[i++] = okeyPrice;
+			}
+
+			return findInfo;
+		}
+		
+		private void internalFindBooks(IXClient ix, IndexServer.ClientInfo ci,
+			IndexServer.IXServicePortC CONST, String parentId, 
+			String author, String price)
+		{
+			Logger.instance().log("find author=" + author + ", price=" + price);
+
+			// select names only
+			IndexServer.SordZ mbName = new IndexServer.SordZ();
+			mbName.bset = CONST.SORD.mbName;
+
+			// find
+			IndexServer.FindInfo findInfo = internalMakeFindInfo(parentId, author, price);
+			IndexServer.Sord[] sords = ix.findFirstSords(ci, findInfo, 1000, mbName).sords;
+			String nameList = "";
+			for (int i = 0; i < sords.Length; i++) 
+			{
+				if (i != 0) nameList += ",";
+				nameList += sords[i].name;
+			}
+			Logger.instance().log("find OK, sords=" + nameList);
+		}
+	}
+}

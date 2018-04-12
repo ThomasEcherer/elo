@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-DecimalUtils'>/**
+</span> * Utils for handling decimals.
+ *
+ * Uses decimal.js-light.
+ * Please refer to the official documentation of decimal.js-light for further information:
+ * http://mikemcl.github.io/decimal.js-light/
+ *
+ * @author MW, ELO Digital Office GmbH
+ *
+ * @requires moment
+ * @requires decimal-light
+ */
+sol.define(&quot;sol.common.DecimalUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-DecimalUtils-method-configureDecimals'>  /**
+</span>   * Configure Decimals
+   * @param {Object} config Configuration
+   */
+  configureDecimals: function (config) {
+
+    config = config || {
+      precision: 20,
+      rounding: Decimal.ROUND_HALF_UP
+    };
+
+    Decimal.config(config);
+  },
+
+<span id='sol-common-DecimalUtils-method-toDecimal'>  /**
+</span>   * Returns a Decimal
+   * @param {String} value Value
+   * @param {Object} params parameters
+   * @param {String} params.type Type
+   * @param {String} params.thousandsSeparator Thousands separator
+   * @param {String} params.decimalSeparator Decimal separator
+   * @return {Decimal}
+   */
+  toDecimal: function (value, params) {
+    var me = this,
+        decimal;
+
+    value += &quot;&quot;;
+    params = params || {};
+    if (params.thousandsSeparator) {
+      value = me.replaceAll(value, params.thousandsSeparator, &quot;&quot;);
+    }
+    if (params.decimalSeparator) {
+      value = me.replaceAll(value, params.decimalSeparator, &quot;.&quot;);
+    }
+
+    decimal = new Decimal(value);
+
+    return decimal;
+  },
+
+<span id='sol-common-DecimalUtils-method-replaceAll'>  /**
+</span>   * Replaces every occurrence of a substring with another string
+   * @private
+   * @param {String} str Input string
+   * @param {String} target String to replace
+   * @param {String} replacement Replacement string
+   * @returns {String} String
+   */
+  replaceAll: function (str, target, replacement) {
+    return String(str).split(target).join(replacement);
+  }
+});
+</pre>
+</body>
+</html>

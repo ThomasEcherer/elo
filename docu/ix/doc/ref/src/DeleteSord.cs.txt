@@ -1,0 +1,174 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// create a simple structure
+	/// s1 - C# example DeleteSord
+	///  - o1
+	///    - r1
+	///    - r2
+	/// 
+	/// 1. delete o1 logically - will recursively mark all children as logically deleted too
+	/// 2. delete s1 finally - will recursively delete all children too
+	/// </summary>
+	public class DeleteSord
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// s1
+				IndexServer.Sord s1 = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+				s1.name = "s1 C# example DeleteSord";
+				s1.id = ix.checkinSord(ci, s1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("s1: guid=" + s1.guid + ", id=" + s1.id);
+
+				// o1
+				IndexServer.Sord o1 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o1.name = "o1";
+				o1.id = ix.checkinSord(ci, o1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o1: guid=" + o1.guid + ", id=" + o1.id);
+
+				// r1
+				IndexServer.Sord r1 = ix.createSord(ci, o1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				r1.name = "r1";
+				r1.id = ix.checkinSord(ci, r1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("r1: guid=" + r1.guid + ", id=" + r1.id);
+
+				// r2
+				IndexServer.Sord r2 = ix.createSord(ci, o1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				r2.name = "r2";
+				r2.id = ix.checkinSord(ci, r2, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("r2: guid=" + r2.guid + ", id=" + r2.id);
+
+				// DELETE o1 logically
+				ix.deleteSord(ci, null, o1.guid, CONST.LOCK.NO, null);				
+				
+				// VERIFY o1, r1, r2 deleted logically, s1 still visible
+				s1 = ix.checkoutSord(ci, s1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+				o1 = ix.checkoutSord(ci, o1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+				r1 = ix.checkoutSord(ci, r1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+				r2 = ix.checkoutSord(ci, r2.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+
+				// objects are logically deleted if Sord.status != 0
+				Logger.instance().log("s1 deleted=" + s1.deleted);
+				Logger.instance().log("o1 deleted=" + o1.deleted);
+				Logger.instance().log("r1 deleted=" + r1.deleted);
+				Logger.instance().log("r2 deleted=" + r2.deleted);
+				
+				// DELETE s1 finally
+            ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, null);
+            IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+            delOpts.deleteFinally = true;
+            ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, delOpts);
+				
+				// VERIFY, if s1, o1, r1, r2 does not exist, checkoutSord will throw an exception
+
+				try
+				{
+					s1 = ix.checkoutSord(ci, s1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+					Logger.instance().log("s1 not deleted !!!");
+				} 
+				catch (Exception e)
+				{
+					Logger.instance().log("s1 deleted, exception=" + formatException(e));
+				}
+
+				try
+				{
+					o1 = ix.checkoutSord(ci, o1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+					Logger.instance().log("o1 not deleted !!!");
+				} 
+				catch (Exception e)
+				{
+					Logger.instance().log("o1 deleted, exception=" + formatException(e));
+				}
+
+				try
+				{
+					r1 = ix.checkoutSord(ci, r1.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+					Logger.instance().log("r1 not deleted !!!");
+				} 
+				catch (Exception e)
+				{
+					Logger.instance().log("r1 deleted, exception=" + formatException(e));
+				}
+				
+				try
+				{
+					r2 = ix.checkoutSord(ci, r2.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+					Logger.instance().log("r2 not deleted !!!");
+				} 
+				catch (Exception e)
+				{
+					Logger.instance().log("r2 deleted, exception=" + formatException(e));
+				}
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private String formatException(Exception e) 
+		{
+			String raw = e.ToString();
+			int p = raw.IndexOf("[ELOIX");
+			if (p < 0) return raw;
+			int start = raw.IndexOf("]", p);
+			if (start < 0) return raw;
+			start++;
+			int end = raw.IndexOf(")\r\n", start);
+			if (end < 0) end = raw.Length;
+			String msg = raw.Substring(start, end - start);
+			return msg;
+		}
+
+	}
+}

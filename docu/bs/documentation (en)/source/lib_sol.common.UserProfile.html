@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='sol-common-UserProfile'>/**
+</span> * Represents the settings of an user
+ *
+ *     var userProfile = sol.create(&#39;sol.common.UserProfile&#39;, {
+ *        userId: &quot;123&quot;
+ *     });
+ *
+ *     // get an option
+ *     var option = userProfile.getOption(&quot;Elo.J.S.Script.ELO.LastId&quot;);
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ *
+ */
+sol.define(&quot;sol.common.UserProfile&quot;, {
+
+<span id='sol-common-UserProfile-property-requiredProperties'>  requiredProperties: [&quot;userId&quot;],
+</span>
+<span id='sol-common-UserProfile-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.newOptions = {};
+  },
+
+<span id='sol-common-UserProfile-method-read'>  /**
+</span>   * Reads the settings of an user
+   */
+  read: function () {
+    var me = this,
+        userProfile, i, option;
+    me.logger.enter(&quot;read&quot;, arguments);
+
+    me.options = {};
+    userProfile = new UserProfile();
+    userProfile.userId = me.userId;
+    if (me.excludeGroupValues) {
+      userProfile.excludeGroupValues = true;
+    }
+    if (me.excludeDefaultValues) {
+      userProfile.excludeDefaultValues = true;
+    }
+    me.userProfile = ixConnect.ix().checkoutUserProfile(userProfile, LockC.NO);
+    
+    for (i = 0; i &lt; me.userProfile.options.length; i++) {
+      option = me.userProfile.options[i];
+      me.options[String(option.key)] = String(option.value);
+    }
+    me.logger.exit(&quot;read&quot;);    
+  },
+
+<span id='sol-common-UserProfile-method-getOption'>  /**
+</span>   * Returns a single value of the user settings
+   * @param {String} key Key of the user setting.
+   * @return {String} single value of the user settings.
+   */
+  getOption: function (key) {
+    var me = this;
+    if (!me.options) {
+      me.read();
+    }    
+    return me.options[key] || &quot;&quot;;
+  },
+
+<span id='sol-common-UserProfile-method-setOption'>  /**
+</span>   * Sets a profile option
+   * @param {String} key Key of the user setting.
+   * @param {String} value Key of the user setting.
+   * @param {Object} config profile option.
+   */
+  setOption: function (key, value, config) {
+    var me = this,
+        newValue, separator;
+    me.logger.enter(&quot;setOption&quot;, arguments);
+    newValue = &quot;&quot;;
+    if (!key) {
+      throw &quot;Key is empty&quot;;
+    }
+    if (config &amp;&amp; config.append) {
+      separator = config.separator || &quot;¶&quot;;
+      newValue = me.getOption(key);
+      if (newValue) {
+        newValue += separator;
+      }
+    }
+    newValue += value;
+    if (me.options) {
+      me.options[key] = newValue;
+    }
+    me.newOptions[key] = newValue;
+    me.logger.exit(&quot;setOption&quot;, { key: key, newValue: newValue });    
+  },
+
+<span id='sol-common-UserProfile-method-write'>  /**
+</span>   * Writes the changed profile options
+   */
+  write: function () {
+    var me = this,
+        userProfile, newKeyValues, key, _result;
+    me.logger.enter(&quot;write&quot;, arguments);    
+    userProfile = new UserProfile();
+    newKeyValues = [];
+    for (key in me.newOptions) {
+      newKeyValues.push(new KeyValue(key, me.newOptions[key]));
+    }
+    userProfile.userId = me.userId;
+    userProfile.options = newKeyValues;
+    ixConnect.ix().checkinUserProfile(userProfile, LockC.NO);
+    
+    _result = sol.common.JsonUtils.stringifyAll(me.newOptions) || &quot;&quot;;
+    _result = _result.split(&quot;\&quot;,\&quot;&quot;).join(&quot;\&quot;\n\&quot;&quot;);
+    me.logger.exit(&quot;write&quot;, _result);    
+        
+    me.newOptions = {};
+  }
+});
+
+<span id='sol-common-UserProfileUtils'>/**
+</span> * User profile utility methods
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;sol.common.UserProfileUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-UserProfileUtils-method-isOptionBitSet'>  /**
+</span>   * Checks wether a option bit is set
+   * @param {Number} optionValue Option value
+   * @param {Number} bitMask Bit mask
+   * @return {Boolean}
+   */
+  isOptionBitSet: function (optionValue, bitMask) {
+    var result;
+    result = ((optionValue &amp; bitMask) != 0);
+    return result;
+  },
+
+<span id='sol-common-UserProfileUtils-method-setOptionBit'>  /**
+</span>   * Set an option bit
+   * @param {Number} optionValue Option value
+   * @param {Boolean} flag Flag
+   * @param {Number} bitMask Bit mask
+   * @return {Number} New optionValue
+   */
+  setOptionBit: function (optionValue, flag, bitMask) {
+    if (flag === true) {
+      optionValue |= bitMask;
+    } 
+    if (flag === false) {
+      optionValue &amp;= ~bitMask;
+    }         
+    return optionValue;    
+  }
+});
+</pre>
+</body>
+</html>

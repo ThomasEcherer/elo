@@ -1,0 +1,124 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.SordType;
+import de.elo.ix.client.SordTypeC;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code provides an overview of SordTypes
+ * 
+ */
+
+public class CheckinSordTypes {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static SordTypeC SORD_TYPE;
+    private static LockC LOCK;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            checkoutSords();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void checkoutSords() throws RemoteException {
+        
+        // List current sord types
+        SordType[] sordTypes = ix.ix().checkoutSordTypes(
+                                                       null, 
+                                                       SORD_TYPE.getMbAllJPG(), 
+                                                       LOCK.getNO());
+        System.out.println("Dumping SordTypes.........");
+        dumpSordTypes(sordTypes);
+        
+        // Add new SordType for documents with extensions .ABC and .DEF
+        SordType sordTypeABC = new SordType();
+        sordTypeABC.setId(sordTypes[sordTypes.length - 1].getId() + 1);
+        sordTypeABC.setName("ABC and DEF documents");
+        sordTypeABC.setExtensions(new String[] {"ABC", "DEF"});
+        ix.ix().checkinSordTypes(
+                               new SordType[] {sordTypeABC}, 
+                               LOCK.getNO());
+        System.out.println("Created new SordType Id = " + sordTypeABC.getId() + 
+                           " with name " + sordTypeABC.getName());
+        
+        // List current sord types
+        sordTypes = ix.ix().checkoutSordTypes(
+                                            null, 
+                                            SORD_TYPE.getMbAllJPG(), 
+                                            LOCK.getNO());
+        System.out.println("Dumping SordTypes.........");
+        dumpSordTypes(sordTypes);
+        
+        // Delete SordType
+        ix.ix().deleteSordTypes(
+                              new int[] {sordTypeABC.getId()}, 
+                              LOCK.getNO());
+        System.out.println("Deleted SordType Id " + sordTypeABC.getId() + 
+                           " with name " + sordTypeABC.getName());
+        
+        // List current sord types
+        sordTypes = ix.ix().checkoutSordTypes(
+                                            null, 
+                                            SORD_TYPE.getMbAllJPG(), 
+                                            LOCK.getNO());
+        System.out.println("Dumping SordTypes.........");
+        dumpSordTypes(sordTypes);
+        
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        SORD_TYPE = CONS.getSORD_TYPE();
+        LOCK = CONS.getLOCK();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+    public static void dumpSordTypes(SordType[] sordTypes){
+        
+        for (int i = 0; i < sordTypes.length; i++){
+            System.out.println("   SordType Id = " + sordTypes[i].getId() + 
+                               " SordType name = " + sordTypes[i].getName());
+        }
+    }
+}

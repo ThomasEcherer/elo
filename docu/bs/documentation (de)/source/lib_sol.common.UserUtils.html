@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.RepoUtils.js
+
+/*
+ * Local definition of the class `sol.common.Cache` for backward compatibility of previous solution packages.
+ */
+if (!sol.ClassManager.getClass(&quot;sol.common.Cache&quot;)) {
+  sol.define(&quot;sol.common.Cache&quot;, {
+
+    initialize: function (config) {
+      var me = this;
+      me.cache = new java.util.concurrent.ConcurrentHashMap(8, 0.9, 1);
+    },
+
+<span id='global-method-put'>    /**
+</span>     * Inserts the specified key-value pair into the cache.
+     * @param {String} key
+     * @param {Object} value
+     * @return {Object} The previous value associated with the key, or null if there was no mapping before
+     */
+    put: function (key, value) {
+      var me = this;
+      return me.cache.put(key, value);
+    },
+
+<span id='global-method-putAll'>    /**
+</span>     * Inserts all key-value pairs specified by an object into the cache. Existing mappings will be replaced.
+     * @param {Object} data Property names will be used as keys and the associated values as values.
+     */
+    putAll: function (data) {
+      var me = this;
+      me.cache.putAll(data);
+    },
+
+<span id='global-method-containsKey'>    /**
+</span>     * Tests if the specified object is a key in the cache.
+     * @param {String} key
+     * @return {Boolean}
+     */
+    containsKey: function (key) {
+      var me = this;
+      return me.cache.containsKey(key);
+    },
+
+<span id='global-method-get'>    /**
+</span>     * Returns the value for the specified key from the cache, or null if the chache contains no mapping for the key.
+     * @param {String} key
+     * @return {Object}
+     */
+    get: function (key) {
+      var me = this;
+      return me.cache.get(key);
+    },
+
+<span id='global-method-keys'>    /**
+</span>     * Returns an enumeration of all keys in the cache.
+     * @return {Object} An `java.util.Enumeration` of all keys
+     */
+    keys: function () {
+      var me = this;
+      return me.cache.keys();
+    },
+
+<span id='global-method-values'>    /**
+</span>     * Returns a collection view of the values contained in the cache.
+     * @return {Object} An `java.util.Collection` of all values
+     */
+    values: function () {
+      var me = this;
+      return me.cache.values();
+    },
+
+<span id='global-method-elements'>    /**
+</span>     * Returns an enumeration of the values in the cache.
+     * @return {Object} An `java.util.Enumeration` of all values
+     */
+    elements: function () {
+      var me = this;
+      return me.cache.elements();
+    },
+
+<span id='global-method-remove'>    /**
+</span>     * Removes the key (and its corresponding value) from the cache.
+     * @param {String} key
+     * @return {Object} The previous value associated with the key, or null if there was no value for the key
+     */
+    remove: function (key) {
+      var me = this;
+      return me.cache.remove(key);
+    },
+
+<span id='global-method-size'>    /**
+</span>     * Returns the number of key-value pairs in the cache.
+     * @return {Number}
+     */
+    size: function () {
+      var me = this;
+      return me.cache.size();
+    },
+
+<span id='global-method-isEmpty'>    /**
+</span>     * Returns `true` if the chache contains no key-value pairs.
+     * @return {Boolean}
+     */
+    isEmpty: function () {
+      var me = this;
+      return me.cache.isEmpty();
+    },
+
+<span id='global-method-clear'>    /**
+</span>     * Removes all of the mappings from the cache.
+     */
+    clear: function () {
+      var me = this;
+      me.cache.clear();
+    }
+  });
+}
+
+<span id='sol-common-UserUtils'>/**
+</span> * User utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ *
+ * @requires sol.common.Cache
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ */
+sol.define(&quot;sol.common.UserUtils&quot;, {
+  singleton: true,
+  requires: [&quot;sol.common.Cache&quot;],
+
+<span id='sol-common-UserUtils-property-usersById'>  usersById: null,
+</span><span id='sol-common-UserUtils-property-usersByGuid'>  usersByGuid: null,
+</span><span id='sol-common-UserUtils-property-usersByName'>  usersByName: null,
+</span>
+<span id='sol-common-UserUtils-property-adminsById'>  /**
+</span>   * @private
+   * @property {sol.common.Cache} adminsById
+   * The optimized cache for administrative users.
+   * This will be initialized with all administrative users on first access.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.usersById = sol.create(&quot;sol.common.Cache&quot;);
+    me.usersByGuid = sol.create(&quot;sol.common.Cache&quot;);
+    me.usersByName = sol.create(&quot;sol.common.Cache&quot;);
+  },
+
+<span id='sol-common-UserUtils-method-getUserInfos'>  /**
+</span>   * Retrieves UserInfo objects.
+   * @param {String[]} users The names, GUIDs or IDs of the users
+   * @return {de.elo.ix.client.UserInfo[]} The retrieved UserInfo objects
+   */
+  getUserInfos: function (users) {
+    var me = this,
+        result;
+
+    if (!users) {
+      return;
+    }
+
+    me.requireUserInfos(users);
+
+    result = users.map(function (user) {
+      return me.getUserInfoFromCache(user);
+    });
+
+    return result;
+  },
+
+<span id='sol-common-UserUtils-method-requireUserInfos'>  /**
+</span>   * Load user infos into the cache
+   * @param {Array} users
+   */
+  requireUserInfos: function (users) {
+    var me = this,
+        userInfos, i, userInfo;
+
+    users = users.filter(function (user) {
+      userInfo = me.getUserInfoFromCache(user);
+      return !userInfo;
+    });
+
+    if (users &amp;&amp; (users.length &gt; 0)) {
+      userInfos = ixConnect.ix().checkoutUsers(users, CheckoutUsersC.BY_IDS_RAW, LockC.NO);
+      for (i = 0; i &lt; userInfos.length; i++) {
+        userInfo = userInfos[i];
+        me.writeUserInfoToCache(userInfo);
+      }
+    }
+  },
+
+<span id='sol-common-UserUtils-method-writeUserInfoToCache'>  /**
+</span>   * @private
+   * Write user info into the cache
+   * @param  {de.elo.ix.client.UserInfo} userInfo
+   */
+  writeUserInfoToCache: function (userInfo) {
+    var me = this,
+        osName;
+    me.usersById.put(userInfo.id + &quot;&quot;, userInfo);
+    me.usersByName.put(userInfo.name + &quot;&quot;, userInfo);
+    if (userInfo.userProps &amp;&amp; (userInfo.userProps.length &gt; UserInfoC.PROP_NAME_OS)) {
+      osName = userInfo.userProps[UserInfoC.PROP_NAME_OS] + &quot;&quot;;
+      if (osName) {
+        me.usersByName.put(osName, userInfo);
+      }
+    }
+    me.usersByGuid.put(userInfo.guid + &quot;&quot;, userInfo);
+  },
+
+<span id='sol-common-UserUtils-method-getUserInfoFromCache'>  /**
+</span>   * @private
+   * Retrieves the user info from the cache
+   * @param {String} user User ID or name
+   * @return {de.elo.ix.client.UserInfo} User info
+   */
+  getUserInfoFromCache: function (user) {
+    var me = this;
+    user += &quot;&quot;;
+    if (me.isUserId(user)) {
+      return me.usersById.get(user);
+    } else if (me.isUserGuid(user)) {
+      return me.usersByGuid.get(user);
+    } else {
+      return me.usersByName.get(user);
+    }
+  },
+
+<span id='sol-common-UserUtils-method-isUserId'>  /**
+</span>   * Checks wether the given string is a user ID
+   * @param {String} user User
+   * @return {Boolean}
+   */
+  isUserId: function (user) {
+    return /^\d+$/.test(user);
+  },
+
+<span id='sol-common-UserUtils-method-isUserGuid'>  /**
+</span>   * Checks wether the given string is a user GUID
+   * @param {String} user User
+   * @return {Boolean}
+   */
+  isUserGuid: function (user) {
+    return /^\(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}\)$/.test(String(user));
+  },
+
+<span id='sol-common-UserUtils-method-getUserInfo'>  /**
+</span>   * Retrieves an UserInfo object.
+   *
+   * If the parameter is already an UserInfo, it returns the object itself.
+   * Therefore this function can be used to make sure you&#39;re dealing with an UserInfo and not just a user name.
+   *
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.UserInfo} The UserInfo object, if one was found
+   */
+  getUserInfo: function (user) {
+    var me = this,
+        userInfos, _result;
+    me.logger.enter(&quot;getUserInfo&quot;, arguments);
+    if (user instanceof UserInfo) {
+      return user;
+    }
+    userInfos = me.getUserInfos([user]);
+
+    _result = (userInfos &amp;&amp; userInfos.length &gt; 0) ? userInfos[0] : null;
+    me.logger.exit(&quot;getUserInfo&quot;, _result + &quot;&quot;);
+    return _result;
+
+    // return (userInfos &amp;&amp; userInfos.length &gt; 0) ? userInfos[0] : null;
+  },
+
+<span id='sol-common-UserUtils-method-getSupervisor'>  /**
+</span>   * Returns the supervisior user name
+   * @param {String|Number} user User name or ID
+   * @return {String} Supervisior user name
+   */
+  getSupervisor: function (user) {
+    var me = this,
+        userInfo, userName, supervisorUserInfo;
+
+    userInfo = me.getUserInfo(user);
+    if (!userInfo) {
+      me.logger.info(&quot;User not found: user=&quot; + user);
+      return user;
+    }
+
+    supervisorUserInfo = me.getUserInfo(userInfo.superiorId);
+    userName = supervisorUserInfo.name + &quot;&quot;;
+
+    return userName;
+  },
+
+<span id='sol-common-UserUtils-method-getCurrentUserInfo'>  /**
+</span>   * Retrieves an UserInfo object of the current user
+   * @return {de.elo.ix.client.UserInfo} The UserInfo object
+   */
+  getCurrentUserInfo: function () {
+    var me = this;
+
+    return me.getUserInfo(ixConnect.userId);
+  },
+
+<span id='sol-common-UserUtils-method-checkCurrentPermissions'>  /**
+</span>   * Checks the permissions of the current user
+   * @param {Array} flagNames Flags, e.g. &quot;FLAG_IMPORT&quot;
+   * @return {Array} missingPermissions
+   */
+  checkCurrentPermissions: function (flagNames) {
+    var me = this,
+        missingPermissions = [],
+        userInfo, i, flagName, flags, flag;
+
+    if (!flagNames) {
+      throw &quot;Flag names are missing&quot;;
+    }
+    userInfo = me.getCurrentUserInfo();
+
+    for (i = 0; i &lt; flagNames.length; i++) {
+      flagName = flagNames[i];
+      if (flagName.indexOf(&quot;FLAG_&quot;) == 0) {
+        flags = userInfo.flags;
+      } else if (flagName.indexOf(&quot;FLAG2_&quot;) == 0) {
+        flags = userInfo.flags2;
+      } else {
+        throw &quot;Unknown flag: &quot; + flagName;
+      }
+      flag = AccessC[flagName];
+      if ((flags &amp; flag) == 0) {
+        missingPermissions.push(flagName);
+      }
+    }
+    return missingPermissions;
+  },
+
+<span id='sol-common-UserUtils-method-addUsersToGroups'>  /**
+</span>   * Adds memberships
+   *
+   *     sol.common.UserUtils.addUsersToGroups(
+   *       [&#39;Max Brey&#39;, &#39;Steven Grog&#39;],
+   *       [&#39;Accounting&#39;]
+   *     );
+   *
+   * @param {Array} userNames Name of the member
+   * @param {Array} groupNames Names of the groups
+   */
+  addUsersToGroups: function (userNames, groupNames) {
+    var me = this,
+        groupIds = [],
+        newUserInfos, groups, group, userInfos, userInfo, membershipIds, groupId, i, j;
+
+    me.logger.enter(&quot;addUsersToGroups&quot;, arguments);
+    newUserInfos = [];
+    if (!userNames || (userNames.length === 0) || !groupNames || (groupNames.length === 0)) {
+      me.logger.exit(&quot;addUsersToGroups&quot;);
+      return;
+    }
+
+    groups = ixConnect.ix().getUserNames(groupNames, CheckoutUsersC.BY_IDS_RAW);
+    for (i = 0; i &lt; groups.length; i++) {
+      group = groups[i];
+      groupIds.push(parseInt(group.id, 10));
+    }
+
+    if (groupIds.length === 0) {
+      me.logger.exit(&quot;addUsersToGroups&quot;);
+      return;
+    }
+
+    userInfos = userInfos = ixConnect.ix().checkoutUsers(userNames, CheckoutUsersC.BY_IDS_RAW, LockC.NO);
+
+    if (!userInfos &amp;&amp; (userInfos.length &gt; 0)) {
+      me.logger.exit(&quot;addUsersToGroups&quot;);
+      return;
+    }
+    for (i = 0; i &lt; userInfos.length; i++) {
+      userInfo = userInfos[i];
+
+      membershipIds = [];
+      for (j = 0; j &lt; userInfo.groupList.length; j++) {
+        membershipIds.push(parseInt(userInfo.groupList[j], 10));
+      }
+      for (j = 0; j &lt; groupIds.length; j++) {
+        groupId = groupIds[j];
+        if (membershipIds.indexOf(groupId) &lt; 0) {
+          membershipIds.push(groupId);
+        }
+      }
+      userInfo.groupList = membershipIds;
+      newUserInfos.push(userInfo);
+    }
+    if (newUserInfos.length &gt; 0) {
+      ixConnect.ix().checkinUsers(newUserInfos, CheckinUsersC.WRITE, LockC.NO);
+    }
+    me.logger.exit(&quot;addUsersToGroups&quot;);
+  },
+
+<span id='sol-common-UserUtils-method-isMainAdmin'>  /**
+</span>   * Checks if an user is a main admin.
+   *
+   * For performance reasons this uses a separate cache for the administrative users.
+   * This cache can only be used if the client version is newer then &#39;10.17.010.005&#39; and if this is called with an UserInfo or a Number.
+   * In any other cases a fallback will be used and the performance might suffer.
+   *
+   * @param {de.elo.ix.client.UserInfo|Number|String} user An UserInfo object, an user ID, name or GUID. UserInfo or user ID (Number) should be prefered due to better performance (only relevant for IX client versions above 10.17.010.005).
+   * @return {Boolean}
+   */
+  isMainAdmin: function (user) {
+    var me = this,
+        fui, result, userIterator, userInfo, isAdmin;
+    me.logger.enter(&quot;isMainAdmin&quot;, arguments);
+
+    me.versionCheckFindFirstUsers = me.versionCheckFindFirstUsers || sol.common.RepoUtils.checkVersion(ixConnect.clientVersion, &quot;10.17.010.005&quot;); // cache &#39;version check&#39; result
+
+    if (me.versionCheckFindFirstUsers &amp;&amp; ((user instanceof UserInfo) || (typeof user === &quot;number&quot;))) {
+      // only use cache version, if the version check was successfull and the user parameter is of type UserInfo or Number
+      if (!me.adminsById) {
+        me.adminsById = sol.create(&quot;sol.common.Cache&quot;);
+        me.logger.info(&quot;&#39;adminsById&#39; cache was initialized.&quot;);
+
+        fui = new FindUserInfo();
+        fui.hasFlags = AccessC.FLAG_ADMIN;
+        result = ixConnect.ix().findFirstUsers(fui, 1000);
+        if (result.userNames &amp;&amp; (result.userNames.size() &gt; 0)) {
+          userIterator = result.userNames.values().iterator();
+          while (userIterator.hasNext()) {
+            userInfo = userIterator.next();
+            me.adminsById.put(userInfo.id, userInfo);
+          }
+        }
+      }
+      isAdmin = !!me.adminsById.get((typeof user.id === &quot;number&quot;) ? user.id : user);
+    } else {
+      // Fallback for backwarts compatibility without admin user cache
+      userInfo = me.getUserInfo(user);
+      isAdmin = (userInfo.flags &amp; AccessC.FLAG_ADMIN) !== 0;
+    }
+
+    me.logger.exit(&quot;isMainAdmin&quot;, isAdmin);
+    return isAdmin;
+  },
+
+<span id='sol-common-UserUtils-method-isInGroup'>  /**
+</span>   * Checks, if a user is in a group.
+   * @param {String} group Id or name of a group
+   * @param {Object} params (optional)
+   * @param {Number|String} params.userId (optional) If not set, the userId from `ixConnect` will be used
+   * @return {Boolean}
+   */
+  isInGroup: function (group, params) {
+    var me = this,
+        isInGroup = false,
+        userId, groupsOfUser;
+
+    me.logger.enter(&quot;isInGroup&quot;, arguments);
+
+    userId = (params &amp;&amp; (params.userId || params.userId === 0)) ? params.userId : ixConnect.loginResult.user.id;
+
+    groupsOfUser = ixConnect.ix().getUserNames([userId], CheckoutUsersC.GROUPS_OF_MEMBER_RECURSIVE);
+
+    if (groupsOfUser &amp;&amp; (groupsOfUser.length &gt; 0)) {
+      isInGroup = groupsOfUser.some(function (groupName) {
+        return groupName.id === group || groupName.name.equals(group);
+      });
+    }
+
+    me.logger.exit(&quot;isInGroup&quot;);
+
+    return isInGroup;
+  },
+
+<span id='sol-common-UserUtils-method-getMailAddress'>  /**
+</span>   * Returns the email address of an ELO user
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {String} Email address
+   */
+  getMailAddress: function (user) {
+    var me = this,
+        userInfo, mailAddress;
+    me.logger.enter(&quot;getMailAddress&quot;, arguments);
+    if (!user) {
+      throw &quot;user is not defined&quot;;
+    }
+    userInfo = me.getUserInfo(user);
+    mailAddress = userInfo.userProps[UserInfoC.PROP_NAME_EMAIL];
+    me.logger.exit(&quot;getMailAddress&quot;, mailAddress + &quot;&quot;);
+    return mailAddress;
+  },
+
+<span id='sol-common-UserUtils-method-getUserNames'>  /**
+</span>   * Returns user names
+   * @param {Object} config Configuration
+   * @param {String} config.name Name
+   * @param {String} config.namePart Name part
+   * @param {String} config.max maximum User names
+   * @param {Boolean} [config.visible=false] (optional) If set to `true`, only users with the `visible in userlist` property will be returned
+   * @return {de.elo.ix.client.UserName[]}
+   */
+  getUserNames: function (config) {
+    var me = this,
+        findUserInfo, findResult, userNamesIterator, userNames, index, max, conn, _result;
+
+    me.logger.enter(&quot;getUserNames&quot;, arguments);
+
+    userNames = [];
+    index = 0;
+    max = 100;
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+
+    config = config || {};
+
+    findUserInfo = new FindUserInfo();
+    if (config.name) {
+      findUserInfo.name = config.name;
+    } else if (config.namePart) {
+      findUserInfo.name = &quot;*&quot; + config.namePart + &quot;*&quot;;
+    } else {
+      findUserInfo.name = &quot;*&quot;;
+    }
+
+    if (config.visible === true) {
+      findUserInfo.hasFlags2 |= AccessC.FLAG2_VISIBLE_USER;
+    }
+
+    if (config.max) {
+      max = config.max;
+    }
+
+    findResult = conn.ix().findFirstUsers(findUserInfo, max);
+    try {
+      while (true) {
+        userNamesIterator = findResult.userNames.values().iterator();
+        while (userNamesIterator.hasNext()) {
+          userNames.push(userNamesIterator.next());
+        }
+        if (!findResult.isMoreResults()) {
+          break;
+        }
+        if (config.max) {
+          break;
+        }
+        index += findResult.userNames.size();
+        findResult = conn.ix().findNextUsers(findResult.searchId, index, max);
+      }
+    } catch (ex) {
+      throw ex;
+    } finally {
+      conn.ix().findClose(findResult.searchId);
+    }
+
+    _result = sol.common.JsonUtils.stringifyAll(userNames) || &quot;&quot;;
+    _result = _result.split(&quot;\&quot;,\&quot;&quot;).join(&quot;\&quot;\n\&quot;&quot;);
+    me.logger.exit(&quot;getUserNames&quot;, _result);
+    return userNames;
+  },
+
+<span id='sol-common-UserUtils-method-userExists'>  /**
+</span>   * Checks wether a user exists
+   * @param {String} userName User name
+   * @return {Boolean}
+   */
+  userExists: function (userName) {
+    try {
+      ixConnect.ix().getUserNames([userName], CheckoutUsersC.BY_IDS_RAW);
+      return true;
+    } catch (ex) {
+      return false;
+    }
+  },
+
+<span id='sol-common-UserUtils-method-createUser'>  /**
+</span>   * Creates an user or group
+   * @param {String} userName User name
+   * @param {Object} params (optional) Configuration
+   * @param {Boolean} [params.checkIfAlreadyExists=true] Don&#39;t create the user if it already exists.
+   * @param {String} [params.type=user] Type
+   * @param {String} params.windowsUserName (optional) Windows user name
+   * @param {String} params.password password (optional) Password
+   * @param {Boolean} [params.locked=false] Locked
+   * @param {Boolean} [params.visible=true] Visible
+   * @param {String} params.email (optional) The E-Mail address of the new user
+   * @param {Boolenan} [params.changePassword=true] Change password
+   * @param {Boolean} [params.fileAccess=true] File Access
+   * @param {Boolean} [params.allowInteractiveLogin=false] Only used if creating a user. User can login.
+   * @param {Array} params.permissions (optional) Permissions, e.g. &quot;FLAG_HASFILEACCESS&quot;, &quot;FLAG2_SHOW_EXTRA_INFO&quot;
+   * @return {Number} User ID
+   */
+  createUser: function (userName, params) {
+    var me = this,
+        flags = 0,
+        flags2 = 0,
+        userInfo, userIds, i, permission, permissionParts, firstPermissionPart;
+
+    if (!userName) {
+      throw &quot;User name is empty&quot;;
+    }
+    params = params || {};
+    params.type = params.type || &quot;user&quot;;
+    params.checkIfAlreadyExists = (typeof params.checkIfAlreadyExists == &quot;undefined&quot;) ? true : params.checkIfAlreadyExists;
+    params.locked = (typeof params.locked == &quot;undefined&quot;) ? false : params.locked;
+    params.visible = (typeof params.visible == &quot;undefined&quot;) ? true : params.visible;
+    params.allowInteractiveLogin = (params.allowInteractiveLogin === true);
+    params.changePassword = (typeof params.changePassword == &quot;undefined&quot;) ? true : params.changePassword;
+    params.fileAccess = (typeof params.fileAccess == &quot;undefined&quot;) ? true : params.fileAccess;
+
+    if (params.checkIfAlreadyExists) {
+      if (me.userExists(userName)) {
+        return;
+      }
+    }
+    userInfo = ixConnect.ix().createUser(null);
+    userInfo.name = userName;
+
+    if (params.type == &quot;user&quot;) {
+      userInfo.type = UserInfoC.TYPE_USER;
+      if (params.allowInteractiveLogin) {
+        flags2 |= AccessC.FLAG2_INTERACTIVE_LOGIN;
+      }
+    } else {
+      userInfo.type = UserInfoC.TYPE_GROUP;
+    }
+
+    if (params.windowsUserName) {
+      userInfo.userProps[UserInfoC.PROP_NAME_OS] = params.windowsUserName;
+    }
+
+    if (params.password) {
+      userInfo.pwd = params.password;
+    }
+
+    if (params.locked) {
+      flags |= AccessC.FLAG_NOLOGIN;
+    }
+
+    if (params.changePassword) {
+      flags |= AccessC.FLAG_CHANGEPW;
+    }
+
+    if (params.fileAccess) {
+      flags |= AccessC.FLAG_HASFILEACCESS;
+    }
+
+    if (params.visible) {
+      flags2 |= AccessC.FLAG2_VISIBLE_USER;
+    }
+
+    if (params.email) {
+      userInfo.userProps[UserInfoC.PROP_NAME_EMAIL] = params.email;
+    }
+
+    if (params.permissions) {
+      for (i = 0; i &lt; params.permissions.length; i++) {
+        permission = params.permissions[i];
+        permissionParts = permission.split(&quot;_&quot;);
+        if (permissionParts.length &gt; 1) {
+          firstPermissionPart = permissionParts[0];
+          if (firstPermissionPart == &quot;FLAG&quot;) {
+            flags |= AccessC[permission];
+          } else if (firstPermissionPart == &quot;FLAG2&quot;) {
+            flags2 |= AccessC[permission];
+          }
+        }
+      }
+    }
+
+    userInfo.flags = flags;
+    userInfo.flags2 = flags2;
+    userInfo.userProps[UserInfoC.PROP_ACTION] = &quot;&quot;;
+
+    userIds = ixConnect.ix().checkinUsers([userInfo], CheckinUsersC.WRITE, LockC.NO);
+    if (userIds &amp;&amp; (userIds.length == 1)) {
+      return userIds[0];
+    }
+  },
+
+<span id='sol-common-UserUtils-method-getUserFolder'>  /**
+</span>   * Checkout userfolder
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.Sord} sord
+   */
+  getUserFolder: function (user) {
+    var me = this,
+        userGuid = me.getUserInfo(user).guid;
+
+    return ixConnect.ix().checkoutSord(&quot;OKEY:ELOUSERGUID=&quot; + userGuid, EditInfoC.mbSord, LockC.NO).sord;
+  },
+
+<span id='sol-common-UserUtils-method-getFolderUserNameData'>  /**
+</span>   * Checkout folder username/data
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.Sord} sord
+   */
+  getFolderUserNameData: function (user) {
+    var me = this,
+        userGuid = me.getUserInfo(user).guid;
+
+    return ixConnect.ix().checkoutSord(&quot;OKEY:ELOINDEX=&quot; + ixConnect.CONST.SORD.ELOINDEX_USER_FOLDER_DATA + userGuid, SordC.mbMin, LockC.NO);
+  },
+
+<span id='sol-common-UserUtils-method-getFolderUserNameDataEloProfile'>  /**
+</span>   * Checkout folder username/data/elo.profile
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.Sord} sord
+   */
+  getFolderUserNameDataEloProfile: function (user) {
+    var me = this,
+        userGuid = me.getUserInfo(user).guid;
+
+    return ixConnect.ix().checkoutSord(&quot;OKEY:ELOINDEX=&quot; + ixConnect.CONST.SORD.ELOINDEX_USER_FOLDER_DATA_PROFILE + userGuid, SordC.mbMin, LockC.NO);
+  },
+
+<span id='sol-common-UserUtils-method-getFolderUserNamePrivate'>  /**
+</span>   * Checkout folder username/private
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.Sord} sord
+   */
+  getFolderUserNamePrivate: function (user) {
+    var me = this,
+        userGuid = me.getUserInfo(user).guid;
+
+    return ixConnect.ix().checkoutSord(&quot;OKEY:ELOINDEX=&quot; + ixConnect.CONST.SORD.ELOINDEX_USER_FOLDER_PRIVATE + userGuid, SordC.mbMin, LockC.NO);
+  },
+
+<span id='sol-common-UserUtils-method-getFolderUserNameInbox'>  /**
+</span>   * Checkout folder username/inbox
+   * @param {String|de.elo.ix.client.UserInfo} user The name, GUID or ID of the user (or an UserInfo object)
+   * @return {de.elo.ix.client.Sord} sord
+   */
+  getFolderUserNameInbox: function (user) {
+    var me = this,
+        userGuid = me.getUserInfo(user).guid;
+
+    return ixConnect.ix().checkoutSord(&quot;OKEY:ELOINDEX=&quot; + ixConnect.CONST.SORD.ELOINDEX_USER_FOLDER_INBOX + userGuid, SordC.mbMin, LockC.NO);
+  }
+});
+</pre>
+</body>
+</html>

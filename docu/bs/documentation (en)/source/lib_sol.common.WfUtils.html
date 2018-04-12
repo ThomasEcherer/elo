@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-WfUtils'>/**
+</span> * Contains workflow related utility functions
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ * @requires sol.common.Config
+ * @requires sol.common.ConfigMixin
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.UserUtils
+ * @requires sol.common.UserProfile
+ *
+ */
+sol.define(&quot;sol.common.WfUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-WfUtils-property-logger'>  /**
+</span>   * @private
+   */
+  logger: sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.WfUtils&quot; }),
+
+<span id='sol-common-WfUtils-method-loadBaseConfig'>  /**
+</span>   * @private
+   * Loads the base configuration from the JSON file: `/Administration/Business Solutions/common/Configuration/base.config`
+   * @return {Object}
+   */
+  loadBaseConfig: function () {
+    var me = this;
+    if (!me.baseConfig) {
+      me.baseConfig = sol.create(&quot;sol.common.Config&quot;, { load: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/common/Configuration/base.config&quot; }).config;
+    }
+    return me.baseConfig;
+  },
+
+<span id='sol-common-WfUtils-method-startWorkflow'>  /**
+</span>   * Starts a workflow.
+   * @param {String} templFlowId Name or ID of the template which should be started
+   * @param {String} flowName Name of the new workflow
+   * @param {String} objId Object on which the workflow should be started
+   * @param {Number} prio (optional) If specified, the workflow priority will be changed (0=high, 1=medium, 2=low)
+   * @return {Number} The ID of the started workflow
+   */
+  startWorkflow: function (templFlowId, flowName, objId, prio) {
+    var me = this,
+        flowId;
+
+    me.logger.enter(&quot;startWorkflow&quot;, arguments);
+
+    if (!templFlowId) {
+      throw &quot;Workflow template ID is empty&quot;;
+    }
+
+    if (flowName &amp;&amp; flowName.length &gt; 120) {
+      flowName = flowName.substr(0, 120);
+    }
+
+    flowId = ixConnect.ix().startWorkFlow(templFlowId, flowName, objId);
+    if (typeof prio !== &quot;undefined&quot;) {
+      me.changeWorkflowPriority(flowId, prio);
+    }
+
+    me.logger.exit(&quot;startWorkflow&quot;, { flowId: flowId });
+
+    return flowId;
+  },
+
+<span id='sol-common-WfUtils-method-startMaskStandardWorkflow'>  /**
+</span>   * Starts the workflow defined as standard workflow for the mask or in an index field.
+   * If there is already an workflow, it will do nothing and return the first active one.
+   * @param {String} objId
+   * @param {Object} params (optional) Default will be the sord name
+   * @param {Object} params.name (optional) Default will be the sord name
+   * @param {Object} params.field (optional) The field to read the workflow template from
+   * @return {String} The workflow ID
+   */
+  startMaskStandardWorkflow: function (objId, params) {
+    var me = this,
+        activeWorkflows, sord, templateName, templateId, maskName, docMask, name, flowId;
+
+    me.logger.enter(&quot;startMaskStandardWorkflow&quot;, arguments);
+
+    activeWorkflows = sol.common.WfUtils.getActiveWorkflows(objId);
+
+    if (activeWorkflows.length &gt; 0) {
+      return activeWorkflows[0].id;
+    }
+
+    sord = ixConnect.ix().checkoutSord(objId, SordC.mbAllIndex, LockC.NO);
+    if (params &amp;&amp; params.field) {
+      templateName = sol.common.SordUtils.getObjKeyValue(sord, params.field);
+      if (templateName) {
+        templateId = sol.common.WfUtils.getWorkflowTemplateId(templateName);
+      }
+    }
+
+    if (!templateId) {
+      maskName = sord.maskName;
+      docMask = sol.common.SordUtils.getDocMask(maskName);
+      templateId = docMask.flowId;
+    }
+
+    if (!templateId || templateId === -1) {
+      throw &quot;mask &#39;&quot; + maskName + &quot;&#39; does not define a standard workflow&quot;;
+    }
+
+    name = (params &amp;&amp; params.name) ? params.name : sord.name;
+    if (name &amp;&amp; name.length &gt; 120) {
+      name = name.substr(0, 120);
+    }
+
+    flowId = me.startWorkflow(templateId, name, objId);
+
+    me.logger.exit(&quot;startMaskStandardWorkflow&quot;, { flowId: flowId });
+
+    return flowId;
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflow'>  /**
+</span>   * Returns a specific workflow.
+   * @param {String} flowId Flow ID
+   * @param {Object} params (optional)
+   * @param {Boolean} params.inclFinished (optional) If `true`, the workflows will be returned, even if it is already finished
+   * @return {de.elo.ix.client.WFDiagram}
+   */
+  getWorkflow: function (flowId, params) {
+    var workflow;
+    try {
+      workflow = ixConnect.ix().checkoutWorkFlow(flowId, WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+    } catch (ex) {
+      if (params &amp;&amp; (params.inclFinished === true)) {
+        workflow = ixConnect.ix().checkoutWorkFlow(flowId, WFTypeC.FINISHED, WFDiagramC.mbAll, LockC.NO);
+      } else {
+        throw ex;
+      }
+    }
+    return workflow;
+  },
+
+<span id='sol-common-WfUtils-property-wfDiagramTypeId'>  wfDiagramTypeId: 1663767661,
+</span><span id='sol-common-WfUtils-property-wfVersionTypeId'>  wfVersionTypeId: 914434915,
+</span><span id='sol-common-WfUtils-property-wfNodeTypeId'>  wfNodeTypeId: 2015686193,
+</span><span id='sol-common-WfUtils-property-wfEscalationTypeId'>  wfEscalationTypeId: 633363356,
+</span><span id='sol-common-WfUtils-property-wfEscalationUserTypeId'>  wfEscalationUserTypeId: 123879203,
+</span>
+<span id='sol-common-WfUtils-method-getWorkflowAsJson'>  /**
+</span>   * Returns workflow diagram as JSON string
+   * @param {String} flowId Workflow ID
+   * @param {String} config Configuration
+   * @param {String} config.flowVersId Workflow version ID
+   * @param {Boolean} config.clearUsers Clears the owner name of the template
+   * @param {Boolean} config.nameSubWorkflowTemplates Clears the owner name of the template
+   * @return {String} JSON representation of the workflow diagram
+   */
+  getWorkflowAsJson: function (flowId, config) {
+    var me = this,
+        fileData, workflowExportOptions, jsonData, dataObject, lastTypeId;
+
+    config = config || {};
+
+    workflowExportOptions = new WorkflowExportOptions();
+    workflowExportOptions.flowId = flowId;
+
+    if (typeof config.flowVersId != &quot;undefined&quot;) {
+      workflowExportOptions.flowVersId = config.flowVersId;
+    }
+
+    workflowExportOptions.format = WorkflowExportOptionsC.FORMAT_JSON;
+    fileData = ixConnect.ix().exportWorkflow(workflowExportOptions);
+    jsonData = String(new java.lang.String(fileData.data, &quot;UTF-8&quot;));
+
+    lastTypeId = 0;
+    dataObject = JSON.parse(jsonData);
+    jsonData = JSON.stringify(dataObject, function (key, value) {
+      if (key == &quot;_typeId&quot;) {
+        lastTypeId = value;
+      }
+
+      if (config.clearUsers) {
+        if ((lastTypeId == me.wfVersionTypeId) &amp;&amp; (key == &quot;userId&quot;)) {
+          return 0;
+        }
+        if ((lastTypeId == me.wfVersionTypeId) &amp;&amp; (key == &quot;userName&quot;)) {
+          return &quot;&quot;;
+        }
+      }
+
+      if (config.nameSubWorkflowTemplates) {
+        if ((lastTypeId == me.wfNodeTypeId) &amp;&amp; (key == &quot;subTemplateId&quot;) &amp;&amp; value) {
+          value = me.getWorkflowTemplateName(value);
+        }
+      }
+
+      return value;
+    });
+
+    return jsonData;
+  },
+
+<span id='sol-common-WfUtils-method-getWfNameFromJson'>  /**
+</span>   * Returns the workflow name
+   * @param {String} workflowJson Workflow JSON
+   * @return {String} Workflow name
+   */
+  getWfNameFromJson: function (workflowJson) {
+    var me = this,
+        workflowObj, objectTable, i, obj, typeId;
+    if (!workflowJson) {
+      throw &quot;Workflow JSON content is empty&quot;;
+    }
+    workflowObj = JSON.parse(workflowJson);
+    objectTable = workflowObj.objectTable;
+    for (i = 0; i &lt; objectTable.length; i++) {
+      obj = objectTable[i];
+      if (obj) {
+        typeId = obj[&quot;_typeId&quot;];
+        if (typeId &amp;&amp; (typeId == me.wfDiagramTypeId)) {
+          return obj.name;
+        }
+      }
+    }
+  },
+
+<span id='sol-common-WfUtils-method-getActiveWorkflows'>  /**
+</span>   * Retrieves the active workflows for an object.
+   * @param {String} objId
+   * @param {Object} filter (optional)
+   * @param {String} filter.template (optional) Filter results by name or ID of the workflow template
+   * @param {Boolean} filter.user (optional) If `true` the active workflows will be filtered by the current user
+   * @return {de.elo.ix.client.WFDiagram[]}
+   */
+  getActiveWorkflows: function (objId, filter) {
+    var findInfo = new FindWorkflowInfo();
+
+    findInfo.objId = objId;
+    findInfo.type = WFTypeC.ACTIVE;
+
+    if (filter &amp;&amp; filter.template) {
+      findInfo.templateId = filter.template;
+    }
+
+    return this.findWorkflows(findInfo, null, ((filter &amp;&amp; filter.user === true) || (typeof ixConnectAdmin === &quot;undefined&quot;)) ? ixConnect : ixConnectAdmin);
+  },
+
+<span id='sol-common-WfUtils-method-hasActiveWorkflow'>  /**
+</span>   * Checks, if an object has at least on active workflow.
+   * If a template name is defined, the function checks, if there is at least one active workflow with this template.
+   * @param {String} objId
+   * @param {String} template (optional)
+   * @return {Boolean}
+   */
+  hasActiveWorkflow: function (objId, template) {
+    var filter;
+    if (template) {
+      filter = { template: template };
+    }
+    return (this.getActiveWorkflows(objId, filter).length &gt; 0);
+  },
+
+
+<span id='sol-common-WfUtils-method-getLastActiveWorkflow'>  /**
+</span>   * Returns the last active workflow for an object
+   * @param {String} objId Object ID
+   * @return {de.elo.ix.client.WFDiagram}
+   */
+  getLastActiveWorkflow: function (objId) {
+    var me = this,
+        workflows;
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    workflows = me.getActiveWorkflows(objId);
+    if (workflows &amp;&amp; (workflows.length &gt; 0)) {
+      return workflows[workflows.length - 1];
+    }
+  },
+
+<span id='sol-common-WfUtils-method-findWorkflows'>  /**
+</span>   * Retrieves workflows with a search request.
+   * @param {de.elo.ix.client.FindWorkflowInfo} findWorkflowInfo Defines the search
+   * @param {de.elo.ix.client.WFDiagramC} [checkoutOptions=WFDiagramC.mbLean] (optional) Defines the members which will be returned in the result
+   * @param {de.elo.ix.client.IXConnection} [ixConn=ixConnect] (optional)
+   * @return {de.elo.ix.client.WFDiagram[]}
+   */
+  findWorkflows: function (findWorkflowInfo, checkoutOptions, ixConn) {
+    var me = this,
+        max = 100,
+        idx = 0,
+        workflows = [],
+        findResult, i, wf;
+
+    ixConn = ixConn || ixConnect;
+    checkoutOptions = checkoutOptions || WFDiagramC.mbLean;
+
+    try {
+      findResult = ixConn.ix().findFirstWorkflows(findWorkflowInfo, max, checkoutOptions);
+      while (true) {
+        for (i = 0; i &lt; findResult.workflows.length; i++) {
+          wf = findResult.workflows[i];
+          workflows.push(wf);
+        }
+
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.workflows.length;
+        findResult = ixConn.ix().findNextWorkflows(findResult.searchId, idx, max);
+      }
+    } catch (ex) {
+      me.logger.warn(&quot;error looking up workflows&quot;, ex);
+    } finally {
+      if (findResult) {
+        ixConn.ix().findClose(findResult.searchId);
+      }
+    }
+    return workflows;
+  },
+
+  /*
+   * Retrieves tasks for an object.
+   * @param {Object} filter (optional)
+   * @param {Boolean} filter.allUsers If `true` all tasks will be returned, not just the current users tasks
+   * @param {Boolean} filter.group If `true` group tasks will be included
+   * @param {Boolean} filter.deputy If `true` deputy tasks will be included
+   * @param {Boolean} filter.workflows If `true` workflow tasks will be included
+   * @param {String} filter.objId If set, only tasks for this object will be returned
+   * @return {String[]} Array of the task IDs
+   *
+  getTasks: function (filter) {
+    var ixConn = (filter &amp;&amp; filter.allUsers === true) ? ixConnectAdmin : ixConnect,
+        findInfo = new FindTasksInfo(),
+        ids = [],
+        idx, max, findResult, i, wfNode;
+
+    findInfo.inclWorkflows = (filter &amp;&amp; filter.workflows === true);
+    findInfo.inclGroup = (filter &amp;&amp; filter.group === true);
+    findInfo.inclDeputy = (filter &amp;&amp; filter.deputy === true);
+    findInfo.lowestPriority = UserTaskPriorityC.LOWEST;
+    findInfo.highestPriority = UserTaskPriorityC.HIGHEST;
+    if (filter &amp;&amp; filter.objId) {
+      findInfo.objId = filter.objId;
+    }
+
+    try {
+      idx = 0;
+      max = 100;
+      findResult = ixConn.ix().findFirstTasks(findInfo, max);
+
+      while (true) {
+        for (i = 0; i &lt; findResult.tasks.length; i++) {
+          wfNode = findResult.tasks[i].wfNode;
+          ids.push(wfNode.flowId);
+        }
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.tasks.length;
+        findResult = ixConn.ix().findNextTasks(findResult.searchId, idx, max);
+      }
+    } finally {
+      if (findResult !== null) {
+        ixConn.ix().findClose(findResult.searchId);
+      }
+    }
+    return ids;
+  },*/
+
+<span id='sol-common-WfUtils-method-changeWorkflowPriority'>  /**
+</span>   * Changes the priority of a workflow.
+   * @param {String} flowId The workflows ID
+   * @param {Number} prio The new priority (0=high, 1=medium, 2=low)
+   */
+  changeWorkflowPriority: function (flowId, prio) {
+    var wfDiagram;
+    if ((typeof prio !== &quot;undefined&quot;) &amp;&amp; (Object.prototype.toString.call(prio) === &quot;[object Number]&quot;) &amp;&amp; (prio &gt;= 0) &amp;&amp; (prio &lt;= 2)) {
+      wfDiagram = ixConnect.ix().checkoutWorkFlow(flowId, WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+      if (wfDiagram.prio !== prio) {
+        wfDiagram.prio = prio;
+        ixConnect.ix().checkinWorkFlow(wfDiagram, WFDiagramC.mbAll, LockC.NO);
+      }
+    }
+  },
+
+<span id='sol-common-WfUtils-method-cancelWorkflow'>  /**
+</span>   * Cancels a workflow.
+   * @param {String} flowId
+   * @param {Boolean} force (optional) If `true`, the workflow will be terminated ignoring existing locks
+   * @return {Number} The canceled workflows ID
+   */
+  cancelWorkflow: function (flowId, force) {
+    return ixConnect.ix().terminateWorkFlow(flowId, (force) ? LockC.FORCE : LockC.YES);
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflowStatus'>  /**
+</span>   * Returns the Status of the workflow.
+   * @param {String|de.elo.ix.client.WFDiagram} flow Either a flowId or WFDiagram (to avoid loading it again)
+   * @return {String}
+   */
+  getWorkflowStatus: function (flow) {
+    var me = this,
+        startNode;
+
+    if (!flow) {
+      throw &quot;Flow is empty&quot;;
+    }
+
+    if (!flow.id) {
+      flow = me.getWorkflow(flow);
+    }
+    startNode = me.getNode(flow, 0);
+
+    return (startNode) ? String(startNode.yesNoCondition) : &quot;&quot;;
+  },
+
+<span id='sol-common-WfUtils-method-setWorkflowStatus'>  /**
+</span>   * Sets the workflow status.
+   * @param {de.elo.ix.client.WFDiagram} wfDiagram Workflow diagram
+   * @param {String} status Workflow status
+   */
+  setWorkflowStatus: function (wfDiagram, status) {
+    var me = this,
+        startNode;
+    if (!wfDiagram) {
+      throw &quot;Workflow diagram is empty&quot;;
+    }
+    status = status || &quot;&quot;;
+    startNode = me.getNode(wfDiagram, 0);
+    startNode.yesNoCondition = status;
+  },
+
+<span id='sol-common-WfUtils-method-getTemplates'>  /**
+</span>   * Retrieves the available workflow templates.
+   * @param {Object} params Parameters
+   * @param {de.elo.ix.client.WFDiagramC} [params.wfDiagramZ=WFDiagramC.mbLean] (optional) Defines the members which will be returned in the result
+   * @return {de.elo.ix.client.WFDiagram[]}
+   */
+  getTemplates: function (params) {
+    var me = this,
+        info;
+    params = params || {};
+    info = new FindWorkflowInfo();
+    info.type = WFTypeC.TEMPLATE;
+    return me.findWorkflows(info, params.wfDiagramZ);
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflowTemplateId'>  /**
+</span>   * Returns the template ID of a workflow
+   * @param {String} workflowTemplateName Name of the workflow template
+   * @return {String} Workflow ID
+   */
+  getWorkflowTemplateId: function (workflowTemplateName) {
+    var wfDiag = ixConnect.ix().checkoutWorkflowTemplate(workflowTemplateName, &quot;&quot;, new WFDiagramZ(WFDiagramC.mbId), LockC.NO);
+    return wfDiag.id;
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflowTemplateName'>  /**
+</span>   * Returns the template name of a workflow
+   * @param {String} workflowTemplateId ID of the workflow template
+   * @return {String} Workflow name
+   */
+  getWorkflowTemplateName: function (workflowTemplateId) {
+    var wfDiag, wfName;
+    if (typeof workflowTemplateId == &quot;undefined&quot;) {
+      return &quot;&quot;;
+    }
+    wfDiag = ixConnect.ix().checkoutWorkflowTemplate(workflowTemplateId, &quot;&quot;, new WFDiagramZ(WFDiagramC.mbName), LockC.NO);
+    if (!wfDiag) {
+      return &quot;&quot;;
+    }
+    wfName = wfDiag.name + &quot;&quot;;
+    return wfName;
+  },
+
+<span id='sol-common-WfUtils-method-exportWorkflowTemplate'>  /**
+</span>   * Exports a workflow template into a specified file
+   * @param {String} workflowTemplateName Name of the workflow template
+   * @param {java.io.File} file Export file
+   * @param {Object} config Configuration
+   * @param {Boolean} clearAdminName Clear the administrator user name
+   */
+  exportWorkflowTemplate: function (workflowTemplateName, file, config) {
+    var me = this,
+        workflowTemplateId;
+
+    workflowTemplateId = me.getWorkflowTemplateId(workflowTemplateName);
+    me.exportWorkflow(workflowTemplateId, file, config);
+  },
+
+<span id='sol-common-WfUtils-method-exportWorkflow'>  /**
+</span>   * Exports a workflow into a specified file
+   * @param {String} workflowId Workflow ID
+   * @param {java.io.File} file Export file
+   * @param {Object} config Configuration
+   * @param {Boolean} clearAdminName Clear the administrator user name
+   */
+  exportWorkflow: function (workflowId, file, config) {
+    var me = this,
+        workflowJson;
+
+    workflowJson = me.getWorkflowAsJson(workflowId, config);
+    Packages.org.apache.commons.io.FileUtils.writeStringToFile(file, workflowJson, &quot;UTF-8&quot;);
+  },
+
+<span id='sol-common-WfUtils-method-importWorkflow'>  /**
+</span>   * Imports a workflow into a specified file
+   * @param {String} workflowName Workflow name
+   * @param {java.io.File} file Import file
+   * @param {Object} params Parameters
+   * @param {Boolean} [params.replaceMissingUserByUserId=0] Replace a missing user by this user ID
+   * @return {String} Flow ID
+   */
+  importWorkflow: function (workflowName, file, params) {
+    var me = this,
+        workflowJson, workflowData, workflowImportOptions, flowId;
+
+    if (!workflowName) {
+      throw &quot;Workflow name is empty&quot;;
+    }
+
+    if (!file) {
+      throw &quot;Workflow file is empty&quot;;
+    }
+
+    params = params || {};
+    params.replaceMissingUserByUserId = (typeof params.replaceMissingUserByUserId == &quot;undefined&quot;) ? &quot;0&quot; : params.replaceMissingUserByUserId;
+
+    workflowImportOptions = new WorkflowImportOptions();
+    workflowImportOptions.replaceMissingUserByUserId = params.replaceMissingUserByUserId;
+
+    workflowJson = Packages.org.apache.commons.io.FileUtils.readFileToString(file, &quot;UTF-8&quot;) + &quot;&quot;;
+
+    if (params.replaceSubTemplateNames) {
+      workflowJson = me.replaceSubTemplateNamesInWorkflowJson(workflowJson);
+    }
+
+    workflowData = (new java.lang.String(workflowJson)).getBytes(&quot;UTF-8&quot;);
+
+    flowId = ixConnect.ix().importWorkFlow2(workflowName, workflowData, workflowImportOptions);
+    return flowId;
+  },
+
+<span id='sol-common-WfUtils-method-replaceSubTemplateNamesInWorkflowJson'>  /**
+</span>   * Replaces the sub workflow names by the sub workflow IDs
+   * @param {String} workflowJson Workflow JSON
+   * @return {String} Workflow JSON with replaced sub workflow names
+   */
+  replaceSubTemplateNamesInWorkflowJson: function (workflowJson) {
+    var me = this,
+        workflowData, lastTypeId;
+
+    workflowData = JSON.parse(workflowJson);
+
+    workflowJson = JSON.stringify(workflowData, function (key, value) {
+      if (key == &quot;_typeId&quot;) {
+        lastTypeId = value;
+      }
+
+      if ((lastTypeId == me.wfNodeTypeId) &amp;&amp; (key == &quot;subTemplateId&quot;) &amp;&amp; value &amp;&amp; (sol.common.ObjectUtils.isString(value))) {
+        value = me.getWorkflowTemplateId(value);
+      }
+
+      return value;
+    });
+
+    return workflowJson;
+  },
+
+<span id='sol-common-WfUtils-method-renameWorkflowTemplate'>  /**
+</span>   * Renames workflow templates
+   * @param {String} oldName Old name
+   * @param {String} newName New name
+   * @return {Boolean}
+   */
+  renameWorkflowTemplate: function (oldName, newName) {
+    var me = this,
+        wfDiag;
+
+    if (!oldName) {
+      throw &quot;Old workflow template name is empty&quot;;
+    }
+
+    if (!newName) {
+      throw &quot;New workflow template name is empty&quot;;
+    }
+
+    try {
+      wfDiag = me.getWorkflowTemplate(oldName);
+    } catch (ex) {
+      return false;
+    }
+
+    wfDiag.name = newName;
+    ixConnect.ix().checkinWorkflowTemplate(wfDiag, WFDiagramC.mbAll, LockC.NO);
+
+    return true;
+  },
+
+<span id='sol-common-WfUtils-method-mergeWorkflowTemplate'>  /**
+</span>   * Merge workflow template
+   * After the workflow templateshave been imported via JSON with a timestamp suffix, they will be stored as a new working
+   * version of the origin workflow and than the imported workflow will be deleted.
+   * @param {String} workflowTemplateName Workflow template name
+   * @param {Object} params Parameters
+   * @param {String} params.mergeWorkflowTemplateSeparator Merge workflow separator
+   * @return {String} Merged workflow template name
+   */
+  mergeWorkflowTemplate: function (workflowTemplateName, params) {
+    var me = this,
+        mergeWorkflowTemplates = [],
+        i, workflowTemplates, workflowTemplate, originWorkflowTemplate, originWorkflowTemplateName,
+        currentWorkflowTemplateName, mergeWorkflowTemplateNamePrefix, mergeWorkflowTemplateSeparator,
+        mergeWorkflowTemplate;
+
+    params = params || {};
+
+    mergeWorkflowTemplateSeparator = params.mergeWorkflowTemplateSeparator || &quot; | &quot;;
+
+    if (!workflowTemplateName) {
+      throw &quot;Workflow template name is empty&quot;;
+    }
+    workflowTemplates = me.getTemplates({ wfDiagramZ: WFDiagramC.mbAll });
+
+    for (i = 0; i &lt; workflowTemplates.length; i++) {
+      workflowTemplate = workflowTemplates[i];
+      currentWorkflowTemplateName = workflowTemplate.name + &quot;&quot;;
+      if (workflowTemplateName == currentWorkflowTemplateName) {
+        originWorkflowTemplate = workflowTemplate;
+      } else {
+        mergeWorkflowTemplateNamePrefix = workflowTemplateName + mergeWorkflowTemplateSeparator;
+        if (currentWorkflowTemplateName.indexOf(mergeWorkflowTemplateNamePrefix) == 0) {
+          mergeWorkflowTemplates.push(workflowTemplate);
+        }
+      }
+    }
+
+    mergeWorkflowTemplates.sort();
+
+    for (i = 0; i &lt; mergeWorkflowTemplates.length; i++) {
+      mergeWorkflowTemplate = mergeWorkflowTemplates[i];
+      me.addWorkflowTemplateVersions(mergeWorkflowTemplate, originWorkflowTemplate);
+      me.deleteWorkflowTemplate(mergeWorkflowTemplate.id);
+    }
+
+    if (originWorkflowTemplate) {
+      originWorkflowTemplateName = originWorkflowTemplate.name + &quot;&quot;;
+      return originWorkflowTemplateName;
+    }
+  },
+
+<span id='sol-common-WfUtils-method-addWorkflowTemplateVersions'>  /**
+</span>   * Save a workflow template as a workflow template version
+   * @param  {de.elo.ix.client.WFDiagram} mergeWorkflowTemplate Merge workflow template
+   * @param  {de.elo.ix.client.WFDiagram} originWorkflowTemplate Origin workflow template
+   */
+  addWorkflowTemplateVersions: function (mergeWorkflowTemplate, originWorkflowTemplate) {
+    var me = this,
+        mergeWorkflowTemplateVersions, i, mergeWorkflowTemplateVersion, nextWorkflowVersionNo, mergeWorkflowVersionTemplate;
+
+    if (!mergeWorkflowTemplate) {
+      throw &quot;Merge workflow template is empty&quot;;
+    }
+    if (!originWorkflowTemplate) {
+      throw &quot;Origin workflow template is empty&quot;;
+    }
+
+    nextWorkflowVersionNo = me.getNextWorkflowVersionNo(originWorkflowTemplate);
+
+    mergeWorkflowTemplateVersions = ixConnect.ix().getWorkflowTemplateVersions(mergeWorkflowTemplate.id, false);
+
+    for (i = 0; i &lt; mergeWorkflowTemplateVersions.length; i++) {
+      mergeWorkflowTemplateVersion = mergeWorkflowTemplateVersions[i];
+
+      mergeWorkflowVersionTemplate = ixConnect.ix().checkoutWorkflowTemplate(mergeWorkflowTemplate.id, mergeWorkflowTemplateVersion.id, WFDiagramC.mbAll, LockC.NO);
+      mergeWorkflowVersionTemplate.id = originWorkflowTemplate.id;
+      mergeWorkflowVersionTemplate.version.id = -1;
+      mergeWorkflowVersionTemplate.version.version = nextWorkflowVersionNo + &quot;.0&quot;;
+
+      ixConnect.ix().checkinWorkflowTemplate(mergeWorkflowVersionTemplate, WFDiagramC.mbAll, LockC.NO);
+      nextWorkflowVersionNo++;
+    }
+  },
+
+<span id='sol-common-WfUtils-method-getNextWorkflowVersionNo'>  /**
+</span>   * Returns the highest workflow template version number
+   * @param  {de.elo.ix.client.WFDiagram} workflowTemplate Workflow template
+   * @return {Number} Next workflow version number
+   */
+  getNextWorkflowVersionNo: function (workflowTemplate) {
+    var workflowTemplateVersions, i, workflowTemplateVersion, currentWorkflowTemplateVersionNo, nextWorkflowVersionNo,
+        highestWorkflowTemplateVersionNo = 0;
+
+    if (!workflowTemplate) {
+      throw &quot;Workflow template is empty&quot;;
+    }
+
+    workflowTemplateVersions = ixConnect.ix().getWorkflowTemplateVersions(workflowTemplate.id, false);
+
+    for (i = 0; i &lt; workflowTemplateVersions.length; i++) {
+      workflowTemplateVersion = workflowTemplateVersions[i];
+      currentWorkflowTemplateVersionNo = parseInt(workflowTemplateVersion.version, 10);
+      if (currentWorkflowTemplateVersionNo &gt; highestWorkflowTemplateVersionNo) {
+        highestWorkflowTemplateVersionNo = currentWorkflowTemplateVersionNo;
+      }
+    }
+
+    nextWorkflowVersionNo = highestWorkflowTemplateVersionNo + 1;
+
+    return nextWorkflowVersionNo;
+  },
+
+<span id='sol-common-WfUtils-method-deleteWorkflowTemplate'>  /**
+</span>   * Deletes a workflow template ID
+   * @param {String} workflowTemplateId Workflow template ID
+   */
+  deleteWorkflowTemplate: function (workflowTemplateId) {
+    if (!workflowTemplateId) {
+      throw &quot;Workflow template ID is empty&quot;;
+    }
+    ixConnect.ix().deleteWorkflowTemplate(workflowTemplateId, &quot;&quot;, LockC.NO);
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflowTemplate'>  /**
+</span>   * Returns the workflow template
+   * @param {String} workflowTemplateId Workflow template ID
+   * @return {String} Workflow ID
+   */
+  getWorkflowTemplate: function (workflowTemplateId) {
+    if (!workflowTemplateId) {
+      throw &quot;Workflow template ID is empty&quot;;
+    }
+    var wfDiag = ixConnect.ix().checkoutWorkflowTemplate(workflowTemplateId, &quot;&quot;, WFDiagramC.mbAll, LockC.NO);
+    return wfDiag;
+  },
+
+<span id='sol-common-WfUtils-method-parseAndCheckParams'>  /**
+</span>   * This function parses the configuration object from a nodes comment.
+   * The comment has to be valid JSON string.
+   *
+   * Additionally this method supports parsing the configuration from a config file (see {@link sol.common.ConfigMixin#parseConfiguration}).
+   *
+   * In addition there can be a variable number of string arguments for mandatory properties. If the configuration is missing one of those properties, an exception will be thrown.
+   *
+   *     var config = sol.common.ix.WfUtils.parseAndCheckParams(wf, 23, &quot;objId&quot;, ...);
+   *
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId The ID of the node
+   * @return {Object}
+   */
+  parseAndCheckParams: function (workflow, nodeId) {
+    var me = this,
+        emptyArray = [],
+        mandatoryProperties, node, configString, config, nodeComment;
+
+    mandatoryProperties = (arguments.length &gt; 2) ? emptyArray.slice.call(arguments, 2) : emptyArray;
+    node = me.getNode(workflow, nodeId);
+
+    nodeComment = node.comment + &quot;&quot;;
+    nodeComment = ((nodeComment.length &gt; 0) &amp;&amp; (nodeComment.trim().charAt(0) == &quot;{&quot;)) ? nodeComment : &quot;&quot;;
+
+    configString = String(node.properties) || nodeComment || &quot;{}&quot;;
+
+    try {
+      config = JSON.parse(configString);
+      config = sol.common.ConfigMixin.parseConfiguration(config).config;
+    } catch (ex) {
+      me.logger.error([&quot;error reading node config of node &#39;{0}&#39;: {1}&quot;, node.name, configString], ex);
+      throw &quot;configuration syntax error (node=&#39;&quot; + node.name + &quot;&#39;): &quot; + ex + &quot; - config=&quot; + configString;
+    }
+
+    mandatoryProperties.forEach(function (property) {
+      if (!config.hasOwnProperty(property)) {
+        throw &quot;configuration error: missing parameter &#39;&quot; + property + &quot;&#39;&quot;;
+      }
+    });
+
+    return config;
+  },
+
+<span id='sol-common-WfUtils-method-getNode'>  /**
+</span>   * Returns the node defined by the nodeId.
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} id The ID of the node
+   * @return {de.elo.ix.client.WFNode} The node or null, if no node was found with the ID
+   */
+  getNode: function (workflow, id) {
+    var node, i;
+    for (i = 0; i &lt; workflow.nodes.length; i++) {
+      node = workflow.nodes[i];
+      if ((node.id == id) &amp;&amp; (node.type != WFNodeC.TYPE_NOTHING)) {
+        return node;
+      }
+    }
+    return null;
+  },
+
+<span id='sol-common-WfUtils-method-getNodeName'>  /**
+</span>   * Returns the name of the node.
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId
+   * @return {String} The name of the node or null, if no node was found with the ID
+   */
+  getNodeName: function (workflow, nodeId) {
+    var node = this.getNode(workflow, nodeId);
+    return node ? node.name : null;
+  },
+
+<span id='sol-common-WfUtils-method-getActiveNodes'>  /**
+</span>   * Returns all active workflow nodes.
+   * @param {de.elo.ix.client.WFDiagram} workflow
+   * @return {de.elo.ix.client.WFNode[]}
+   */
+  getActiveNodes: function (workflow) {
+    var nodes = [],
+        i;
+    for (i = 0; i &lt; workflow.nodes.length; i++) {
+      if (workflow.nodes[i].enterDateIso != &quot;&quot; &amp;&amp; workflow.nodes[i].exitDateIso == &quot;&quot;) {
+        nodes.push(workflow.nodes[i]);
+      }
+    }
+    return nodes;
+  },
+
+<span id='sol-common-WfUtils-method-getActiveUserNodes'>  /**
+</span>   * Returns all active workflow nodes with assigned users or groups.
+   * @param {de.elo.ix.client.WFDiagram} workflow
+   * @return {de.elo.ix.client.WFNode[]}
+   */
+  getActiveUserNodes: function (workflow) {
+    var nodes = [],
+        i, node;
+    for (i = 0; i &lt; workflow.nodes.length; i++) {
+      node = workflow.nodes[i];
+      if (node.enterDateIso != &quot;&quot; &amp;&amp; node.exitDateIso == &quot;&quot; &amp;&amp; node.userName != &quot;&quot;) {
+        nodes.push(node);
+      }
+    }
+    return nodes;
+  },
+
+<span id='sol-common-WfUtils-method-getNodeByName'>  /**
+</span>   * Returns the node for a node name.
+   * If the node name is not unique, the first found node will be returned.
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} name The name of the node
+   * @param {String} cycleNo Cycle number
+   * @return {de.elo.ix.client.WFNode} The node or null, if no node was found with the name
+   */
+  getNodeByName: function (workflow, name, cycleNo) {
+    var node, i;
+    if (!workflow) {
+      throw &quot;Workflow diagram is empty&quot;;
+    }
+    if (!name) {
+      throw &quot;Name is empty&quot;;
+    }
+    for (i = 0; i &lt; workflow.nodes.length; i++) {
+      node = workflow.nodes[i];
+      if ((node.name == name || node.nameTranslationKey == name) &amp;&amp; (node.type != WFNodeC.TYPE_NOTHING)) {
+        if (!cycleNo || sol.common.StringUtils.endsWith(node.name, &quot;[[&quot; + cycleNo + &quot;]]&quot;)) {
+          return node;
+        }
+      }
+    }
+    return null;
+  },
+
+<span id='sol-common-WfUtils-method-getNodeById'>  /**
+</span>   * Returns the node for a node ID.
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId Node ID
+   * @return {de.elo.ix.client.WFNode} The node or null, if no node was found with the ID
+   */
+  getNodeById: function (workflow, nodeId) {
+    var node, i;
+    for (i = 0; i &lt; workflow.nodes.length; i++) {
+      node = workflow.nodes[i];
+      if ((node.id == nodeId) &amp;&amp; (node.type != WFNodeC.TYPE_NOTHING)) {
+        return node;
+      }
+    }
+    return null;
+  },
+
+<span id='sol-common-WfUtils-method-getSuccessorNodes'>  /**
+</span>   * Retrieves a list of nodes which are successors to the node with the spezified ID.
+   * The returned nodes could be filtered by type.
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId The ID of the node
+   * @param {Number} filterType (optional) The number of the type (use de.elo.ix.client.WFNodeC.TYPE_* for the types)
+   * @return {de.elo.ix.client.WFNode[]}
+   */
+  getSuccessorNodes: function (workflow, nodeId, filterType) {
+    var me = this,
+        assocs = workflow.matrix.assocs,
+        succNodes = [];
+
+    assocs.forEach(function (assoc) {
+      var node;
+      if (assoc.nodeFrom == nodeId) {
+        node = me.getNode(workflow, assoc.nodeTo);
+        if (!filterType || filterType == node.type) {
+          succNodes.push(node);
+        }
+      }
+    });
+
+    return succNodes;
+  },
+
+<span id='sol-common-WfUtils-method-getSuccessorNode'>  /**
+</span>   * Returns the successor node
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId The ID of the node
+   * @param {Object} filterConfig Filte configuration
+   * @param {Array} filterConfig.nameTranslationKeys Translation keys
+   * @param {Array} filterConfig.iconNames Icon names
+   * @return {de.elo.ix.client.WFNode[]}
+   */
+  getSuccessorNode: function (workflow, nodeId, filterConfig) {
+    var me = this,
+        succNodes;
+
+    succNodes = me.getSuccessorNodes2(workflow, nodeId, filterConfig);
+
+    if (succNodes.length &gt; 1) {
+      throw &quot;More than one successor node found.&quot;;
+    }
+
+    if (succNodes.length == 1) {
+      return succNodes[0];
+    }
+  },
+
+<span id='sol-common-WfUtils-method-getSuccessorNodes2'>  /**
+</span>   * Returns the successor nodes
+   * @param {de.elo.ix.client.WFDiagram} workflow The WFDiagram containing the workflow description
+   * @param {String} nodeId The ID of the node
+   * @param {Object} filterConfig Filte configuration
+   * @param {Array} filterConfig.nameTranslationKeys Translation keys
+   * @param {Array} filterConfig.iconNames Icon names
+   * @return {de.elo.ix.client.WFNode[]}
+   */
+  getSuccessorNodes2: function (workflow, nodeId, filterConfig) {
+    var me = this,
+        succNodes = [],
+        assocs, assoc, i, j, node,
+        nameTranslationKeys, nameTranslationKey,
+        iconNames, iconGuid;
+
+    filterConfig = filterConfig || {};
+    assocs = workflow.matrix.assocs;
+
+    for (i = 0; i &lt; assocs.length; i++) {
+      assoc = assocs[i];
+      if (assoc.nodeFrom == nodeId) {
+        node = me.getNode(workflow, assoc.nodeTo);
+        if (filterConfig) {
+          if (filterConfig.nameTranslationKeys) {
+            nameTranslationKeys = filterConfig.nameTranslationKeys;
+            for (j = 0; j &lt; nameTranslationKeys.length; j++) {
+              nameTranslationKey = nameTranslationKeys[j];
+              if (node.nameTranslationKey == nameTranslationKey) {
+                succNodes.push(node);
+                continue;
+              }
+            }
+          }
+          if (filterConfig.iconNames) {
+            iconNames = filterConfig.iconNames;
+            for (j = 0; j &lt; iconNames.length; j++) {
+              iconGuid = me.getWorkflowIconGuid(iconNames[j]);
+              if (iconGuid &amp;&amp; (node.iconId == iconGuid)) {
+                succNodes.push(node);
+              }
+            }
+          }
+        } else {
+          succNodes.push(node);
+        }
+      }
+    }
+
+    return me.getUniqueNodes(succNodes);
+  },
+
+<span id='sol-common-WfUtils-method-getWorkflowIconGuid'>  /**
+</span>   * Returns the guid of a workflow icon
+   * @param {String} iconName Icon name
+   * @return {String} Workflow icon GUID
+   */
+  getWorkflowIconGuid: function (iconName) {
+    var me = this,
+        guid;
+    if (!me.workflowIconGuids) {
+      me.readWorkflowIconGuids();
+    }
+    guid = me.workflowIconGuids[iconName];
+    return guid;
+  },
+
+<span id='sol-common-WfUtils-method-activateAssocs'>  /**
+</span>   * Activates associations
+   * @param  {de.elo.ix.client.WFNodeAssoc[]} assocs Associations
+   */
+  activateAssocs: function (assocs) {
+    var me = this;
+    if (!assocs || (assocs.length == 0)) {
+      return;
+    }
+    assocs.forEach(function (assoc) {
+      me.logger.debug([&quot;Activate association: nodeFrom={0}, nodeTo={1}, assocType={2}&quot;, assoc.nodeFrom, assoc.nodeTo, assoc.type]);
+      assoc.done = true;
+    });
+  },
+
+<span id='sol-common-WfUtils-property-workflowIconFolderGuid'>  workflowIconFolderGuid: &quot;(E10E1000-E100-E100-E100-E10E10E10EE0)&quot;,
+</span>
+<span id='sol-common-WfUtils-method-readWorkflowIconGuids'>  /**
+</span>   * Reads the workflow icon IDs
+   * @private
+   */
+  readWorkflowIconGuids: function () {
+    var me = this,
+        wfIconGuids = {},
+        sords;
+
+    sords = sol.common.RepoUtils.findChildren(me.workflowIconFolderGuid, { includeDocuments: true, includeReferences: true, sordZ: SordC.mbMin });
+    sords.forEach(function (sord) {
+      wfIconGuids[sord.name] = sord.guid;
+    });
+    me.workflowIconGuids = wfIconGuids;
+  },
+
+<span id='sol-common-WfUtils-method-getUniqueNodes'>  /**
+</span>   * Returns a list of unique workflow nodes
+   * @param {Array} nodes Workflow nodes
+   * @returns {Array} Unique workflow nodes
+   */
+  getUniqueNodes: function (nodes) {
+    var key,
+        nodesObj = {},
+        filteredNodes = [];
+
+    if (!nodes) {
+      throw &quot;Nodes array must be given&quot;;
+    }
+    nodes.forEach(function (node) {
+      nodesObj[String(node.id)] = node;
+    });
+    for (key in nodesObj) {
+      if (nodesObj.hasOwnProperty(key)) {
+        filteredNodes.push(nodesObj[key]);
+      }
+    }
+    return filteredNodes;
+  },
+
+<span id='sol-common-WfUtils-method-forwardWorkflow'>  /**
+</span>   * Forward a workflow
+   * @param {String} flowId Flow ID
+   * @param {String} currentNodeId Current node ID
+   * @param {Array} destinationNodeIds Destination node ID
+   */
+  forwardWorkflow: function (flowId, currentNodeId, destinationNodeIds) {
+    var me = this;
+
+    if (!flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+
+    if (!currentNodeId) {
+      throw &quot;Current node ID is empty&quot;;
+    }
+
+    if (!destinationNodeIds) {
+      throw &quot;Destination node IDs are empty&quot;;
+    }
+
+    ixConnect.ix().beginEditWorkFlowNode(flowId, currentNodeId, LockC.YES);
+    ixConnect.ix().endEditWorkFlowNode(flowId, currentNodeId, false, false, null, null, destinationNodeIds);
+
+    me.logger.debug([&quot;Workflow forwarded (flowId={0}, currentNodeId={1}, destinationNodeIds={2})&quot;, flowId, currentNodeId, destinationNodeIds]);
+  },
+
+<span id='sol-common-WfUtils-method-changeNodeUser'>  /**
+</span>   * Changes the user of a node.
+   * @param {de.elo.ix.client.WFNode} node The node to be changed
+   * @param {String} user The user which should be set
+   */
+  changeNodeUser: function (node, user) {
+    if (node) {
+      if (node.userName != user) {
+        node.userName = user;
+        node.userId = -1;
+      }
+    } else {
+      this.logger.warn(&quot;&#39;node&#39; cannot be empty, no user set.&quot;);
+    }
+  },
+
+<span id='sol-common-WfUtils-method-changeNodeName'>  /**
+</span>   * Changes the name of a node.
+   * @param {de.elo.ix.client.WFNode} node The node to be changed
+   * @param {String} name The new node name
+   */
+  changeNodeName: function (node, name) {
+    if (node) {
+      node.name = name;
+    } else {
+      this.logger.warn(&quot;&#39;node&#39; cannot be empty, name not changed.&quot;);
+    }
+  },
+
+<span id='sol-common-WfUtils-method-appendNodeComment'>  /**
+</span>   * Appends a String to a nodes comment field.
+   * @param {de.elo.ix.client.WFNode} node The node to be changed
+   * @param {String} comment
+   * @param {Boolean} override (optional) If `true`, an existing comment will be overridden
+   */
+  appendNodeComment: function (node, comment, override) {
+    if (override) {
+      node.comment = comment;
+      return;
+    }
+
+    if (node.comment &amp;&amp; node.comment.length() &gt; 0) {
+      node.comment += &quot;\n&quot;;
+    }
+    node.comment += comment;
+  },
+
+<span id='sol-common-WfUtils-method-findFirstActiveNodeWithUrl'>  /**
+</span>   * Finds the first active node of a specific object and workflow
+   * and returns the node ID and the URL.
+   * @param {String} objId Object ID
+   * @param {String} flowId Flow ID
+   * @return {Object} nodeId, url. Node ID and URL
+   */
+  findFirstActiveNodeWithUrl: function (objId, flowId) {
+    var me = this,
+        wfCollectNode, url;
+    wfCollectNode = me.findFirstActiveNode(objId, flowId);
+    if (wfCollectNode) {
+      url = me.getFormUrl(wfCollectNode);
+      return { nodeId: wfCollectNode.nodeId, url: url };
+    }
+  },
+
+<span id='sol-common-WfUtils-method-findFirstActiveNode'>  /**
+</span>   * Finds the first active Node of a specific object and workflow
+   * @param {String} objId Object ID
+   * @param {String} flowId Flow ID
+   * @return {de.elo.ix.client.WFCollectNode} wfCollectNode. Found active node.
+   */
+  findFirstActiveNode: function (objId, flowId) {
+    var me = this,
+        findTasksInfo, idx, findResult, tasks, i, wfCollectNode;
+
+    me.logger.enter(&quot;findFirstActiveNode&quot;, { objId: objId, flowId: flowId });
+
+    findTasksInfo = new FindTasksInfo();
+    findTasksInfo.inclWorkflows = true;
+    findTasksInfo.lowestPriority = UserTaskPriorityC.LOWEST;
+    findTasksInfo.highestPriority = UserTaskPriorityC.HIGHEST;
+    findTasksInfo.objId = objId;
+
+    idx = 0;
+    findResult = ixConnect.ix().findFirstTasks(findTasksInfo, 100);
+
+    while (true) {
+      tasks = findResult.tasks;
+      for (i = 0; i &lt; tasks.length; i++) {
+        wfCollectNode = tasks[i].wfNode;
+        if (wfCollectNode.flowId == flowId) {
+          me.logger.debug([&quot;found active node for workflow (flowId={0}, nodeName={1}, nodeId={2})&quot;, wfCollectNode.flowId, wfCollectNode.nodeName, wfCollectNode.nodeId]);
+          me.logger.exit(&quot;findFirstActiveNode&quot;);
+          return wfCollectNode;
+        }
+      }
+
+      if (!findResult.isMoreResults()) {
+        break;
+      }
+
+      idx += findResult.tasks.length;
+      findResult = ixConnect.ix().findNextTasks(findResult.searchId, idx, 100);
+    }
+
+    if (findResult) {
+      ixConnect.ix().findClose(findResult.searchId);
+    }
+
+    me.logger.debug([&quot;no active node found for flowId={0}&quot;, flowId]);
+    me.logger.exit(&quot;findFirstActiveNode&quot;);
+    return null;
+  },
+
+<span id='sol-common-WfUtils-method-getFormUrl'>  /**
+</span>   * Returns the ELOwf form URL of a specified node
+   * @param {de.elo.ix.client.WFCollectNode} wfCollectNode
+   * @return {String} url URL of the ELOwf form
+   */
+  getFormUrl: function (wfCollectNode) {
+    var me = this,
+        formName, baseUrl, url,
+        urlParams = [];
+    urlParams.push(&quot;wfid=&quot; + wfCollectNode.flowId);
+    urlParams.push(&quot;nodeid=&quot; + wfCollectNode.nodeId);
+    urlParams.push(&quot;ticket=&quot; + ixConnect.loginResult.clientInfo.ticket);
+    urlParams.push(&quot;lang=&quot; + ixConnect.loginResult.clientInfo.language);
+
+    formName = me.getFormName(wfCollectNode);
+    baseUrl = me.getWfBaseUrl();
+
+    if (!formName || !baseUrl) {
+      return &quot;&quot;;
+    }
+
+    url = baseUrl + &quot;/&quot; + formName + &quot;.jsp?&quot; + urlParams.join(&quot;&amp;&quot;);
+    return url;
+  },
+
+<span id='sol-common-WfUtils-method-getWfBaseUrl'>  /**
+</span>   * Returns the ELOwf base URL
+   * @return {String} url. ELOwf base URL.
+   */
+  getWfBaseUrl: function () {
+    var me = this,
+        globalProfile;
+    if (!me.wfBaseUrl) {
+      globalProfile = sol.create(&quot;sol.common.UserProfile&quot;, { userId: UserProfileC.USERID_ALL });
+      me.wfBaseUrl = String(globalProfile.getOption(&quot;Client.1398.1.0.Options.EloWfUrl.&quot;)).replace(/\/$/, &quot;&quot;);
+    }
+    return me.wfBaseUrl;
+  },
+
+<span id='sol-common-WfUtils-method-checkWfIsRunning'>  /**
+</span>   * Checks wether the ELOwf is running
+   * @return {Object}
+   * @return {Boolean} httpResponse.isRunning
+   */
+  checkWfIsRunning: function () {
+    var me = this,
+        wfStatusUrl, httpResponse;
+
+    wfStatusUrl = me.getWfBaseUrl() + &quot;/wf?__cmd__=status&quot;;
+
+    httpResponse = sol.common.HttpUtils.sendRequest({ url: wfStatusUrl, resolve: false, connectTimeout: 3000, readTimeout: 10000 });
+
+    if (httpResponse.responseOk &amp;&amp; (httpResponse.content.indexOf(&quot;&gt;ELOwf Status Report&lt;&quot;) &gt; -1) &amp;&amp; (httpResponse.content.indexOf(&quot;&gt;Running&lt;&quot;) &gt; -1)) {
+      httpResponse.isRunning = true;
+    } else {
+      httpResponse.isRunning = false;
+    }
+
+    return httpResponse;
+  },
+
+<span id='sol-common-WfUtils-method-getFormName'>  /**
+</span>   * Returns form name of a specified node
+   * @param {de.elo.ix.client.WFCollectNode} wfCollectNode
+   * @return {String} formName. Form name.
+   */
+  getFormName: function (wfCollectNode) {
+    var me = this,
+        formStartPos, formEndPos,
+        formSpec = String(wfCollectNode.formSpec);
+    if (!formSpec) {
+      me.logger.warn(&quot;Property &#39;formSpec&#39; is empty: node.name=&quot; + wfCollectNode.name);
+      return &quot;&quot;;
+    }
+    formStartPos = formSpec.indexOf(&quot;[&quot;) + 1;
+    formEndPos = formSpec.indexOf(&quot;(&quot;);
+    return formSpec.substring(formStartPos, formEndPos);
+  },
+
+<span id='sol-common-WfUtils-method-getTemplateWfDiagramNode'>  /**
+</span>   * Creates a template workflow node from a WFDiagram (see {@link sol.common.ObjectFormatter.TemplateWfDiagramNode TemplateWfDiagramNode}).
+   * @param {de.elo.ix.client.WFDiagram} wfDiagram
+   * @param {Number} nodeId
+   * @return {Object}
+   */
+  getTemplateWfDiagramNode: function (wfDiagram, nodeId) {
+    if (!wfDiagram) {
+      throw &quot;wfDiagram is empty&quot;;
+    }
+    if (!nodeId) {
+      throw &quot;Node ID is empty&quot;;
+    }
+
+    return sol.common.ObjectFormatter.format({
+      node: {
+        formatter: &quot;sol.common.ObjectFormatter.TemplateWfDiagramNode&quot;,
+        data: wfDiagram,
+        config: {
+          flowId: wfDiagram.id,
+          nodeId: nodeId
+        }
+      }
+    });
+  },
+
+<span id='sol-common-WfUtils-method-getWfMapValue'>  /**
+</span>   * Retrieves a map value from a workflow.
+   * @param {String} flowId Flow ID
+   * @param {String} key Map key
+   * @return {String} value
+   */
+  getWfMapValue: function (flowId, key) {
+    var tmpValue,
+        value = &quot;&quot;;
+
+    tmpValue = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_WORKFLOW_ACTIVE, flowId, [key], LockC.NO).items;
+    if (tmpValue &amp;&amp; tmpValue.length == 1) {
+      value = tmpValue[0].value;
+    }
+    return value;
+  },
+
+<span id='sol-common-WfUtils-method-setWfMapValue'>  /**
+</span>   * Sets a map value from a workflow.
+   * @param {Number} objId Flow ID
+   * @param {String} flowId Flow ID
+   * @param {String} key Map key
+   * @param {String|Array} values Value
+   */
+  setWfMapValue: function (objId, flowId, key, values) {
+    var i,
+        keyValues = [];
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    if (!flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+
+    if (!key) {
+      throw &quot;Map key is empty&quot;;
+    }
+    values = values || &quot;&quot;;
+
+    objId = parseInt(objId, 10);
+
+    if (sol.common.ObjectUtils.isArray(values)) {
+      for (i = 1; i &lt;= values.length; i++) {
+        keyValues.push(new KeyValue(key + i, values[i - 1]));
+      }
+      keyValues.push(new KeyValue(key + i, &quot;&quot;));
+    } else {
+      keyValues.push(new KeyValue(key, values));
+    }
+
+    ixConnect.ix().checkinMap(MapDomainC.DOMAIN_WORKFLOW_ACTIVE, flowId, objId, keyValues, LockC.NO);
+  },
+
+<span id='sol-common-WfUtils-method-getNodeUser'>  /**
+</span>   * Get node User
+   * @param {de.elo.ix.client.WFDiagram} wfDiagram Workflow diagram
+   * @param {String} nodeId Node ID
+   * @param {Object} config Configuration
+   * @param {Boolean} config.useSessionUserAlternatively
+   * @return {String} Node user
+   */
+  getNodeUser: function (wfDiagram, nodeId, config) {
+    var me = this,
+        wfNode,
+        nodeUser = &quot;&quot;;
+
+    config = config || {};
+
+    if (wfDiagram &amp;&amp; nodeId) {
+      wfNode = me.getNode(wfDiagram, nodeId);
+      nodeUser = String(wfNode.userName);
+    }
+
+    if (!nodeUser &amp;&amp; config.useSessionUserAlternatively) {
+      nodeUser = String(ixConnect.loginResult.user.name);
+    }
+    return nodeUser;
+  },
+
+<span id='sol-common-WfUtils-method-getCycleNumber'>  /**
+</span>   * Returns the cycle number
+   * @param {String} nodeName Node name
+   * @return {String}
+   */
+  getCycleNumber: function (nodeName) {
+    var matches;
+
+    matches = String(nodeName).match(/(\[\[)(\d+)(\]\]$)/);
+    if (matches &amp;&amp; (matches.length == 4)) {
+      return matches[2];
+    }
+  },
+
+<span id='sol-common-WfUtils-method-appendCycleNumber'>  /**
+</span>   * Appends the cycle number to a node name
+   * @param {String} nodeName Node name
+   * @param {String} cycleNo Cycle number
+   * @return {String}
+   */
+  appendCycleNumber: function (nodeName, cycleNo) {
+    return cycleNo ? nodeName + &quot; [[&quot; + cycleNo + &quot;]]&quot; : nodeName;
+  },
+
+<span id='sol-common-WfUtils-method-getServiceWfPrefix'>  /**
+</span>   * Retrieves the prefix for service workflows from the `serviceWfPrefix` property from `base.config` file.
+   * @return {String}
+   */
+  getServiceWfPrefix: function () {
+    var me = this;
+    return me.loadBaseConfig().serviceWfPrefix;
+  },
+
+<span id='sol-common-WfUtils-method-checkMainAdminWf'>  /**
+</span>   * Checks, if the workflow template was created of a user with main admin rights.
+   * @param {de.elo.ix.client.WFDiagram} wfDiagram
+   */
+  checkMainAdminWf: function (wfDiagram) {
+    var creator;
+    creator = (wfDiagram &amp;&amp; wfDiagram.version) ? wfDiagram.version.userId : &quot;&quot;;
+
+    if (creator == -1) {
+      throw &quot;Workflow creator ID is not valid: userId=&quot; + creator;
+    }
+
+    if (!sol.common.UserUtils.isMainAdmin(creator)) {
+      throw &quot;This workflow uses an admin function node. Hence this workflow template has to be created by an administrative user. It was created by &#39;&quot; + +(creator) + &quot;&#39;&quot;;
+    }
+  },
+
+<span id='sol-common-WfUtils-method-isServiceWf'>  /**
+</span>   * Checks, if a workflow was started from a service.
+   *
+   * Currently this is determined by the prefix at the workflow name retrieved by {@link #getServiceWfPrefix}.
+   * @param {de.elo.ix.client.WFDiagram} wfDiagram
+   * @return {Boolean}
+   */
+  isServiceWf: function (wfDiagram) {
+    var me = this,
+        prefix, wfName, isServiceWf;
+    me.logger.enter(&quot;isServiceWf&quot;, arguments);
+    prefix = me.getServiceWfPrefix();
+    wfName = wfDiagram.name;
+    isServiceWf = sol.common.StringUtils.startsWith(wfName, prefix);
+    me.logger.exit(&quot;isServiceWf&quot;, { isServiceWf: isServiceWf });
+    return isServiceWf;
+  },
+
+<span id='sol-common-WfUtils-method-createServiceWfName'>  /**
+</span>   * Creates the name for a service workflow from a given name.
+   *
+   * Currently this is implemented by using the value retrieved by {@link #getServiceWfPrefix} as prefix.
+   * @param {String} wfName
+   * @return {String}
+   */
+  createServiceWfName: function (wfName) {
+    var me = this,
+        prefix;
+    me.logger.enter(&quot;createServiceWfName&quot;, arguments);
+    prefix = me.getServiceWfPrefix();
+    if (prefix) {
+      wfName = prefix + wfName;
+    }
+    me.logger.exit(&quot;createServiceWfName&quot;, { wfName: wfName });
+    return wfName;
+  },
+
+<span id='sol-common-WfUtils-method-setSessionOptionStartDocMaskWorkflows'>  /**
+</span>   * Sets the session option ´Start docmask workflows´
+   * @param {Boolean} startDocMaskWorkflows Start doc mask workflows
+   */
+  setSessionOptionStartDocMaskWorkflows: function (startDocMaskWorkflows) {
+    var sessionOptions;
+
+    if (typeof startDocMaskWorkflows !== &quot;boolean&quot;) {
+      return;
+    }
+    sessionOptions = {};
+    sessionOptions[SessionOptionsC.START_DOCMASK_WORKFLOWS] = startDocMaskWorkflows ? &quot;true&quot; : &quot;false&quot;;
+
+    sol.common.RepoUtils.setSessionOptions(sessionOptions);
+  },
+
+<span id='sol-common-WfUtils-method-getTemplateSord'>  /**
+</span>   * Returns a template sord including wfMap data
+   * @param {de.elo.ix.client.Sord} sord sord for object formatter
+   * @param {String} flowId Workflow id of workflow map
+   * @param {Object} options Options
+   * @param {Boolean} options.asAdmin As admin
+   * @return {Object} Template Sord
+   */
+  getTemplateSord: function (sord, flowId, options) {
+    var me = this,
+        templateSord;
+
+    me.logger.enter(&quot;getTemplateSord&quot;, arguments);
+    templateSord = sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: &quot;sol.common.ObjectFormatter.WfMap&quot;,
+        data: sord,
+        config: {
+          sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;maskName&quot;, &quot;name&quot;, &quot;desc&quot;, &quot;IDateIso&quot;, &quot;XDateIso&quot;, &quot;ownerName&quot;],
+          allMapFields: true,
+          flowId: flowId,
+          asAdmin: (options &amp;&amp; options.asAdmin) || false
+        }
+      }
+    });
+    me.logger.exit(&quot;getTemplateSord&quot;);
+    return templateSord;
+  }
+});
+
+</pre>
+</body>
+</html>

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+
+<span id='sol-common-ActionBase'>/**
+</span> * @abstract
+ *
+ * Base class for actions.
+ *
+ * Actions allow providing the same functionality in several clients. The primary goal is to handle core operations
+ * (creating a folder and starting a workflow) in the process function of an action. Further logic should be implemented
+ * by workflow function modules.
+ *
+ * Subclasses have to implement the two abstract methods &#39;getName&#39; and &#39;process&#39;. These are used by the &#39;execute&#39; function.
+ *
+ * # Response
+ *
+ * Actions can return various types in form of a JSON String. The response is a standardized format and handled by this class.
+ * There are three return types:
+ *
+ * - events
+ * - messages (deprecated, because not used in standard action handling)
+ * - arbitrary data (deprecated, because not used in standard action handling)
+ *
+ * ## Add event functions
+ *
+ * Events are used in order to define a postprocessing in the clients. This allows to trigger a goto to the created element in elo or display a dialog that contains a workflow form.
+ *
+ * Following example shows how to display a dialog by a given flow id.
+ *
+ *     me.addWfDialogEvent(flowId, { objId: objId });
+ *
+ * Currently following events are supported:
+ *
+ * - addWfDialogEvent
+ * - addUrlDialogEvent
+ * - addAddDialogEvent (utilizes url event)
+ * - addActionEvent
+ * - addRefreshEvent
+ * - addGotoIdEvent
+ * - addGotoWfTaskEvent
+ * - addErrorEvent
+ * - addInfoEvent
+ * - addFeedbackEvent
+ *
+ * Please note that events are handled synchronously. If addWfDialogEvent and addRefreshEvent is called. The client will refresh the element after the users closes the dialog.
+ *
+ * # onSuccess and onFailure
+ * These functions can be implemented by the subclass. They will be called either if the action was processed successfully or if there occured an error.
+ *
+ * # Conditional events
+ *
+ * It is possible to declare events as conditional. The client handler will evaluate if the event should be executed.
+ * This is required since workflow processing can be influenced by the user. As an example: A WF-Form is displayed in a dialog. If the user clicks cancel refresh and goto events should&#39;nt be excecuted.
+ *
+ * The events has to declare an `ON` property, which has to define the following properties.
+ *
+ * - type {String}: &quot;WF_STATUS&quot;|&quot;SORD&quot;|&quot;GRP&quot;|&quot;MAP&quot;
+ * - key {String}: only for type=&quot;SORD&quot;|&quot;GRP&quot;|&quot;MAP&quot;, contains the sord property, the group key or map key
+ * - objId {String}: only for type=&quot;SORD&quot;|&quot;GRP&quot;|&quot;MAP&quot;, the objId of the sord which should be checked
+ * - flowId {String}: only for type=&quot;WF_STATUS&quot;, the workflow id to get the status from
+ * - value {String}: the value which has to be fulfilled
+ *
+ * Following example shows a condition used by the refresh event.
+ *
+ *     me.addRefreshEvent(objId, {
+ *       type: &quot;WF_STATUS&quot;,
+ *       value: &quot;APPROVE&quot;,
+ *       flowId: flowId
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @eloas
+ * @requires sol.common.StringUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.WfUtils
+ */
+sol.define(&quot;sol.common.ActionBase&quot;, {
+
+<span id='sol-common-ActionBase-property-_registeredEvents'>  _registeredEvents: undefined,
+</span>
+<span id='sol-common-ActionBase-property-_messages'>  _messages: undefined,
+</span>
+<span id='sol-common-ActionBase-property-_data'>  _data: undefined,
+</span>
+<span id='sol-common-ActionBase-property-_APP_URL_TEMPLATE'>  /**
+</span>   * @private
+   * @property {String} _APP_URL_TEMPLATE Template for the app event
+   */
+  _APP_URL_TEMPLATE: &quot;{{eloWfBaseUrl}}/apps/app/{{appName}}/?lang={{language}}&amp;ticket={{ticket}}&quot;,
+
+<span id='sol-common-ActionBase-property-actionId'>  actionId: undefined,
+</span>
+<span id='sol-common-ActionBase-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    if (me.$className === &quot;sol.common.ActionBase&quot;) {
+      throw &quot;can not create instance of abstract class &#39;sol.common.ActionBase&#39;&quot;;
+    }
+    RhinoManager.registerClass(me.$className);
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me._registeredEvents = [];
+    me._messages = [];
+    me._data = {};
+    me.actionId = sol.common.CounterUtils.incCounter(&quot;SOL_ACTION_ID&quot;);
+  },
+
+<span id='sol-common-ActionBase-method-getName'>  /**
+</span>   * @abstract
+   * Name of the action. Has to be implemented by subclass.
+   */
+  getName: function () {
+    throw &quot;cannot call &#39;name&#39; of abstract class &#39;sol.common.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-ActionBase-method-process'>  /**
+</span>   * @abstract
+   * Implementation of the action. Has to be implemented by subclass.
+   */
+  process: function () {
+    throw &quot;cannot call &#39;process&#39; of abstract class &#39;sol.common.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-ActionBase-method-onSuccess'>  /**
+</span>   * Will be called in case of a successfull action execution. The implementation in the subclass is optional.
+   */
+  onSuccess: function () { },
+
+<span id='sol-common-ActionBase-method-onFailure'>  /**
+</span>   * Will be called in case of an action failure. The implementation in the subclass is optional.
+   * The default implementation will write an ERROR log entry and call {@link #addErrorEvent}.
+   * @param {Exception} exception
+   */
+  onFailure: function (exception) {
+    var me = this;
+    me.logger.error([&quot;Error processing &#39;{0}&#39;&quot;, me.$className], exception);
+    me.addErrorEvent(exception.message || exception);
+  },
+
+<span id='sol-common-ActionBase-method-execute'>  /**
+</span>   * Handles the execution of Actions and internally calls sol.common.ix.ActionHandler#process.
+   * This function is called by sol.common.jc.ActionHandler.execute
+   * @return {Object}
+   */
+  execute: function () {
+    var me = this;
+
+    me.logger.enter(&quot;execute_&quot; + me.$className);
+    me.logger.info([&quot;executing action &#39;{0}&#39; =&gt; actionId={1}&quot;, me.getName(), me.actionId]);
+
+    try {
+      me.process();
+      me.onSuccess();
+    } catch (ex) {
+      me.onFailure(ex);
+    }
+
+    me.logger.exit(&quot;execute_&quot; + me.$className);
+
+    return me.buildResponse();
+  },
+
+<span id='sol-common-ActionBase-method-requireUserRights'>  /**
+</span>   * Checks if a user has the required rights on an object.
+   *
+   * If some rights are missing this will throw an exception.
+   *
+   * @param {String|de.elo.ix.client.Sord} sord ObjId or sord to check the access rights on
+   * @param {Object} params
+   * @param {String|Object} params.rights Either a string (in form &#39;RWDEL&#39;) or an object (see {@link sol.common.AclUtils rights}) specifying the rights the user requires
+   * @param {String} params.message (optional) This can specify a message to override the default exception text from `sol.common.ix.actions.errorRequiredUserRights`. Has priority over `messageKey`.
+   * @param {String} params.messageKey (optional) This can specify a translation key to override the default exception text from `sol.common.ix.actions.errorRequiredUserRights`
+   * @param {String|de.elo.ix.client.ClientInfo} params.language (optional)
+   * Either an ISO language String, or an de.elo.ix.client.ClientInfo Object. Default will be the ClientInfo from the connection. Not relevant for `message`.
+   * @throws Throws an exception if the user has not the specified rights
+   */
+  requireUserRights: function (sord, params) {
+    var me = this,
+        hasRights = true,
+        cfg, exception;
+
+    if (params &amp;&amp; params.rights) {
+      cfg = {};
+      if (!sol.common.ObjectUtils.isObject(params.rights)) {
+        cfg.rights = {};
+        if (sol.common.StringUtils.contains(params.rights, &quot;R&quot;)) {
+          cfg.rights.r = true;
+        }
+        if (sol.common.StringUtils.contains(params.rights, &quot;W&quot;)) {
+          cfg.rights.w = true;
+        }
+        if (sol.common.StringUtils.contains(params.rights, &quot;D&quot;)) {
+          cfg.rights.d = true;
+        }
+        if (sol.common.StringUtils.contains(params.rights, &quot;E&quot;)) {
+          cfg.rights.e = true;
+        }
+        if (sol.common.StringUtils.contains(params.rights, &quot;L&quot;)) {
+          cfg.rights.l = true;
+        }
+      } else {
+        cfg.rights = params.rights;
+      }
+      hasRights = sol.common.AclUtils.hasEffectiveRights(sord, cfg);
+    }
+
+    if (!hasRights) {
+      if (params &amp;&amp; params.message) {
+        exception = params.message;
+      } else {
+        exception = me.getLocalizedString(
+          (params &amp;&amp; params.language) ? params.language : ixConnect.loginResult.clientInfo,
+          (params &amp;&amp; params.messageKey) ? params.messageKey : &quot;sol.common.ix.actions.errorRequiredUserRights&quot;
+        );
+      }
+      throw exception;
+    }
+  },
+
+<span id='sol-common-ActionBase-method-addMessage'>  /**
+</span>   * @deprecated 1.03.000 Not used for standard action handling and might be removed in future versions
+   * Add a (localized) massage to the response.
+   * @param {String|de.elo.ix.client.ClientInfo} language Either an ISO language String, or an de.elo.ix.client.ClientInfo Object
+   * @param {String} msg Either a message string or a message key (if language is set)
+   */
+  addMessage: function (language, msg) {
+    var me = this;
+
+    if (language) {
+      msg = this.getLocalizedString(language, msg);
+    }
+
+    me._messages.push(msg);
+  },
+
+<span id='sol-common-ActionBase-method-addPayload'>  /**
+</span>   * @deprecated 1.03.000 Not used for standard action handling and might be removed in future versions
+   * Add some payload data to the response
+   * @param {String} key
+   * @param {String} value
+   */
+  addPayload: function (key, value) {
+    var me = this;
+    me._data[key] = value;
+  },
+
+<span id='sol-common-ActionBase-method-addWfDialogEvent'>  /**
+</span>   * Add an event which tells the client to open a workflow form in a dialog.
+   *
+   * Please not that the flowId must be given in order to identify the current Workflow node for the user.
+   *
+   *     flowId = me.startWorkflow(contractObjId, contractConfig.workflows.approveContract.workflowTemplateName, wfName);
+   *     me.addWfDialogEvent(flowId, { objId: objId });
+   *
+   * @param {String} flowId (required)
+   * @param {Object} params (optional)
+   * @param {String} params.objId (optional) Either `nodeId` or `objId` is required
+   * @param {String} params.nodeId (optional) Either `nodeId` or `objId` is required
+   * @param {String} params.title (optional) Dialog title
+   * @param {String} params.dialogId (optional) Id so the client can save the size for the dialog
+   */
+  addWfDialogEvent: function (flowId, params) {
+    var me = this,
+        eventdata = { flowId: flowId },
+        node;
+
+    if (params &amp;&amp; params.nodeId) {
+      eventdata.nodeId = params.nodeId;
+    } else if (params &amp;&amp; params.objId) {
+      node = sol.common.WfUtils.findFirstActiveNode(params.objId, flowId);
+      eventdata.nodeId = (node) ? node.nodeId : null;
+    }
+
+    if (!eventdata.flowId || !eventdata.nodeId) {
+      return;
+    }
+
+    me.addDialogEvent(eventdata, params);
+  },
+
+<span id='sol-common-ActionBase-method-addUrlDialogEvent'>  /**
+</span>   * Add an event which tells the client to open a URL in a dialog.
+   *
+   *     me.addUrlDialogEvent(&quot;http://server/myCustomApp&quot;);
+   *
+   * @param {String} url
+   * @param {Object} params (optional)
+   * @param {String} params.title (optional) Dialog title
+   * @param {String} params.dialogId (optional) Id so the client can save the size for the dialog
+   */
+  addUrlDialogEvent: function (url, params) {
+    var me = this,
+        eventdata = { url: url };
+
+    me.addDialogEvent(eventdata, params);
+  },
+
+<span id='sol-common-ActionBase-method-addAppDialogEvent'>  /**
+</span>   * Add an event which tells the client to open a dialog with an app.
+   *
+   *     me.addAppDialogEvent();
+   *
+   * @param {String} appName The name of the app
+   * @param {Object} params (optional)
+   * @param {String} params.language (optional) Language shurtcut to call the app with. Default will be from IX connection.
+   * @param {String} params.title (optional) Dialog title
+   * @param {String} params.dialogId (optional) Id so the client can save the size for the dialog
+   */
+  addAppDialogEvent: function (appName, params) {
+    var me = this,
+        language, eloWfBaseUrl, url, eventdata;
+
+    language = (params &amp;&amp; params.language) ? params.language : ixConnect.loginResult.clientInfo.language;
+    eloWfBaseUrl = sol.common.WfUtils.getWfBaseUrl();
+
+    url = sol.create(&quot;sol.common.Template&quot;, { source: me._APP_URL_TEMPLATE }).apply({
+      eloWfBaseUrl: eloWfBaseUrl,
+      appName: appName,
+      language: language,
+      ticket: ixConnect.loginResult.clientInfo.ticket
+    });
+
+    if (!url) {
+      return;
+    }
+
+    eventdata = { url: url };
+
+    me.addDialogEvent(eventdata, params);
+  },
+
+<span id='sol-common-ActionBase-method-addDialogEvent'>  /**
+</span>   * @private
+   * Adds a dialog event. Used by {@link #addWfDialogEvent}, {@link #addUrlDialogEvent} and {@link #addAppDialogEvent}
+   * @param {Object} eventdata Prefilled data object (e.g. `url` or `flowId` and `nodeId`)
+   * @param {Object} params (optional)
+   * @param {String} params.title (optional) Dialog title
+   * @param {String} params.dialogId (optional) Id so the client can save the size for the dialog
+   */
+  addDialogEvent: function (eventdata, params) {
+    var me = this,
+        event;
+
+    if (params &amp;&amp; params.title) {
+      eventdata.title = eventdata.title || params.title;
+    }
+
+    if (params &amp;&amp; params.dialogId) {
+      eventdata.dialogId = eventdata.dialogId || params.dialogId;
+    }
+
+    event = me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.DIALOG, eventdata);
+
+    me._registeredEvents.push(event);
+  },
+
+<span id='sol-common-ActionBase-method-addActionEvent'>  /**
+</span>   * Adds an event which tells the client to start another action.
+   *
+   * @param {String} registeredFunction RF of the action which should be called next
+   * @param {Object} params Params for the RF which should be called next
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addActionEvent: function () {
+    throw &quot;cannot call &#39;addActionEvent&#39; of class &#39;sol.common.ActionBase&#39;, function has to be implemented by subclass&quot;;
+  },
+
+<span id='sol-common-ActionBase-method-addRefreshEvent'>  /**
+</span>   * Adds an event which tells the client to refresh the current view.
+   *
+   *     me.addRefreshEvent(objId);
+   *
+   * @param {String} objId
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addRefreshEvent: function (objId, on) {
+    var me = this;
+    me._registeredEvents.push(me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.REFRESH, { objId: objId }, on));
+  },
+
+<span id='sol-common-ActionBase-method-addGotoIdEvent'>  /**
+</span>   * Adds an event which tells the client to navigate to a given Sord id.
+   *
+   * Goto a new element.
+   *
+   *     me.addGotoIdEvent(objId);
+   *
+   * Goto a new element if the workflow status was set to &quot;CREATE&quot;.
+   *
+   *     me.addGotoIdEvent(objId, undefined, {
+   *       type: &quot;WF_STATUS&quot;,
+   *       value: &quot;CREATE&quot;,
+   *       flowId: flowId
+   *     });
+   *
+   * Goto a new document and open the document for edit. (Checkout)
+   *
+   *     me.addGotoIdEvent(objId, true, {
+   *       type: &quot;WF_STATUS&quot;,
+   *       value: &quot;CREATE&quot;,
+   *       flowId: flowId
+   *     });
+   *
+   * @param {String} objId
+   * @param {Boolean} checkout
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addGotoIdEvent: function (objId, checkout, on) {
+    var me = this,
+        eventCfg = { objId: objId };
+
+    eventCfg.checkout = (checkout === true) ? true : false;
+
+    me._registeredEvents.push(me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.GOTO, eventCfg, on));
+  },
+
+<span id='sol-common-ActionBase-method-addGotoWfTaskEvent'>  /**
+</span>   * Adds an event which tells the client to navigate to a given task.
+   *
+   *     me.addGotoWfTaskEvent(flowId);
+   *
+   * @param {String} flowId (required)
+   * @param {Object} params (optional)
+   * @param {String} params.objId (optional) Either `nodeId` or `objId` is required
+   * @param {String} params.nodeId (optional) Either `nodeId` or `objId` is required
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addGotoWfTaskEvent: function (flowId, params, on) {
+    var me = this,
+        eventdata = { flowId: flowId },
+        node;
+
+    if (params &amp;&amp; params.nodeId) {
+      eventdata.nodeId = params.nodeId;
+    } else if (params &amp;&amp; params.objId) {
+      node = sol.common.WfUtils.findFirstActiveNode(params.objId, flowId);
+      eventdata.nodeId = (node) ? node.nodeId : null;
+    }
+
+    if (!eventdata.flowId || !eventdata.nodeId) {
+      return;
+    }
+
+    me._registeredEvents.push(me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.GOTO, eventdata, on));
+  },
+
+<span id='sol-common-ActionBase-method-addErrorEvent'>  /**
+</span>   * Adds an error event.
+   *
+   *     if (!me.templateId) {
+   *       me.addErrorEvent(&quot;partner.msgs.errormessage&quot;, null, null, me.ci);
+   *       return;
+   *     }
+   *
+   * @param {String} message Either a message string or a message key (if language is set)
+   * @param {String} errorcode (optional)
+   * @param {String} exception (optional)
+   * @param {String|de.elo.ix.client.ClientInfo} language (optional) Either an ISO language String, or an de.elo.ix.client.ClientInfo Object
+   */
+  addErrorEvent: function (message, errorcode, exception, language) {
+    var me = this,
+        errorCfg = {},
+        errorEvent;
+
+    if (language) {
+      message = me.getLocalizedString(language, message);
+    }
+
+    if (message) {
+      errorCfg.msg = message;
+    }
+    if (errorcode) {
+      errorCfg.code = errorcode;
+    }
+    if (exception) {
+      errorCfg.ex = exception;
+    }
+
+    errorEvent = me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.ERROR, errorCfg);
+
+    me._registeredEvents.push(errorEvent);
+  },
+
+<span id='sol-common-ActionBase-method-addInfoEvent'>  /**
+</span>   * Adds an info event.
+   *
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;de&quot;)
+   *
+   * will return the string as defined the relevant properties language file of the indexserver translation
+   *
+   *     addFeedbackEvent(&quot;hello {{str1}}&quot;, null, { str1: &quot;world&quot; })  ==&gt; &quot;hello world&quot;
+   *
+   * Assuming, that we have property language keys defined for German (`sol.pubsec.MyString=Herr {{name}} wir grüßen Sie`) and English (`sol.pubsec.MyString=Greetings Mr. {{name}}`):
+   *
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;de&quot;, { name: &quot;Mustermann&quot; })  ==&gt; &quot;Herr Mustermann wir grüßen Sie&quot;
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;en&quot;, { name: &quot;Mustermann&quot; })  ==&gt; &quot;Greetings Mr. Mustermann&quot;
+   *
+   * @param {String} message Either a message string or a message key (if language is set)
+   * @param {String|de.elo.ix.client.ClientInfo} language (optional) Either an ISO language String, or an de.elo.ix.client.ClientInfo Object
+   * @param {Object} params (optional) if set, the message will be used as a handlebars string with the params applied (if there is also a `language`, the translation will be applied first)
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addInfoEvent: function (message, language, params, on) {
+    var me = this,
+        feedbackCfg, feedbackEvent;
+
+    feedbackCfg = me.createFeedbackEventCfg(message, language, params, on);
+    if (feedbackCfg) {
+      feedbackCfg.permanent = true;
+      feedbackEvent = me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK, feedbackCfg, on);
+      me._registeredEvents.push(feedbackEvent);
+    }
+  },
+
+<span id='sol-common-ActionBase-method-addFeedbackEvent'>  /**
+</span>   * Adds a feedback event.
+   *
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;de&quot;)
+   *
+   * will return the string as defined the relevant properties language file of the indexserver translation
+   *
+   *     addFeedbackEvent(&quot;hello {{str1}}&quot;, null, { str1: &quot;world&quot; })  ==&gt; &quot;hello world&quot;
+   *
+   * Assuming, that we have property language keys defined for German (`sol.pubsec.MyString=Herr {{name}} wir grüßen Sie`) and English (`sol.pubsec.MyString=Greetings Mr. {{name}}`):
+   *
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;de&quot;, { name: &quot;Mustermann&quot; })  ==&gt; &quot;Herr Mustermann wir grüßen Sie&quot;
+   *     addFeedbackEvent(&quot;sol.pubsec.MyString&quot;, &quot;en&quot;, { name: &quot;Mustermann&quot; })  ==&gt; &quot;Greetings Mr. Mustermann&quot;
+   *
+   * @param {String} message Either a message string or a message key (if language is set)
+   * @param {String|de.elo.ix.client.ClientInfo} language (optional) Either an ISO language String, or an de.elo.ix.client.ClientInfo Object
+   * @param {Object} params (optional) if set, the message will be used as a handlebars string with the params applied (if there is also a `language`, the translation will be applied first)
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  addFeedbackEvent: function (message, language, params, on) {
+    var me = this,
+        feedbackCfg, feedbackEvent;
+
+    feedbackCfg = me.createFeedbackEventCfg(message, language, params, on);
+    if (feedbackCfg) {
+      feedbackCfg.permanent = false;
+      feedbackEvent = me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK, feedbackCfg, on);
+      me._registeredEvents.push(feedbackEvent);
+    }
+  },
+
+<span id='sol-common-ActionBase-method-createFeedbackEventCfg'>  /**
+</span>   * @private
+   * Creates an basic feedback event config. Used by {@link #addFeedbackEvent} and {@link addInfoEvent}.
+   * @param {String} message
+   * @param {String|de.elo.ix.client.ClientInfo} language
+   * @param {Object} params
+   * @param {Object} on
+   * @return {Object}
+   */
+  createFeedbackEventCfg: function (message, language, params, on) {
+    var me = this,
+        feedbackCfg = {};
+
+    if (!message) {
+      return null;
+    }
+    if (language) {
+      message = me.getLocalizedString(language, message);
+    }
+
+    if (params) {
+      message = sol.create(&quot;sol.common.Template&quot;, { source: message }).apply(params);
+    }
+
+    feedbackCfg.msg = message;
+
+    return feedbackCfg;
+  },
+
+<span id='sol-common-ActionBase-method-getLocalizedString'>  /**
+</span>   * Get a localized string for a key.
+   * @param {String|de.elo.ix.client.ClientInfo} language Either an ISO language String, or an de.elo.ix.client.ClientInfo Object
+   * @param {String} key The key in the resource files
+   * @return {String}
+   */
+  getLocalizedString: function (language, key) {
+    return sol.common.TranslateTerms.getTerm(language, key);
+  },
+
+<span id='sol-common-ActionBase-method-writeFeedEvent'>  /**
+</span>   * Writes a feed event for an object.
+   *
+   * Uses {@link sol.common.ix.functions.FeedComment#RF_sol_function_FeedComment RF_sol_function_FeedComment}.
+   *
+   * @param {String} objId
+   * @param {Object} params
+   * @param {String} params.file The name of the language file (in `Administration/ELOwf Base/Feed/Script Locales`)
+   * @param {String} params.key The key in the language file
+   * @param {String[]} params.data (optional) Optional data, if the language key contains placeholders
+   */
+  writeFeedEvent: function (objId, params) {
+    var me = this;
+    if (!objId) {
+      me.logger.error(&quot;IllegalArgumentException: can not write feed comment without an &#39;objId&#39;&quot;);
+      return;
+    }
+    if (!params || !params.file || !params.key) {
+      me.logger.error(&quot;IllegalArgumentException: can not write feed comment without a &#39;file&#39; or a &#39;key&#39;&quot;);
+      return;
+    }
+    sol.common.IxUtils.execute(&quot;RF_sol_function_FeedComment&quot;, params);
+  },
+
+<span id='sol-common-ActionBase-method-startWorkflow'>  /**
+</span>   * Starts a workflow and returns the new workflow Id.
+   * Uses {@link sol.common.WfUtils#startWorkflow WfUtils.startWorkflow}.
+   *
+   *
+   *
+   * @param {String} objId
+   * @param {String} templateId
+   * @param {String} name The workflow name
+   * @return {String} The workflow ID
+   */
+  startWorkflow: function (objId, templateId, name) {
+    return sol.common.WfUtils.startWorkflow(templateId, name, objId);
+  },
+
+<span id='sol-common-ActionBase-method-startMaskStandardWorkflow'>  /**
+</span>   * Starts the workflow defined in the as standard workflow for the mask or in an index field.
+   * If there is already an workflow, it will do nothing and return the first active one.
+   * Uses {@link sol.common.WfUtils#startMaskStandardWorkflow WfUtils.startMaskStandardWorkflow}.
+   *
+   * @param {String} objId
+   * @param {Object} params (optional) Default will be the sord name
+   * @param {Object} params.name (optional) Default will be the sord name
+   * @param {Object} params.field (optional) The field to read the workflow template from
+   * @return {String} The workflow ID
+   */
+  startMaskStandardWorkflow: function (objId, params) {
+    return sol.common.WfUtils.startMaskStandardWorkflow(objId, params);
+  },
+
+<span id='sol-common-ActionBase-method-buildResponse'>  /**
+</span>   * @private
+   * Builds a json response including events, messages.
+   * @return {String}
+   */
+  buildResponse: function () {
+    var me = this,
+        response = {};
+
+    if (me.arrayIsNotEmpty(me._registeredEvents)) {
+      response.events = me._registeredEvents;
+    }
+
+    if (me.arrayIsNotEmpty(me._messages)) {
+      response.messages = me._messages;
+    }
+
+    response.data = me._data;
+
+    return sol.common.JsonUtils.stringifyAll(response);
+  },
+
+<span id='sol-common-ActionBase-method-createEvent'>  /**
+</span>   * @abstract
+   * @private
+   * @param {String} type The type of event which should be executed after function returns
+   * @param {Object} params Object with key-value-pairs to configure the event
+   * @param {Object} on (optional) Object with conditions for the event execution (see class documentation)
+   */
+  createEvent: function () {
+    throw &quot;cannot call &#39;createEvent&#39; of class &#39;sol.common.ActionBase&#39;, function has to be implemented by subclass&quot;;
+  },
+
+<span id='sol-common-ActionBase-method-arrayIsNotEmpty'>  /**
+</span>   * @private
+   * Checks if an Array is empty or not.
+   * @param {Array} array
+   * @returns {Boolean}
+   */
+  arrayIsNotEmpty: function (array) {
+    return array &amp;&amp; array.length &gt; 0;
+  }
+
+});
+</pre>
+</body>
+</html>

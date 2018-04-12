@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// JavaScript Dokument
+
+<span id='Wftransport'>/**
+</span> * @class Wftransport
+ */
+function Wftransport() {
+}
+
+var wftransport = new Wftransport();
+
+<span id='Wftransport-method-beforeSend'>/**
+</span> * Skriptaufruf vor dem Versenden der Workflow-Daten.
+ * 
+ * @param {Object} wfData Workflow-Daten
+ */
+Wftransport.prototype.beforeSend = function(wfData) {
+  log.warn(&quot;Skriptaufruf beforeSend&quot;);
+  log.warn(wfData);
+  wfData.remoteWfObjId = &quot;(E4246684-9E37-B835-0E4A-D9D4FC0AC214)&quot;;
+};
+
+<span id='Wftransport-method-afterReturn'>/**
+</span> * Skriptaufruf nach dem Zurückkehren aus der Funktion. 
+ * 
+ * @param {Object} wfData Workflow-Daten
+ */
+Wftransport.prototype.afterReturn = function(wfData) {
+  log.warn(&quot;Skriptaufruf afterReturn&quot;);
+  log.warn(wfData);
+};
+
+<span id='Wftransport-method-beforeReturn'>/**
+</span> * Skriptaufruf vor dem Zurückkehren aus der Funktion.
+ * 
+ * @param {Object} wfData Workflow-Daten
+ */
+Wftransport.prototype.beforeReturn = function(wfData) {
+  log.warn(&quot;Skriptaufruf beforeReturn&quot;);
+  log.warn(wfData);
+};</pre>
+</body>
+</html>

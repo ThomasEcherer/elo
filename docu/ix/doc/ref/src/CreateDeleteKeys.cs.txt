@@ -1,0 +1,87 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Creates and deletes a key.
+	/// </summary>
+	public class CreateDeleteKeys
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+				
+				// lock key data 
+				// This is optional since checkinKeys and 
+				// deleteKeys check the lock too.
+				Logger.instance().log("lock key data...");
+				ix.checkoutKeys(ci, null, CONST.LOCK.YES);
+				Logger.instance().log("lock key data OK");
+
+				// create key 
+				// - be aware to set KeyInfo.id = -1 to create a new key!
+				Logger.instance().log("create key...");
+				IndexServer.KeyInfo ki = new IndexServer.KeyInfo();
+				ki.id = -1;
+				ki.name = "C# Example Key";
+				ki.id = ix.checkinKeys(ci, new IndexServer.KeyInfo[] {ki}, CONST.LOCK.NO)[0];
+				Logger.instance().log("create key OK, name=" + ki.name + ", id=" + ki.id);
+
+				// delete key and unlock
+				Logger.instance().log("delete key...");
+				ix.deleteKeys(ci, new String[] {ki.name}, CONST.LOCK.YES);
+				Logger.instance().log("delete key OK");
+				
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+
+		}
+	}
+}

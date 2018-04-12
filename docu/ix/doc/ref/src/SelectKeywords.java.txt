@@ -1,0 +1,178 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Keyword;
+import de.elo.ix.client.KeywordC;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to activate and deactivate entries in a keyword list.
+ * The following keyword tree will be inserted
+ * 
+ * Keyword Example Folder
+ * |
+ * +---Folder1
+ * |     +----------------Text 1
+ * |     +----------------Text 2   (cannot be selected)
+ * +---Folder2
+ *       +----------------Folder3           
+ *                          +------Text3      (Folder3 will be added before name if selected)
+ * 
+ * The structure can be viewed in the ELO client by openeing the keywording for 
+ * an archive entry with the "Email" keywording form. Right clicking in the 
+ * "TO" field will open the keywording list.
+ */
+
+public class SelectKeywords {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    private static KeywordC KEYWORD;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            createSelectKeywords();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void createSelectKeywords() throws RemoteException {
+        
+        // Use ELOOUTL2 as list id so entries can be checked in ELO archive with 
+        // entries with the Email mask
+        String keywordListId = "ELOOUTL2";
+        boolean deleteOnExit = false;
+        
+        // Lock keyword database to avoid concurrent modifications
+        ix.ix().checkoutKeywords(null, KEYWORD.getMbEdit(), -1, LOCK.getYES());
+        System.out.println("Keywords locked");
+        
+        // Build keyword tree 
+        // root keyword
+        Keyword kwRoot = new Keyword();
+        // Set keyword id
+        // NOTE: the maximum length of the id is KEYWORD.getLnRoot()
+        // The id must not contain "."
+        kwRoot.setId(keywordListId);
+        kwRoot.setText("Keyword Example Folder");
+        kwRoot.setChildren(new Keyword[2]);
+        
+        // Folder1
+        Keyword kwFolder1 = kwRoot.getChildren()[0] = new Keyword(); 
+        kwFolder1.setText("Folder1");
+        kwFolder1.setChildren(new Keyword[2]);
+        
+        // Text 1
+        kwFolder1.getChildren()[0] = new Keyword();
+        kwFolder1.getChildren()[0].setEnabled(true);
+        kwFolder1.getChildren()[0].setText("Text 1");
+        
+        // Text 2
+        // Setting enabled = false prevents the user selecting the text!
+        kwFolder1.getChildren()[1] = new Keyword();
+        kwFolder1.getChildren()[1].setEnabled(false);
+        kwFolder1.getChildren()[1].setText("Text 2");
+        
+        // Folder 2
+        Keyword kwFolder2 = kwRoot.getChildren()[1] = new Keyword();
+        kwFolder2.setText("Folder2");
+        kwFolder2.setChildren(new Keyword[2]);
+        
+        // Folder 3
+        // Setting add = true concatenates the parent folder name to the front 
+        // of the text selected from the child entries - cookKeyword must be 
+        // called to build the name in full. 
+        Keyword kwFolder3 = kwFolder2.getChildren()[0] = new Keyword();
+        kwFolder3.setText("Folder3");
+        kwFolder3.setChildren(new Keyword[1]);
+        kwFolder3.setAdd(true);
+        
+        // Text 3
+        kwFolder3.getChildren()[0] = new Keyword();
+        kwFolder3.getChildren()[0].setEnabled(true);
+        kwFolder3.getChildren()[0].setText("Text 3");  
+
+        // Checkin new keyword list
+        ix.ix().checkinKeywords(new Keyword[] {kwRoot}, LOCK.getNO());
+        
+        // Checkout to select a keyword 
+        // This call could be used to fill a dialogue to show keywords
+        Keyword kwRootView = ix.ix().checkoutKeywords(new String[] {kwRoot.getId()}, KEYWORD.getMbView(), -1, LOCK.getNO())[0];
+
+        // Display keywords from folders
+        displayKeywords(kwRootView, "     ");
+        
+    }
+    
+    
+    // Display information for keyword
+    public static void displayKeywords(Keyword kw, String indent){
+        System.out.println(indent + "kw.id = " + kw.getId());
+        System.out.println(indent + "text = " + kw.getText());
+        // if enabled and raw then cookKeyword must be called to build the name to be displayed.
+        if (kw.isEnabled() && kw.isRaw()){
+            try{
+                 String keywordText = ix.ix().cookKeyword(kw.getId());
+                 System.out.println(indent + "Cooked text = " + keywordText);
+                } catch (RemoteException ignored){
+                    // ignored
+                } 
+        }
+        System.out.println(indent + "add = " + kw.isAdd());
+        System.out.println(indent + "enabled = " + kw.isEnabled());
+        System.out.println(indent + "raw = " + kw.isRaw());
+        System.out.println(indent + "has children = " + (kw.getChildren() != null) + 
+                                    ", #children = " + ((kw.getChildren() != null) ? kw.getChildren().length : 0));
+        
+        if (kw.getChildren() != null){
+            for ( int i = 0; i < kw.getChildren().length; i++){
+                displayKeywords(kw.getChildren()[i], indent + "    ");
+            }
+        }
+    }
+    
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        LOCK = CONS.getLOCK();
+        KEYWORD = CONS.getKEYWORD();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

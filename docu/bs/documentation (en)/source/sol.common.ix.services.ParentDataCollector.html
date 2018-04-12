@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.ServiceBase.js
+//@include lib_sol.common.ix.DataCollectorBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ParentDataCollector&quot; });
+
+<span id='sol-common-ix-services-ParentDataCollector'>/**
+</span> * Collects all parent information from the hierarchy.
+ *
+ * The hierarchy will be returned as a flat structure.
+ *
+ * The result hierarchy contains the following properties:
+ *
+ * - sord: The selected element itself
+ * - parent: The direct parent element
+ * - SOL_TYPE: For each fount SOL_TYPE one property (see {@link #mode}), could contain duplicates to &#39;parent&#39; and &#39;sord&#39;
+ *
+ * # Example
+ *
+ *     var result = sol.common.IxUtils.execute(&quot;RF_sol_common_service_ParentDataCollector&quot;, {
+ *       objId: &quot;5690&quot;,
+ *       formatter: &quot;sol.common.ObjectFormatter.StatisticSord&quot;
+ *     });
+ *
+ * # Result
+ *
+ *     {
+ *       version: &#39;1.00.000&#39;,
+ *       formatter: &#39;sol.common.ObjectFormatter.StatisticSord&#39;,
+ *       sord: {
+ *         id: &quot;5690&quot;,
+ *         name: &#39;Annual report&#39;,
+ *         O_INVOICE_DATE: &#39;20160101&#39;
+ *       },
+ *       parent: {
+ *         id: &quot;5669&quot;,
+ *         name: &#39;12 Public relations&#39;,
+ *         O_INVOICE_DATE: &#39;20151202&#39;
+ *       },
+ *       FILE: {
+ *         id: &quot;5669&quot;,
+ *         name: &#39;12 Public relations&#39;,
+ *         O_INVOICE_DATE: &#39;20151202&#39;
+ *       },
+ *       ...
+ *     }
+ *
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ServiceBase
+ * @requires sol.common.ix.DataCollectorBase
+ *
+ */
+sol.define(&quot;sol.common.ix.services.ParentDataCollector&quot;, {
+  extend: &quot;sol.common.ix.DataCollectorBase&quot;,
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-services-ParentDataCollector-property-collectorVersion'>  collectorVersion: &quot;1.01.000&quot;,
+</span>
+<span id='sol-common-ix-services-ParentDataCollector-property-MODES'>  MODES: {
+</span>    FIRST_WINS: &quot;FIRST_WINS&quot;,
+    LAST_WINS: &quot;LAST_WINS&quot;,
+    ALL: &quot;ALL&quot;
+  },
+
+<span id='sol-common-ix-services-ParentDataCollector-property-DEFAULT_VALUES'>  DEFAULT_VALUES: {
+</span>    hierarchicalIdentifier: &quot;SOL_TYPE&quot;,
+    mode: &quot;FIRST_WINS&quot;,
+    formatter: &quot;sol.common.ObjectFormatter.TemplateSord&quot;,
+    sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;maskName&quot;, &quot;name&quot;, &quot;desc&quot;, &quot;IDateIso&quot;, &quot;XDateIso&quot;, &quot;ownerName&quot;],
+    allMapFields: false
+  },
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * id of the parent element (guid, objId or archivepath)
+   */
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-hierarchicalIdentifier'>  /**
+</span>   * @cfg {String} [hierarchicalIdentifier=&quot;SOL_TYPE&quot;]
+   * The value from this field will be used to collect the hierarchy
+   */
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-mode'>  /**
+</span>   * @cfg {String} [mode=&quot;FIRST_WINS&quot;]
+   * The mode defines, which object from the hierarchy will be send with the result.
+   *
+   * - &quot;FIRST_WINS&quot;: the first hit (upwards) in the hierarchy for each type wins
+   * - &quot;LAST_WINS&quot;: the last hit (upwards) in the hierarchy for each type wins
+   * - &quot;ALL&quot;: collects an array of the specific type (not implemented yet)
+   *
+   */
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-formatter'>  /**
+</span>   * @cfg {String} [formatter=&quot;sol.common.ObjectFormatter.StatisticSord&quot;]
+   * Sord object formatter implementation.
+   *
+   * e.g. `sol.common.ObjectFormatter.StatisticSord` or `sol.common.ObjectFormatter.TemplateSord`
+   */
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-sordKeys'>  /**
+</span>   * @cfg {String[]} sordKeys
+   * The data objects will contain this keys from the sord.
+   * By default the following keys will be returned: [&#39;id&#39;, &#39;guid&#39;, &#39;maskName&#39;, &#39;name&#39;, &#39;desc&#39;, &#39;IDateIso&#39;, &#39;XDateIso&#39;, &#39;ownerName&#39;]
+   */
+
+<span id='sol-common-ix-services-ParentDataCollector-cfg-allMapFields'>  /**
+</span>   * @cfg {String[]} allMapFields
+   * The data objects will contain all map fields.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.DataCollectorBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.hierarchicalIdentifier = config.hierarchicalIdentifier || me.DEFAULT_VALUES.hierarchicalIdentifier;
+    me.mode = config.mode || me.DEFAULT_VALUES.mode;
+    me.formatter = config.formatter || me.DEFAULT_VALUES.formatter;
+    me.sordKeys = config.sordKeys || me.DEFAULT_VALUES.sordKeys;
+    me.allMapFields = config.allMapFields || me.DEFAULT_VALUES.allMapFields;
+  },
+
+<span id='sol-common-ix-services-ParentDataCollector-method-execute'>  /**
+</span>   * Starts the collection of the desired data
+   * @return {String}
+   */
+  execute: function () {
+    var me = this,
+        data = {},
+        sord, parentSord;
+
+    data.version = me.collectorVersion;
+    data.formatter = me.formatter;
+
+    try {
+      sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+      parentSord = ixConnect.ix().checkoutSord(sord.parentId, SordC.mbAllIndex, LockC.NO);
+
+      data.sord = me.createTemplateSord(sord);
+      data.parent = me.createTemplateSord(parentSord);
+
+      me.collectHierarchy(sord, data);
+    } catch (ex) {
+      me.logger.warn(&quot;Error collecting data, continue with data collected so far&quot;, ex);
+    }
+
+    return sol.common.JsonUtils.stringifyAll(data);
+  },
+
+<span id='sol-common-ix-services-ParentDataCollector-method-collectHierarchy'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} dataObj
+   */
+  collectHierarchy: function (sord, dataObj) {
+    var me = this,
+        type;
+
+    if (sord.id &gt; 1) {
+      type = sol.common.SordUtils.getObjKeyValue(sord, me.hierarchicalIdentifier);
+      if (type) {
+        switch (me.mode) {
+          case me.MODES.FIRST_WINS:
+            if (!dataObj[type]) {
+              dataObj[type] = me.createTemplateSord(sord);
+            }
+            break;
+          case me.MODES.LAST_WINS:
+            dataObj[type] = me.createTemplateSord(sord);
+            break;
+          case me.MODES.ALL:
+            throw &quot;mode &#39;&quot; + me.MODES.ALL + &quot;&#39; is not implemented yet&quot;;
+          default:
+            throw &quot;mode&quot; + me.mode + &quot;is not defined&quot;;
+        }
+      }
+      me.collectHierarchy(ixConnect.ix().checkoutSord(sord.parentId, SordC.mbAllIndex, LockC.NO), dataObj);
+    }
+  },
+
+<span id='sol-common-ix-services-ParentDataCollector-method-createTemplateSord'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Object}
+   */
+  createTemplateSord: function (sord) {
+    var me = this;
+    return sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: me.formatter,
+        data: sord,
+        config: {
+          allMapFields: me.allMapFields,
+          sordKeys: me.sordKeys
+        }
+      }
+    }).sord;
+  }
+
+});
+
+<span id='sol-common-ix-services-ParentDataCollector-static-method-RF_sol_common_service_ParentDataCollector'>/**
+</span> * @member sol.common.ix.services.ParentDataCollector
+ * @method RF_sol_common_service_ParentDataCollector
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_ParentDataCollector(ec, configAny) {
+  logger.enter(&quot;RF_sol_common_service_ParentDataCollector&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny, &quot;objId&quot;),
+      jsonDataCollector, result;
+
+  jsonDataCollector = sol.create(&quot;sol.common.ix.services.ParentDataCollector&quot;, config);
+  result = jsonDataCollector.execute();
+  logger.exit(&quot;RF_sol_common_service_ParentDataCollector&quot;, result);
+  return result;
+}
+
+</pre>
+</body>
+</html>

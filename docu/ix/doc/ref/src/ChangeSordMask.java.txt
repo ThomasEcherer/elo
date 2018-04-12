@@ -1,0 +1,117 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to change the mask (or keywording form) for a sord 
+ * 
+ */
+
+public class ChangeSordMask {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            changeSords();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void changeSords() throws RemoteException {
+        
+        // Create Sord
+        // Create sord in archive top-level
+        String parentId = "1";
+        String maskId = "";
+        EditInfo ed = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        sord.setName("Example Sord");
+        System.out.println("Sord  GUID = " + sord.getGuid() + 
+                           ", objId = " +sord.getId() + 
+                           " with the name " + sord.getName()); 
+        System.out.println(" has mask: " + sord.getMask() + 
+                           " and " + sord.getObjKeys().length + " objKeys ");
+        
+        // Change sord  mask  
+        // Name will not be changed in changeSordMask() call!
+        ed = ix.ix().changeSordMask(sord, "Email", EDIT_INFO.getMbSord());
+        sord = ed.getSord();
+        System.out.println("Sord  GUID = " + sord.getGuid() + 
+                           ", objId = " +sord.getId() + 
+                           " with the name " + sord.getName()); 
+        System.out.println(" has mask: " + sord.getMask() + 
+                           " and " + sord.getObjKeys().length + " objKeys ");
+        
+        // Checkin sord
+        ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO());
+        System.out.println("Sord checked in");
+        
+        
+        // Delete Sord - this section can be commented out if the Sord 
+        // is to be viewed in an ELO client, for example.
+        // Sord is deleted twice - once to logically delete Sord
+        // and once to permanently delete the Sord
+        DeleteOptions delOpts = new DeleteOptions();
+        delOpts.setDeleteFinally(true);
+        ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+        ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+        System.out.println("Sord deleted!");
+        
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

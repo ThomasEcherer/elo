@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Event API Example</title>
+
+<!-- ------------------------------------------------------------------------
+This example shows how to use the client side event API.
+Two connections are opened and messages are sent from the first connection
+to the second. 
+-->
+
+
+<!-- Style definition for the result table --------------------------------
+-->
+
+<style>
+	.EventTable {
+		border-width:thin;
+		border-style:solid;
+	}
+</style>
+
+
+<!-- Import Indexserver JSON API -----------------------------------
+-->
+
+<script type="text/javascript" src="/ix-elo80/EloixClient.js"></script>
+
+
+<!-- Example code ---------------------------------------------------
+-->
+
+<script type="text/javascript">
+
+	// Simplify access to ELOix API namespace
+	var IX = de.elo.ix.client;
+	
+	// Indexserver URL
+	var url = "/ix-elo80/ix";
+	
+	// Login credentials
+	var userName = "Administrator";
+	var userPwd = "elo";
+
+	/**
+	 * The main function for the example.
+	 */
+	function test1() {
+
+		try {
+			var connFact = new IX.IXConnFactory(url, "my-json-testapp", "11.11");
+
+			// Define the type of the events to send.
+			// The event type classifies an event. A connection has to tell 
+			// Indexserver, for which event types it wants to receive data.  
+			// In the Java API, the event type is a 64bit Integer. Since JavaScript  
+			// can only handle 32bit Integers, long Integers are transmitted as Strings.
+			var eventType = "123";
+
+			// 1. Connection: Login and listen to events of our type transmitted though the  
+			// Broadcast Event Bus.
+			// If an event is received, the function processEventBusEvents1 is called.
+			// (This function is currently not called because we only send from conn1, 
+			// no events are sent from conn2)
+			var conn1 = loginAndListen(connFact, userName, userPwd, eventType,
+					processEventBusEvents1);
+
+			// 2. Connection: Login and listen to events of our type transmitted though the  
+			// Broadcast Event Bus.
+			// If an event is received, the function processEventBusEvents2 is called.
+			var conn2 = loginAndListen(connFact, userName, userPwd, eventType,
+					processEventBusEvents2);
+
+			// Send loop for some events			
+			for ( var id = 0; id < 200; id++) {
+
+				// Prepare the event payload data:
+				// A text message and a Sord object packed into an array.
+				var sord = new IX.Sord();
+				sord.name = "sord-" + id;
+				sord.id = id;
+				var data = [ "message-" + id, sord ];
+
+				// Add the event to the "sendEvents" table
+				var table = document.getElementById("sentEvents");
+				addResult(table, eventType, id.toString(), data);
+
+				// First connection sends the event though the Broadcast Event Bus.
+				var bus1 = conn1.getEventBusApi().getBroadcastBus();
+				bus1.send(eventType, id.toString(), data);
+
+				// Second connection sends the event...
+				var bus2 = conn2.getEventBusApi().getBroadcastBus();
+				bus2.send(eventType, id.toString(), data);
+			}
+
+			conn1.logout();
+
+			// We cannot logout conn2 because it might still have to process the events
+		} catch (e) {
+			alert(e);
+		}
+	};
+
+	/**
+	 * Login to Indexserver and start listening for the given event type on the Broadcast Event bus.
+	 * @param connFact IXConnFactory
+	 * @param userName Login user name
+	 * @param userPwd Login user password
+	 * @param eventType Event type
+	 * @param callback Callback function that is called for the received events.
+	 * @return Indexserver connection object
+	 */
+	function loginAndListen(connFact, userName, userPwd, eventType, callback) {
+		
+		// login
+		var conn1 = connFact.create(userName, userPwd);
+		
+		// get event bus API object
+		var eventBusApi1 = conn1.getEventBusApi();
+		
+		// define event handler object according to de.elo.ix.client.IXEventBusHandler 
+		var eventHandler1 = {
+			conn : conn1,
+			processEventBusEvents : callback
+		};
+		
+		// add event the handler object
+		eventBusApi1.addHandler(eventHandler1);
+		
+		// register a listener for the event type on the Broadcast bus.
+		var bus1 = eventBusApi1.getBroadcastBus();
+		bus1.addListener(eventType);
+		
+		return conn1;
+	}
+
+	/**
+	 * Event bus handler function for the first connection.
+	 * @param subsId Subscriber ID
+	 * @param events Array of de.elo.ix.client.Event objects
+	 */
+	function processEventBusEvents1(subsId, events) {
+		var table = document.getElementById("receivedEvents");
+		for ( var i = 0; i < events.length; i++) {
+			addResult(table, events[i].type, events[i].id, events[i].any);
+		}
+	};
+
+	/**
+	 * Event bus handler function for the second connection.
+	 * @param subsId Subscriber ID
+	 * @param events Array of de.elo.ix.client.Event objects
+	 */
+	function processEventBusEvents2(subsId, events) {
+		var table = document.getElementById("receivedEvents");
+		for ( var i = 0; i < events.length; i++) {
+			addResult(table, events[i].type, events[i].id, events[i].any);
+		}
+	};
+
+	/**
+	 * Insert event data into the given table.
+	 * @param table Destination table
+	 * @param eventType Event type
+	 * @param eventId Event ID
+	 * @param eventData Either an array [message, Sord] or an Any object that contains this array.
+	 */
+	function addResult(table, eventType, eventId, eventData) {
+
+		var tr = document.createElement("TR");
+
+		td = document.createElement("TD");
+		td.innerHTML = eventType;
+		tr.appendChild(td);
+
+		td = document.createElement("TD");
+		td.innerHTML = eventId;
+		tr.appendChild(td);
+
+		td = document.createElement("TD");
+
+		// Is eventData an Any object?
+		if (eventData.clazz && eventData.clazz == 'de.elo.ix.client.Any') {
+			eventData = IX.AnyToObject.toObject(eventData);
+		}
+
+		var message = eventData[0];
+		var sord = eventData[1];
+		td.innerHTML = message + ", " + sord.name;
+
+		tr.appendChild(td);
+
+		table.appendChild(tr);
+	}
+
+	
+</script>
+</head>
+<body>
+<input type="submit" onclick="test1()"></input>
+<table style="width:100%" ><tr><td>
+<table id="sentEvents" class="EventTable">
+<tr><td colspan="3">Send</td></tr>
+<tr>
+	<td>eventType</td>
+	<td>eventId</td>
+	<td>payload</td>
+</tr>
+</table>
+
+</td><td>
+<table id="receivedEvents" class="EventTable">
+<tr><td colspan="3">Receive</td></tr>
+<tr>
+	<td>eventType</td>
+	<td>eventId</td>
+	<td>payload</td>
+</tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

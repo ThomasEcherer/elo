@@ -1,0 +1,98 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für ViewUserRights.
+	/// </summary>
+	public class ViewUserRights
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				String name = userName;
+				IndexServer.UserInfo ui = ix.checkoutUsers(ci, new String[] {name},
+					CONST.CHECKOUT_USERS.BY_IDS, CONST.LOCK.NO)[0];
+
+				Logger.instance().log("Main admin                 " + ((ui.flags & CONST.ACCESS.FLAG_ADMIN) != 0));
+				Logger.instance().log("Edit configuration         " + ((ui.flags & CONST.ACCESS.FLAG_EDITCONFIG) != 0));
+				Logger.instance().log("Edit archive structure     " + ((ui.flags & CONST.ACCESS.FLAG_EDITSTRUCTURE) != 0));
+				Logger.instance().log("Edit documents             " + ((ui.flags & CONST.ACCESS.FLAG_EDITDOCS) != 0));
+				Logger.instance().log("Change password            " + ((ui.flags & CONST.ACCESS.FLAG_CHANGEPW) != 0));
+				Logger.instance().log("Change revision            " + ((ui.flags & CONST.ACCESS.FLAG_CHANGEREV) != 0));
+				Logger.instance().log("Edit user rights           " + ((ui.flags & CONST.ACCESS.FLAG_SUBADMIN) != 0));
+				Logger.instance().log("Edit workflows             " + ((ui.flags & CONST.ACCESS.FLAG_EDITWF) != 0));
+				Logger.instance().log("Start workflows            " + ((ui.flags & CONST.ACCESS.FLAG_STARTWF) != 0));
+				Logger.instance().log("Delete documents           " + ((ui.flags & CONST.ACCESS.FLAG_DELDOC) != 0));
+				Logger.instance().log("Delete structure           " + ((ui.flags & CONST.ACCESS.FLAG_DELSTRUC) != 0));
+				Logger.instance().log("SAP admin                  " + ((ui.flags & CONST.ACCESS.FLAG_SAPADMIN) != 0));
+				Logger.instance().log("Import                     " + ((ui.flags & CONST.ACCESS.FLAG_IMPORT) != 0));
+				Logger.instance().log("Export                     " + ((ui.flags & CONST.ACCESS.FLAG_EXPORT) != 0));
+				Logger.instance().log("Edit storage masks         " + ((ui.flags & CONST.ACCESS.FLAG_EDITMASK) != 0));
+				Logger.instance().log("Edit scripts               " + ((ui.flags & CONST.ACCESS.FLAG_EDITSCRIPT) != 0));
+				Logger.instance().log("Edit expiration date       " + ((ui.flags & CONST.ACCESS.FLAG_EDITDUEDATE) != 0));
+				Logger.instance().log("Edit buzzword lists        " + ((ui.flags & CONST.ACCESS.FLAG_EDITSWL) != 0));
+				Logger.instance().log("Delete read-only Documents " + ((ui.flags & CONST.ACCESS.FLAG_DELREADONLY) != 0));
+				Logger.instance().log("Edit replication sets      " + ((ui.flags & CONST.ACCESS.FLAG_EDITREPL) != 0));
+				Logger.instance().log("Edit ACL                   " + ((ui.flags & CONST.ACCESS.FLAG_EDITACL) != 0));
+				Logger.instance().log("Ignore ACL                 " + ((ui.flags & CONST.ACCESS.FLAG_IGNOREACL) != 0));
+				Logger.instance().log("Edit scanner configuration " + ((ui.flags & CONST.ACCESS.FLAG_EDITSCAN) != 0));
+				Logger.instance().log("Change storage mask        " + ((ui.flags & CONST.ACCESS.FLAG_CHANGEMASK) != 0));
+				Logger.instance().log("Edit activity projects     " + ((ui.flags & CONST.ACCESS.FLAG_EDITACT) != 0));
+				Logger.instance().log("Edit storage path          " + ((ui.flags & CONST.ACCESS.FLAG_CHANGEPATH) != 0));
+				Logger.instance().log("Inhibit login              " + ((ui.flags & CONST.ACCESS.FLAG_NOLOGIN) != 0));
+				Logger.instance().log("Delete document version    " + ((ui.flags & CONST.ACCESS.FLAG_DELVERSION) != 0));
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_handlebars.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.DMSDesktop&quot; });
+
+<span id='sol-common-ix-services-DMSDesktop'>/**
+</span> * Provides service functions for the DMS Desktop.
+ *
+ * # Usage
+ *
+ * ## Load ELOas configuration
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_service_DMSDesktopLoadAsConfig&quot;, {
+ *       solution: &quot;contract&quot;  // optional, fallback would be the common as.config
+ *     });
+ *
+ *     // result //
+ *     {
+ *       protocol: &quot;http&quot;,
+ *       serverName: &quot;localhost&quot;,
+ *       port: &quot;8080&quot;,
+ *       serviceName&quot;: &quot;as-contract&quot;
+ *     }
+ *
+ * ## Retrieve workflow status
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_service_DMSDesktopGetWfStatus&quot;, {
+ *       flowId: &quot;4711&quot;
+ *     });
+ *
+ *     // result //
+ *     {
+ *       wfstatus: &quot;CANCELED&quot;
+ *     }
+ *
+ * ## Translate terms
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_service_DMSDesktopTranslate&quot;, {
+ *       keys: [&quot;sol.contract.client.ribbon.tabContract&quot;],
+ *       language: &quot;en&quot;  // optional, default is the IXConnection language
+ *     });
+ *
+ *     // result //
+ *     [
+ *       {
+ *         key: &quot;sol.contract.client.ribbon.tabContract&quot;,
+ *         lang: &quot;en&quot;,
+ *         text: &quot;Contracts&quot;
+ *       }
+ *     ]
+ *
+ * ## Apply handlebars
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_service_DMSDesktopHandlebars&quot;, {
+ *       transformations: [
+ *         { source: &quot;Hello {{name}}.&quot;, context: { name: &quot;Max&quot; } },
+ *         { source: &quot;Hello {{name}}.&quot;, context: { name: &quot;Moritz&quot; } }
+ *       ]
+ *     });
+ *
+ *     // result //
+ *     [
+ *       { source: &quot;Hello {{name}}.&quot;, context: { name: &quot;Max&quot; }, text: &quot;Hello Max.&quot; },
+ *       { source: &quot;Hello {{name}}.&quot;, context: { name: &quot;Moritz&quot;}, text: &quot;Hello Moritz.&quot; }
+ *     ]
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires handlebars
+ * @requires sol.common.Config
+ * @requires sol.common.WfUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.DMSDesktop&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-DMSDesktop-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-DMSDesktop-method-loadAsConfig'>  /**
+</span>   * Loads the ELOas server configuration
+   * @return {Object} The ELOas server configuration
+   * @return {String} return.protocol
+   * @return {String} return.server
+   * @return {String} return.port
+   * @return {String} return.name
+   */
+  loadAsConfig: function () {
+    var me = this,
+        config;
+    config = sol.create(&quot;sol.common.Config&quot;);
+    return config.loadEloAsConfig(me.solution);
+  },
+
+<span id='sol-common-ix-services-DMSDesktop-method-getWfStatus'>  /**
+</span>   * Retrieves the status of a workflow.
+   * @return {Object}
+   * @return {String} return.wfstatus
+   */
+  getWfStatus: function () {
+    var me = this,
+        result;
+
+    if (typeof me.flowId === &quot;undefined&quot;) {
+      throw &quot;IllegalArgumentException: no &#39;flowId&#39; set&quot;;
+    }
+
+    result = {
+      wfstatus: sol.common.WfUtils.getWorkflowStatus(me.flowId)
+    };
+
+    return result;
+  },
+
+<span id='sol-common-ix-services-DMSDesktop-method-translate'>  /**
+</span>   * Translates a key.
+   * @return {Object[]}
+   * @return {String} return.key
+   * @return {String} return.lang
+   * @return {String} return.text
+   */
+  translate: function () {
+    var me = this,
+        result = [],
+        language;
+
+    if (typeof me.keys === &quot;undefined&quot;) {
+      throw &quot;IllegalArgumentException: no &#39;keys&#39; set&quot;;
+    }
+
+    language = me.language || ixConnect.loginResult.clientInfo.language;
+    sol.common.TranslateTerms.require(me.keys);
+
+    me.keys.forEach(function (key) {
+      var text = sol.common.TranslateTerms.getTerm(language, key);
+      result.push({ key: key, lang: language, text: text });
+    });
+
+    return result;
+  },
+
+
+<span id='sol-common-ix-services-DMSDesktop-method-handlebars'>  handlebars: function () {
+</span>    var me = this,
+        result = [];
+
+    if (typeof me.transformations === &quot;undefined&quot;) {
+      throw &quot;IllegalArgumentException: no &#39;transformations&#39; set&quot;;
+    }
+
+    me.transformations.forEach(function (transformation) {
+      if (transformation.source &amp;&amp; transformation.context) {
+        transformation.text = Handlebars.compile(transformation.source)(transformation.context);
+      }
+      result.push(transformation);
+    });
+
+    return result;
+  }
+
+});
+
+<span id='sol-common-ix-services-DMSDesktop-static-method-RF_sol_common_service_DMSDesktopLoadAsConfig'>/**
+</span> * @member sol.common.ix.services.DMSDesktop
+ * @method RF_sol_common_service_DMSDesktopLoadAsConfig
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_DMSDesktopLoadAsConfig(ec, args) {
+  var rfUtils = sol.common.ix.RfUtils,
+      params, service, result;
+
+  logger.enter(&quot;RF_sol_common_service_DMSDesktopLoadAsConfig&quot;, args);
+
+  params = rfUtils.parseAndCheckParams(ec, arguments.callee.name, args);
+  service = sol.create(&quot;sol.common.ix.services.DMSDesktop&quot;, params);
+  result = rfUtils.stringify(service.loadAsConfig());
+
+  logger.exit(&quot;RF_sol_common_service_DMSDesktopLoadAsConfig&quot;, result);
+
+  return result;
+}
+
+<span id='sol-common-ix-services-DMSDesktop-static-method-RF_sol_common_service_DMSDesktopGetWfStatus'>/**
+</span> * @member sol.common.ix.services.DMSDesktop
+ * @method RF_sol_common_service_DMSDesktopGetWfStatus
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_DMSDesktopGetWfStatus(ec, args) {
+  var rfUtils = sol.common.ix.RfUtils,
+      params, service, result;
+
+  logger.enter(&quot;RF_sol_common_service_DMSDesktopGetWfStatus&quot;, args);
+
+  params = rfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;flowId&quot;);
+  service = sol.create(&quot;sol.common.ix.services.DMSDesktop&quot;, params);
+  result = rfUtils.stringify(service.getWfStatus());
+
+  logger.exit(&quot;RF_sol_common_service_DMSDesktopGetWfStatus&quot;, result);
+
+  return result;
+}
+
+<span id='sol-common-ix-services-DMSDesktop-static-method-RF_sol_common_service_DMSDesktopTranslate'>/**
+</span> * @member sol.common.ix.services.DMSDesktop
+ * @method RF_sol_common_service_DMSDesktopTranslate
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_DMSDesktopTranslate(ec, args) {
+  var rfUtils = sol.common.ix.RfUtils,
+      params, service, result;
+
+  logger.enter(&quot;RF_sol_common_service_DMSDesktopTranslate&quot;, args);
+
+  params = rfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;keys&quot;);
+  service = sol.create(&quot;sol.common.ix.services.DMSDesktop&quot;, params);
+  result = rfUtils.stringify(service.translate());
+
+  logger.exit(&quot;RF_sol_common_service_DMSDesktopTranslate&quot;, result);
+
+  return result;
+}
+
+<span id='sol-common-ix-services-DMSDesktop-static-method-RF_sol_common_service_DMSDesktopHandlebars'>/**
+</span> * @member sol.common.ix.services.DMSDesktop
+ * @method RF_sol_common_service_DMSDesktopHandlebars
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_DMSDesktopHandlebars(ec, args) {
+  var rfUtils = sol.common.ix.RfUtils,
+      params, service, result;
+
+  logger.enter(&quot;RF_sol_common_service_DMSDesktopHandlebars&quot;, args);
+
+  params = rfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;transformations&quot;);
+  service = sol.create(&quot;sol.common.ix.services.DMSDesktop&quot;, params);
+  result = rfUtils.stringify(service.handlebars());
+
+  logger.exit(&quot;RF_sol_common_service_DMSDesktopHandlebars&quot;, result);
+
+  return result;
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace elo
+
+<span id='elo'>/**
+</span> * @class elo
+ * @singleton
+ */
+var elo = new Object();
+elo = {
+
+<span id='elo-method-getIndexValueByName'>  /**
+</span>   * Liefert den Wert der angegebenen Indexzeile zurück.
+   * 
+   * @param {Sord} sord Verschlagwortung des Archiveintrags
+   * @param {String} groupName Gruppennamen
+   * @param {String} defaultValue Default-Wert
+   * @return {String} Wert der Indexzeile
+   */
+  getIndexValueByName: function(sord, groupName, defaultValue) {
+    var objKeys = sord.objKeys;
+    for (var i = 0; i &lt; objKeys.length; i++) {
+      var key = objKeys[i];
+      if (key.name == groupName) {
+        return this.formatKeyData(key.data);
+      }
+    }
+    
+    return defaultValue;
+  },
+  
+<span id='elo-method-getIndexValue'>  /**
+</span>   * Liefert den Wert der angegebenen Indexzeile zurück.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   * @param {Number} lineNo Zeilennummer
+   * @return {String} Wert der Indexzeile
+   */
+  getIndexValue: function (Sord, lineNo) {
+    var objKey = Sord.getObjKeys()[lineNo];
+    if (!objKey) {
+      return &quot;&quot;;
+    }
+
+    return this.formatKeyData(objKey.data);
+  },
+
+<span id='elo-method-formatKeyData'>  /**
+</span>   * Liefert eine Zeichenkette mit den formattierten Daten zurück.
+   * 
+   * @param {Array} keyData Liste mit Daten
+   * @return {String} Zeichenkette mit den formattierten Daten
+   */
+  formatKeyData: function(keyData) {
+    if (keyData &amp;&amp; keyData.length &gt; 0) {
+      if (keyData.length == 1) {
+        return keyData[0] + &quot;&quot;;
+      } else {
+        var result = &quot;&quot;;
+        var i;
+        for (i = 0; i &lt; keyData.length; i++) {
+          result = result + &quot;¶&quot; + keyData[i];
+        }
+        result = result.substr(1);
+        return result;
+      }
+    } else {
+      return &quot;&quot;;
+    }
+  },
+  
+<span id='elo-method-setIndexValueByName'>  /**
+</span>   * Setzt den Wert der angegebenen Indexzeile.
+   * 
+   * @param {Sord} sord Verschlagwortung eines Archiveintrags
+   * @param {String} groupName Gruppenname
+   * @param {String} value Wert der Indexzeile
+   */
+  setIndexValueByName: function(sord, groupName, value) {
+    var objKeys = sord.objKeys;
+    for (var i = 0; i &lt; objKeys.length; i++) {
+      if (objKeys[i].name == groupName) {
+        this.setIndexValue(sord, i, value);
+        return;
+      }
+    }
+  },
+  
+<span id='elo-method-setIndexValue'>  /**
+</span>   * Setzt den Wert der angegebenen Indexzeile.
+   * 
+   * @param {Sord} sord Verschlagwortung eines Archiveintrags
+   * @param {Number} lineNo Zeilennummer
+   * @param {String} text Wert der Indexzeile
+   */
+  setIndexValue: function (sord, lineNo, text) {
+    if (text != null) {
+      text = String(text);
+      var objKey = sord.objKeys[lineNo];
+      if (text.indexOf(&quot;¶&quot;) &gt; -1) {
+        var keyData = text.split(&quot;¶&quot;);
+        objKey.data = keyData;
+      } else {
+        objKey.data = [ text ];
+      }
+    }
+  },
+
+<span id='elo-method-preparePath'>  /**
+</span>   * Legt den angegebenen Archivpfad an falls der Pfad nicht vorhanden ist.
+   * 
+   * @param {String} destPath Archivpfad
+   * @return {Number} Objekt ID des letzten Pfadelements
+   */
+  preparePath: function (destPath) {
+    return elo.prepareDynPath(destPath, &quot;&quot;);
+  },
+
+<span id='elo-method-prepareDynPath'>  /**
+</span>   * Legt den angegebenen dynamischen Pfad an.
+   * 
+   * @param {String} destPath Zielpfad
+   * @param {String} memo Zusatztext
+   * @return {Number} Objekt ID des letzten Pfadelements
+   */
+  prepareDynPath: function (destPath, memo) {
+    log.debug(&quot;PreparePath: &quot; + destPath);
+    var temp = destPath.split(&quot;¶¶¶.&quot;);
+    if (temp.length == 2) {
+      EM_FOLDERMASK = temp[0];
+      destPath = temp[1];
+    } else {
+      EM_FOLDERMASK = &quot;1&quot;;
+    }
+
+    try {
+      var allowCreate = false;
+      var checkOutPath = destPath;
+      if (isNaN(destPath)) {
+        checkOutPath = &quot;ARCPATH:&quot; + destPath;
+        allowCreate = true;
+      }
+      var editInfo = ixConnect.ix().checkoutSord(checkOutPath, EditInfoC.mbOnlyId, LockC.NO);
+      log.debug(&quot;Path found, GUID: &quot; + editInfo.getSord().getGuid() + &quot;   ID: &quot; + editInfo.getSord().getId());
+      EM_PARENT_ID = editInfo.getSord().getId();
+      EM_PARENT_ACL = editInfo.getSord().getAclItems();
+      return editInfo.getSord().getId();
+    } catch (e) {
+      log.debug(&quot;Path not found, create new: &quot; + destPath + &quot;, use foldermask: &quot; + EM_FOLDERMASK);
+    }
+
+    if (!allowCreate) {
+      return -1;
+    }
+
+    EM_PARENT_ID = -1;
+
+    items = destPath.split(&quot;¶&quot;);
+
+    var sordList = new Array(items.length - 1);
+
+    var i;
+    for (i = 1; i &lt; items.length; i++) {
+      log.debug(&quot;Split &quot; + i + &quot; : &quot; + items[i]);
+      var sord = new Sord();
+      sord.setMask(EM_FOLDERMASK);
+      sord.setName(items[i]);
+
+      if (i == (items.length - 1)) {
+        sord.setDesc(memo);
+      }
+
+      sordList[i - 1] = sord;
+    }
+
+    log.debug(&quot;now checkinSordPath&quot;);
+    var ids = ixConnect.ix().checkinSordPath(&quot;1&quot;, sordList, new SordZ(SordC.mbName | SordC.mbMask | SordC.mbDesc | SordC.mbObjKeys));
+    log.debug(&quot;checkin done: id: &quot; + ids[ids.length - 1]);
+
+    return ids[ids.length - 1];
+  },
+
+<span id='elo-method-loadBaseData'>  /**
+</span>   * Lädt die Basisdaten aus dem angegebenen Archiveintrag.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   */
+  loadBaseData: function (Sord) {
+    NAME = String(Sord.name);
+    DOCDATE = String(Sord.getXDateIso());
+    ARCDATE = String(Sord.getIDateIso());
+    OBJCOLOR = String(Sord.kind);
+    OBJDESC = String(Sord.desc);
+    OBJTYPE = String(Sord.type);
+    ARCHIVINGMODE = Sord.getDetails().getArchivingMode() - 2000;
+    ACL = elo.getACLString(Sord);
+    BACKUP_ACL = ACL;
+  },
+
+<span id='elo-method-storeBaseData'>  /**
+</span>   * Speichert die Basisdaten im angegebenen Archiveintrag.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   */
+  storeBaseData: function (Sord) {
+    if (NAME != &quot;&quot;) {
+      Sord.setName(NAME);
+    }
+    Sord.setXDateIso(DOCDATE);
+    Sord.setIDateIso(ARCDATE);
+    Sord.setKind(OBJCOLOR);
+    Sord.setDesc(OBJDESC);
+    Sord.setType(OBJTYPE);
+    Sord.getDetails().setArchivingMode(ARCHIVINGMODE + 2000);
+    elo.processAcl(Sord);
+  },
+
+<span id='elo-method-fillupAclItem'>  /**
+</span>   * Setzt die Werte in der angegebenen Berechtigung (AclItem-Objekt).
+   * 
+   * @param {AclItem} aclItem Berechtigung
+   * @param {String} oneItem Berechtigungen als String
+   */
+  fillupAclItem: function (aclItem, oneItem) {
+    var parts = oneItem.split(&quot;:&quot;);
+    var cnt = parts.length;
+    if (cnt &gt; 1) {
+      var itemType = AclItemC.TYPE_GROUP;
+      var access = parts[0];
+      var mask = 0;
+      if (access.indexOf(&quot;R&quot;) &gt;= 0) {
+        mask = mask | 1;
+      }
+      if (access.indexOf(&quot;W&quot;) &gt;= 0) {
+        mask = mask | 2;
+      }
+      if (access.indexOf(&quot;D&quot;) &gt;= 0) {
+        mask = mask | 4;
+      }
+      if (access.indexOf(&quot;E&quot;) &gt;= 0) {
+        mask = mask | 8;
+      }
+      if (access.indexOf(&quot;L&quot;) &gt;= 0) {
+        mask = mask | 16;
+      }
+      if (access.indexOf(&quot;U&quot;) &gt;= 0) {
+        itemType = AclItemC.TYPE_USER;
+      }
+      aclItem.setAccess(mask);
+      aclItem.setName(parts[1]);
+      aclItem.setType(itemType);
+
+      if (cnt &gt; 2) {
+        var andGroups = new Array(cnt - 2);
+        var i;
+        for (i = 2; i &lt; cnt; i++) {
+          andGroups[i - 2] = new IdName();
+          andGroups[i - 2].setName(parts[i]);
+        }
+        aclItem.setAndGroups(andGroups);
+      }
+    }
+  },
+
+<span id='elo-method-processAcl'>  /**
+</span>   * Setzt die aktuellen Berechtigungen im angegebenen Archiveintrag.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   */
+  processAcl: function (Sord) {
+    if (ACL == &quot;PARENT&quot;) {
+      var aclItems = new Array(1);
+      var parentAcl = new AclItem(0, 0, &quot;&quot;, AclItemC.TYPE_INHERIT);
+      aclItems[0] = parentAcl;
+      Sord.setAclItems(aclItems);
+    } else if (ACL != &quot;&quot;) {
+      var items = ACL.split(&quot;¶&quot;);
+      var cnt = items.length;
+      var aclItems = new Array(cnt);
+      var i;
+
+      for (i = 0; i &lt; cnt; i++) {
+        aclItems[i] = new AclItem();
+      }
+
+      Sord.setAclItems(aclItems);
+    }
+
+    for (i = 0; i &lt; cnt; i++) {
+      elo.fillupAclItem(aclItems[i], items[i]);
+    }
+
+  },
+
+<span id='elo-method-getACLString'>  /**
+</span>   * Liefert die Berechtigungen vom angegebenen Archiveintrag als 
+   * eine Zeichenkette zurück.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   * @return {String} Berechtigungen als eine Zeichenkette
+   */
+  getACLString: function (Sord) {
+    var sb = new StringBuilder();
+    var i;
+    var cnt = Sord.aclItems.length;
+
+    for (i = 0; i &lt; cnt; i++) {
+      if (i != 0) {
+        sb.append(&quot;¶&quot;);
+      }
+
+      var itemType = Sord.aclItems[i].getType();
+      if (itemType == AclItemC.TYPE_USER) {
+        sb.append(&quot;U&quot;);
+      }
+
+      var mask = Sord.aclItems[i].getAccess();
+      if (mask &amp; 1) {
+        sb.append(&quot;R&quot;);
+      };
+      if (mask &amp; 2) {
+        sb.append(&quot;W&quot;);
+      };
+      if (mask &amp; 4) {
+        sb.append(&quot;D&quot;);
+      };
+      if (mask &amp; 8) {
+        sb.append(&quot;E&quot;);
+      };
+      if (mask &amp; 16) {
+        sb.append(&quot;L&quot;);
+      };
+      sb.append(&quot;:&quot;);
+      sb.append(Sord.aclItems[i].getName());
+
+      var andGroups = Sord.aclItems[i].getAndGroups();
+      if (andGroups) {
+        var k;
+        for (k = 0; k &lt; andGroups.length; k++) {
+          sb.append(&quot;:&quot;);
+          sb.append(andGroups[k].getName());
+        }
+      }
+    }
+
+    return sb.toString();
+  },
+
+<span id='elo-method-processResultSet'>  /**
+</span>   * Führt die Regeln des aktuellen Regelsatzes aus.
+   */
+  processResultSet: function () {
+    var i;
+    for (i = 0; i &lt; Sords.length; i++) {
+      if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+        log.debug(&quot;Abort processResultSet, interrupted&quot;);
+        return;
+      }
+      
+      bt.processObject(Sords[i]);
+    }
+
+    if (!ruleset.getInterval().isManuallyTriggered()) {
+      ruleset.setStatusMessage(&quot;Wait.&quot;);
+    }
+  },
+
+<span id='elo-method-changeMask'>  /**
+</span>   * Setzt die Maske im angegebenen Archiveintrag.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   * @param {String} newMaskId Masken ID
+   */
+  changeMask: function (Sord, newMaskId) {
+    log.debug(&quot;Switch to new MaskId: &quot; + newMaskId);
+    var editInfo = ixConnect.ix().changeSordMask(Sord, newMaskId, EditInfoC.mbSord);
+    Sord.setMask(editInfo.getSord().getMask());
+    Sord.setMaskName(editInfo.getSord().getMaskName());
+    Sord.setObjKeys(editInfo.getSord().getObjKeys());
+  },
+
+<span id='elo-method-pad'>  /**
+</span>   * Fügt führende Nullen in der angegebenen Zeichenkette ein.
+   * 
+   * @param {String} val Wert
+   * @param {Number} len Anzahl der Nullen
+   * @return {String} Zeichenkette mit führenden Nullen
+   */
+  pad: function (val, len) {
+    val = String(val);
+    while (val.length &lt; len) val = &quot;0&quot; + val;
+    return val;
+  },
+
+<span id='elo-method-toDayAsIso'>  /**
+</span>   * Liefert das aktuelle Datum im ISO-Format zurück. 
+   * 
+   * @return {String} Aktuelles Datum im ISO-Format
+   */
+  toDayAsIso: function() {
+    var dt = new Date();
+    var mon = dt.getMonth() + 1;
+    var day = dt.getDate();
+    var txt = &quot;&quot; + dt.getFullYear() + ((mon &lt; 10) ? (&quot;0&quot; + mon) : mon) + ((day &lt; 10) ? (&quot;0&quot; + day) : day);
+
+    return txt;
+  },
+
+<span id='elo-method-convertDateToUTC'>  /**
+</span>   * Konvertiert das angegebene Datum in einem UTC-Datum.
+   * 
+   * @param {Date} date Normales Datum
+   * @return {Date} UTC-Datum
+   */
+  convertDateToUTC: function (date) {
+    return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(),
+                    date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds());
+  },
+
+<span id='elo-method-isoDate'>  /**
+</span>   * Liefert ein ISO-Datum aus dem angegebenen Datum zurück.
+   * 
+   * @param {Date} date Datum
+   * @return {String} ISO-Datum
+   */
+  isoDate: function (date) {
+    return elo.pad(date.getFullYear(), 4) + elo.pad(date.getMonth() + 1, 2) + elo.pad(date.getDate(), 2);
+  },
+
+<span id='elo-method-timeStamp'>  /**
+</span>   * Liefert den Zeitstempel des angegebenen Datums zurück.
+   * 
+   * @param {Date} date Datum
+   * @return {String} Zeitstempel vom Datum
+   */
+  timeStamp: function(date) {
+    return elo.pad(date.getFullYear(), 4) + &quot;.&quot; +
+           elo.pad(date.getMonth() + 1, 2) + &quot;.&quot; +
+           elo.pad(date.getDate(), 2) + &quot;.&quot; +
+           elo.pad(date.getHours(), 2) + &quot;.&quot; +
+           elo.pad(date.getMinutes(), 2) + &quot;.&quot; +
+           elo.pad(date.getSeconds(), 2);
+  },
+
+<span id='elo-method-decodeDate'>  /**
+</span>   * Liefert ein ISO-Datum aus dem angegebenen Text zurück.
+   * 
+   * @param {String} text Text
+   * @return {String} ISO-Datum
+   */
+  decodeDate: function (text) {
+    if (text == &quot;&quot;) {
+      return text;
+    }
+    if (text.charAt(0) == '+') {
+      text = text.substring(1);
+      var now = new Date();
+
+      var dateOffset = (24 * 60 * 60 * 1000) * text;
+      now.setTime(now.getTime() + dateOffset);
+
+      return elo.isoDate(now);
+    } else if (text.charAt(0) == '-') {
+      text = text.substring(1);
+      var now = new Date();
+
+      var dateOffset = 0 - ((24 * 60 * 60 * 1000) * text);
+      now.setTime(now.getTime() + dateOffset);
+
+      return elo.isoDate(now);
+    } else {
+      return text;
+    }
+  },
+
+<span id='elo-method-setAnswer'>  /**
+</span>   * Setzt die angegebene Status-Message im aktuellen Regelsatz.
+   * 
+   * @param {String} text Status-Message
+   */
+  setAnswer: function (text) {
+    ruleset.setStatusMessage(text);
+  },
+
+<span id='elo-method-setDownloadFile'>  /**
+</span>   * Setzt die Download-Datei im aktuellen Regelsatz.
+   * 
+   * @param {String} fileName Dateiname
+   * @param {String} contentType Content Type
+   */
+  setDownloadFile: function(fileName, contentType){
+    ruleset.setDownloadFile(fileName, contentType);
+  },
+
+<span id='elo-method-logStackTrace'>  /**
+</span>   * Loggt die angegebene Fehlermeldung.
+   * 
+   * @param {Exception} exception Fehlermeldung
+   */
+  logStackTrace: function (exception) {
+    var e2 = exception.rhinoException;
+    if (e2) {
+      log.debug(e2.scriptStackTrace);
+
+      var sw = new StringWriter();
+      var pw = new PrintWriter(sw, true);
+      e2.printStackTrace(pw);
+      pw.flush();
+      sw.flush();
+
+      log.debug(sw.toString());
+    }
+  },
+
+<span id='elo-method-dynamicKeywordsObject'> /**
+</span>  * Erzeugt eine Liste mit Objekten für die dynamische Stichwortliste.
+  * 
+  * @param {Object} dynResultTable Dynamische Stichwortliste
+  * @return {Array} Liste mit Objekten
+  */
+ dynamicKeywordsObject: function(dynResultTable){
+   var items = {};
+   if((dynResultTable === undefinied) || (dynResultTable.length == 0)) {
+     return items;	
+   }
+
+   var groupNames = dynResultTable.keyNames();
+
+   for(var i=0; i&lt;dynResultTable.length; i++){
+      var currRow = dynResultTable[i];       
+      var obj = new Object();
+      for (var j=0; j&lt;currRow.length; j++){
+        if (groupNames[j]){
+	   obj[groupNames[j]] = currRow[j];
+	}
+      } 
+      items[i] = obj;
+   }
+
+   return items;
+ }
+
+};
+// end of namespace elo
+
+
+<span id='StringBuilder'>/**
+</span> * Initialisiert eine neue Instanz der Klasse &quot;StringBuilder&quot; und 
+ * fügt den angegebenen Wert ein.
+ * 
+ * @param {String} value Wert
+ * @return {StringBuilder}
+ */
+function StringBuilder(value) {
+  this.strings = new Array(&quot;&quot;);
+  this.append(value);
+}
+
+<span id='StringBuilder-method-append'>/**
+</span> * Fügt den angegebenen Wert am Ende der Instanz ein.
+ * 
+ * @param {String} value Wert
+ */
+StringBuilder.prototype.append = function (value) {
+  if (value) {
+    this.strings.push(value);
+  }
+};
+
+<span id='StringBuilder-method-clear'>/**
+</span> * Löscht den Inhalt des aktuellen StringBuffers.
+ */
+StringBuilder.prototype.clear = function () {
+  this.strings.length = 1;
+};
+
+<span id='StringBuilder-method-toString'>/**
+</span> * Liefert die aktuelle Instanz als eine Zeichenkette zurück.
+ * 
+ * @return {String} Aktuelle Instanz als Zeichenkette
+ */
+StringBuilder.prototype.toString = function () {
+  return this.strings.join(&quot;&quot;);
+};</pre>
+</body>
+</html>

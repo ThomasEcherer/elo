@@ -1,0 +1,202 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.DocMask;
+import de.elo.ix.client.DocMaskC;
+import de.elo.ix.client.DocMaskLine;
+import de.elo.ix.client.DocMaskLineC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.ArchivingModeC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to create, checkin and checkout storage masks.
+ * 
+ * A mask is created and checked in
+ * A sord object is created with the new mask
+ * The mask and the sord object are deleted
+ * 
+ */
+
+public class CreateCheckinChangeMask {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static ArchivingModeC ARCHIVING_MODE;
+    private static DocMaskC DOC_MASK;
+    private static DocMaskLineC DOC_MASK_LINE;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            createCheckinChangeMask();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void createCheckinChangeMask() throws RemoteException {
+        
+       // Create storage mask
+        DocMask docMask = ix.ix().createDocMask(null);
+        System.out.println("DocMask created");
+        
+        // Set mask properties
+        // The mask name
+        docMask.setName("Demo Mask");
+        // The mask can be used as template for documents and structure elements
+        docMask.getDetails().setDocumentMask(true); 
+        // The mask can be used to search for archive items
+        docMask.getDetails().setSearchMask(true);
+        // Documents with this mask are stored with version control 
+        docMask.getDetails().setArchivingMode(ARCHIVING_MODE.getVERSION());
+        
+
+        // Assign index lines to the mask
+        docMask.setLines(new DocMaskLine[3]);
+        docMask.getLines()[0] = new DocMaskLine();
+        docMask.getLines()[0].setId(0);
+        docMask.getLines()[0].setName("Author");
+        docMask.getLines()[0].setKey("AUTHOR");
+        docMask.getLines()[0].setType(DOC_MASK_LINE.getTYPE_TEXT());
+        docMask.getLines()[0].setLabelCol(1);
+        docMask.getLines()[0].setLabelRow(4);
+        docMask.getLines()[0].setEditCol(14);
+        docMask.getLines()[0].setEditRow(4);
+        docMask.getLines()[0].setEditWidth(20);
+        
+        docMask.getLines()[1] = new DocMaskLine();
+        docMask.getLines()[1].setId(1);
+        docMask.getLines()[1].setName("Title");
+        docMask.getLines()[1].setKey("TEXT");
+        docMask.getLines()[1].setType(DOC_MASK_LINE.getTYPE_TEXT());
+        docMask.getLines()[1].setLabelCol(1);
+        docMask.getLines()[1].setLabelRow(5);
+        docMask.getLines()[1].setEditCol(14);
+        docMask.getLines()[1].setEditRow(5);
+        docMask.getLines()[1].setEditWidth(20);
+
+        docMask.getLines()[2] = new DocMaskLine();
+        docMask.getLines()[2].setId(2);
+        docMask.getLines()[2].setName("Released on");
+        docMask.getLines()[2].setKey("DATE");
+        docMask.getLines()[2].setType(DOC_MASK_LINE.getTYPE_ISO_DATE());
+        docMask.getLines()[2].setLabelCol(1);
+        docMask.getLines()[2].setLabelRow(6);
+        docMask.getLines()[2].setEditCol(14);
+        docMask.getLines()[2].setEditRow(6);
+        docMask.getLines()[2].setEditWidth(20);
+        
+        System.out.println("Mask attributes assigned");
+        
+        // Checkin mask
+        docMask.setId(ix.ix().checkinDocMask(docMask, DOC_MASK.getMbAll(), LOCK.getNO()));
+        System.out.println("Doc Mask created with Id: " + docMask.getId() + " and name: " + docMask.getName());
+        
+        // Checkout mask
+        docMask = ix.ix().checkoutDocMask(docMask.getName(), DOC_MASK.getMbAll(), LOCK.getNO());
+        System.out.println("Doc Mask " + docMask.getName() + " has been checked out");
+        
+        // Create a Sord object with this mask
+        Sord sord = ix.ix().createSord("1", docMask.getName(), EDIT_INFO.getMbSord()).getSord();
+        sord.setName("Mask Demo");
+        System.out.println("Created Sord with id: " + sord.getId());
+        
+        // Display sord index lines
+        System.out.println("Sord index lines:");
+        for (int i = 0; i < sord.getObjKeys().length; i++){
+            System.out.println("      id = " + sord.getObjKeys()[i].getId() + ", group = " + sord.getObjKeys()[i].getName());
+        }
+        
+        // Checkin sord
+        ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO());
+        System.out.println("Sord checked-in");
+        
+        
+        //Set deleteMask = true to delete mask
+        boolean deleteMask = false;
+        if (deleteMask == true){
+            
+            // Delete mask without providing an alternative mask
+            // This action must fail as a sord object exists with this mask
+            try{
+                System.out.println("Trying to delete mask...");
+                ix.ix().deleteDocMask(docMask.getName(), null, LOCK.getNO());
+                System.out.println("Mask deleted!!!!");
+                
+            } catch (Exception e){
+                System.out.println("ERROR: Delete failed - " + e.toString());   
+            }
+            
+            // Delete with replacement mask provided ("0")
+            System.out.println("Trying to delete mask...");
+            ix.ix().deleteDocMask(docMask.getName(), "0", LOCK.getNO());
+            System.out.println("Mask deleted");
+        }
+        
+        // Set deleleSord = true to delete sord
+        boolean deleteSord = false;
+        if (deleteSord == true){
+            
+            // Delete sord
+            System.out.println("Deleting Sord");
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sord deleted");
+        }
+        
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        ARCHIVING_MODE = CONS.getARCHIVING_MODE();
+        DOC_MASK = CONS.getDOC_MASK();
+        DOC_MASK_LINE = CONS.getDOC_MASK_LINE();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

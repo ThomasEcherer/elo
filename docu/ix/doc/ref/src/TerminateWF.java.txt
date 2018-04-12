@@ -1,0 +1,188 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFNode;
+import de.elo.ix.client.WFTakeNodeC;
+import de.elo.ix.client.WFEditNode;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example demontsrates the use of the terminateWorkFlow(...) method.
+ * Two users are created, one with workflow admin rights one without.
+ * WF-User 10 has no WF admin rights and attempts to terminate the workflow.
+ * WF-User 11 has WF admin rights and attempts to terminate the workflow.
+ */
+
+public class TerminateWF {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static WFTakeNodeC TAKE_NODE;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template and find nodes
+            createFromTemplate();
+            
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFromTemplate() throws RemoteException{
+        
+        // Create two users 1 without admin rights - 1 with admin rights
+        String[] userNames = new String[] {"WF-User10", "WF-User11"};
+        int[] userIds = new int[2];
+        userIds[0] = WFHelper.createNewUser(ix, userNames[0], "elo", false); // no admin rights
+        userIds[1] = WFHelper.createNewUser(ix, userNames[1], "elo", true); // admin rights
+
+        
+        // Prepare a workfow template. One node for each user - joined sequentially
+        String templateName = "WF Terminate Demo" + new Date();
+        WFDiagram wf = WFHelper.createSeqTemplateForUsers(ix, templateName, userNames);
+        
+         // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("WF-Sord " + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+       
+        // Start workflow
+        String flowName = "Terminate Demo " + (new Date());
+        int flowId = ix.ix().startWorkFlow(templateName, flowName, ed.getSord().getGuid());                 
+
+        System.out.println("Started WF: sordName= " + ed.getSord().getName() + 
+                ", flowId= " + flowId + 
+                ", flowName= " + flowName);
+        
+        // Node 1 is assigned to WF-User10
+        // Login as WF-User10 and forward node
+        IXConnection connUser = connFact.create("WF-User10", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User10");
+        
+        //Forward node 1 
+        System.out.println("Attempting to terminate WF");
+        forwardNode(connUser, flowId, wf.getNodes()[1], "Forward node 1");
+        
+        // Terminate WF 
+        terminateWF(connUser, flowName);
+         
+        // log WF-User10 out
+        connUser.ix().logout();
+        
+        // Login as WF-User11 and terminate WF
+        connUser = connFact.create("WF-User11", "elo", "IX-Workshop", null);
+        System.out.println("Logged in as WF-User11");
+        
+        // Terminate WF 
+        System.out.println("Attempting to terminate WF");
+        terminateWF(connUser, flowName);
+        
+        // log WF-User11 out
+        connUser.ix().logout();
+         
+
+    }
+    
+    public static void terminateWF(IXConnection connUser, String flowName){
+        
+        // Terminate WF
+        try {
+            connUser.ix().terminateWorkFlow(flowName, LOCK.getNO());
+            System.out.println("Workflow terminated!");
+        } catch (RemoteException re) {
+            // User does not have rights to terminate
+            System.out.println("ERROR during terminate: " + re.toString());
+        }
+    }
+    
+    public static void forwardNode(IXConnection connUser, int flowId, WFNode node, String comment) throws RemoteException{
+        
+        // Lock the node
+        WFEditNode editNode = connUser.ix().beginEditWorkFlowNode(
+                                                          flowId, 
+                                                          node.getId(),
+                                                          CONS.getLOCK().getYES());
+        
+        // Find successor
+        WFNode[] succNodes = editNode.getSuccNodes();
+        int [] arrEnterNodesIds = null;
+        if (succNodes.length > 0) {
+            arrEnterNodesIds = new int[1];
+            arrEnterNodesIds[0] = succNodes[0].getId();
+        }
+                 
+        // forward
+        connUser.ix().endEditWorkFlowNode(
+                flowId, 
+                node.getId(), 
+                false,                 // do not terminate flow
+                false,                 // do not cancel editing
+                editNode.getNode().getName(), // new node name = old name
+                comment,
+                arrEnterNodesIds
+                );
+        System.out.println("Forwarded node " + node.getId());
+    }
+    
+    
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        TAKE_NODE = CONS.getTAKE_NODE();
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

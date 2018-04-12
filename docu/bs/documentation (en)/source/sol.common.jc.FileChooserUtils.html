@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(java.awt);
+importPackage(java.awt.event);
+importPackage(java.io);
+importPackage(java.lang);
+importPackage(java.util);
+importPackage(javax.imageio);
+importPackage(javax.swing);
+importPackage(javax.swing.filechooser);
+
+
+//@include lib_Class.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.IxUtils.js
+
+<span id='global-property-'>/**
+</span> * Provides a converter from a Java filechooser dialog selected FILE to a base64 javascript string
+ *
+ * Displays the Java filechooser. If a file is selected, it will be validated against the rules (see eloReceiveBrowserMessage)
+ * If the file is accepted, it will be converter to a base64 String
+ *
+ * @author ESt, ELO Digital Office GmbH
+ * @version 1
+ *
+ * @requires sol.common.IxUtils
+ */
+
+
+<span id='global-method-preconditionsFulfilled'>/**
+</span> *
+ * @param {java.FILE} file
+ * @param {Object} rules
+ * @param {Number} rules.maxSize maximum filesize in Megabyte (floats possible)
+ * @param {String} rules.accept comma separated image-types to accept (&quot;image/jpeg, image/jpg, image/png&quot;)
+ */
+function preconditionsFulfilled (file, rules) {
+  var result = {}, is, mimeType;
+  result.size = +(file.length());
+  result.type = (function (file) {
+    is = new Packages.java.io.BufferedInputStream(new FileInputStream(file));
+    mimeType = Packages.java.net.URLConnection.guessContentTypeFromStream(is);
+    return String(mimeType);
+  })(file);
+  result.ok = false;
+
+  if (!rules) {
+    result.ok = true;
+    return result;
+  }
+
+  if (file.length() &lt;= (rules.maxSize * 1000000)) {
+    if ((rules.accept.split(&quot;,&quot;).map(function (s) { return String(s.trim()); })).indexOf(String(result.type)) &gt; -1) {
+      result.ok = true;
+    }
+  }
+  return result;
+}
+
+<span id='global-method-eloReceiveBrowserMessage'>/**
+</span> *
+ * @param {*} msg
+ * @param {String} msg.name must contain &quot;workspace.showFileChooserDialog_&quot;
+ * @param {Object} msg.rules see preconditionsFulfilled&#39;s rules parameter
+ */
+function eloReceiveBrowserMessage(msg, compName, browserComponent) {
+  var file, byteArray, base64, re = /.*_(\{.*\})/g, match, result;
+
+  if (msg.name.indexOf(&quot;workspace.showFileChooserDialog_&quot;) &gt; -1) {
+    file = workspace.showFileChooserDialog(&quot;Wählen Sie ein Mitarbeiterfoto aus&quot;, false, true, &quot;&quot;);
+    if (!file || !file.length || +(file.length) &lt; 1) {
+      base64 = &quot;&quot;;
+    } else {
+      match = re.exec(msg.name);
+      result = preconditionsFulfilled(file[0], (match &amp;&amp; JSON.parse(match[1])) || msg.data.rules);
+      result.base64 = &quot;&quot;;
+      if (result.ok) {
+        byteArray = Packages.org.apache.commons.io.FileUtils.readFileToByteArray(file[0]);
+        result.base64 = String(Packages.org.apache.commons.codec.binary.Base64.encodeBase64String(byteArray));
+      }
+    }
+    browserComponent.sendCustomResponse(msg, { response: result });
+  }
+}</pre>
+</body>
+</html>

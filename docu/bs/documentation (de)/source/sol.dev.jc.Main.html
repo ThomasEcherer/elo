@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">/* eslint valid-jsdoc: 0 */
+
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.de.elo.client.scripting.interfaces);
+importPackage(org.apache.commons.io);
+
+importClass(Packages.de.elo.client.scripting.constants.CONSTANTS);
+
+//@include lib_Class.js
+//@include lib_moment.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.DateUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.AsyncUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.SordTypeUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.FileUtils.js
+//@include lib_sol.common.HttpUtils.js
+//@include lib_sol.common.ZipUtils.js
+//@include lib_sol.common.ExecUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.UserProfile.js
+//@include lib_sol.common.jc.CommonDialogs.js
+//@include lib_sol.dev.jc.GotoId.js
+//@include lib_sol.dev.jc.BuildPackages.js
+//@include lib_sol.dev.jc.Deploy.js
+//@include lib_sol.dev.jc.Versions.js
+//@include lib_sol.dev.jc.ExecuteRf.js
+//@include lib_sol.dev.jc.DownloadBranches.js
+//@include lib_sol.dev.install.Installer.js
+
+sol.ns(&quot;sol.dev&quot;);
+sol.dev.extraTabNo = 99;
+sol.dev.bandBaseNo = 10;
+
+<span id='sol-dev-jc-Main'>/**
+</span> * @class sol.dev.jc.Main
+ * @singleton
+ *
+ * Contructs the JavaClient script.
+ * Contains all necessary includes.
+ *
+ * # Registered buttons
+ *
+ * |Number|Name|
+ * |:------|:------|
+ * |650|Build setup package|
+ * |651|Build debug setup package|
+ * |652|Reload forms|
+ * |653|Reload IX scripts|
+ * |654|Reload IX|
+ * |655|GotoId|
+ * |656|Execute RF|
+ * |657|Download Branches|
+ * |658|Generate report|
+ * |659|Validate report|
+ *
+ * @author Business Solutions, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.AsyncUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.FileUtils
+ * @requires sol.common.ZipUtils
+ * @requires sol.common.jc.CommonDialogs
+ * @requires sol.dev.jc.GotoId
+ * @requires sol.dev.jc.BuildPackages
+ * @requires sol.dev.jc.Versions
+ * @requires sol.dev.jc.ExecuteRf
+ * @requires sol.dev.jc.DownloadBranches
+ */
+
+<span id='global-dev-JavaClientEvents-method-eloWorkspaceStarted'>/**
+</span> * @member global.dev.JavaClientEvents
+ * Event handler that is called after the workspace is started.
+ * This function enables the script buttons for the common processing.
+ * The function generateScriptVersionList only available for folders
+ */
+function eloWorkspaceStarted() {
+  workspace.setScriptButtonEnabled(662, true, true, false, true, false, false);
+}
+
+<span id='global-dev-JavaClientEvents-method-getExtraTabs'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getExtraTabs() {
+  return sol.dev.extraTabNo + &quot;,Development&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-getExtraBands'>/**
+</span> * @member global.dev.JavaClientEvents
+ * Event handler that returns the custom bands data.
+ */
+function getExtraBands() {
+  var bandNo = sol.dev.bandBaseNo,
+      bands = [];
+
+  bands.push(&quot;Development&quot; + &quot;,&quot; + (bandNo++) + &quot;,&quot; + &quot;Setup&quot;);
+  bands.push(&quot;Development&quot; + &quot;,&quot; + (bandNo++) + &quot;,&quot; + &quot;Reload&quot;);
+  bands.push(&quot;Development&quot; + &quot;,&quot; + (bandNo++) + &quot;,&quot; + &quot;Tools&quot;);
+  bands.push(&quot;Development&quot; + &quot;,&quot; + (bandNo++) + &quot;,&quot; + &quot;Versions report&quot;);
+  return bands.join(&quot;;&quot;);
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButtonPositions'>/**
+</span> * @member global.dev.JavaClientEvents
+ * Event handler that returns the script button positions.
+ */
+function getScriptButtonPositions() {
+  var positions = [];
+
+  if (!workspace.userRights.hasAdminRight()) {
+    return &quot;&quot;;
+  }
+
+  positions.push(&quot;650,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Setup&quot;);
+  positions.push(&quot;651,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Setup&quot;);
+  positions.push(&quot;652,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Reload&quot;);
+  positions.push(&quot;653,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Reload&quot;);
+  positions.push(&quot;654,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Reload&quot;);
+  positions.push(&quot;655,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Tools&quot;);
+  positions.push(&quot;656,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Tools&quot;);
+  positions.push(&quot;657,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Tools&quot;);
+  positions.push(&quot;658,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Versions report&quot;);
+  positions.push(&quot;659,&quot; + &quot;Development&quot; + &quot;,&quot; + &quot;Versions report&quot;);
+
+  return positions.join(&quot;;&quot;);
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton650Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton650Name() {
+  return &quot;Build setup package&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton650Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton650Start() {
+  var packageBuilder = sol.create(&quot;sol.dev.jc.BuildPackages&quot;, {});
+  packageBuilder.execute();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton651Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton651Name() {
+  return &quot;Build debug setup package&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton651Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton651Start() {
+  var packageBuilder = sol.create(&quot;sol.dev.jc.BuildPackages&quot;, { debug: true });
+  packageBuilder.execute();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton652Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton652Name() {
+  return &quot;Reload forms&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton652Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton652Start() {
+  sol.common.HttpUtils.sendRequest({ url: &quot;{{eloWfBaseUrl}}/wf/edit.jsp?reload=1&amp;lang=en&amp;ticket={{ticket}}&quot;, resolve: true });
+  workspace.setFeedbackMessage(&quot;Forms reloaded&quot;);
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton653Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton653Name() {
+  return &quot;Reload IX scripts&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton653Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton653Start() {
+  var connFact, conn, timeoutSeconds;
+
+  timeoutSeconds = 300;
+
+  connFact = sol.common.RepoUtils.createConnFact(ixConnect.connProperties, ixConnect.sessionOptions, {
+    timeoutSeconds: timeoutSeconds
+  });
+  conn = connFact.createFromTicket(ixConnect.loginResult.clientInfo);
+  conn.ix().reloadScripts();
+  conn.close();
+  connFact.done();
+
+  workspace.setFeedbackMessage(&quot;IX scripts reloaded&quot;);
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton654Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton654Name() {
+  return &quot;Reload IX&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton654Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton654Start() {
+  var connFact, conn, timeoutSeconds;
+
+  timeoutSeconds = 600;
+
+  connFact = sol.common.RepoUtils.createConnFact(ixConnect.connProperties, ixConnect.sessionOptions, {
+    timeoutSeconds: timeoutSeconds
+  });
+  conn = connFact.createFromTicket(ixConnect.loginResult.clientInfo);
+  conn.ix().reload();
+  conn.close();
+  connFact.done();
+
+  workspace.setFeedbackMessage(&quot;IX reloaded&quot;);
+}
+<span id='global-dev-JavaClientEvents-method-getScriptButton655Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton655Name() {
+  return &quot;GotoId&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton655Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton655Start() {
+  sol.dev.jc.GotoId.execute();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton656Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton656Name() {
+  return &quot;Execute RF&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton656Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton656Start() {
+  sol.dev.jc.ExecuteRf.execute();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton657Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton657Name() {
+  return &quot;Download branches&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton657Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton657Start() {
+  sol.dev.jc.DownloadBranches.execute();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton658Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton658Name() {
+  return &quot;Generate report&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton658Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton658Start() {
+  sol.dev.jc.Versions.generateReport();
+}
+
+<span id='global-dev-JavaClientEvents-method-getScriptButton659Name'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function getScriptButton659Name() {
+  return &quot;Validate report&quot;;
+}
+
+<span id='global-dev-JavaClientEvents-method-eloScriptButton659Start'>/**
+</span> * @member global.dev.JavaClientEvents
+ */
+function eloScriptButton659Start() {
+  sol.dev.jc.Versions.validateReport();
+}
+
+</pre>
+</body>
+</html>

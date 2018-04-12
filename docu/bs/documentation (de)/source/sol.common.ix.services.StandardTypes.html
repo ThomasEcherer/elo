@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.StandardTypes&quot; });
+
+<span id='sol-common-ix-services-StandardTypes'>/**
+</span> * Standardized implementation for a types/templates service.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.StandardTypes&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-StandardTypes-cfg-S-types'>  /**
+</span>   * @cfg {Object} $types (optional) Configuration to retrieve the types for selection in the client.
+   * @cfg {String} $types.path The path containing the templates. If `$types` is defined, this is mandatory.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-StandardTypes-method-process'>  /**
+</span>   * Performes the checks and retrieves the data as spezified in the configuration.
+   * @returns {Object}
+   */
+  process: function () {
+    var me = this;
+
+    me.collectTypes();
+
+    // TODO filtering
+
+    return me._types;
+  },
+
+<span id='sol-common-ix-services-StandardTypes-method-collectTypes'>  /**
+</span>   * Collects the types and stores them to `_types`.
+   */
+  collectTypes: function () {
+    var me = this,
+        types;
+
+    if (me.$types) {
+      if (!me.$types.path) {
+        throw &quot;IllegalArgumentException: to retrieve types at least a &#39;path&#39; has to be defined&quot;;
+      }
+
+      types = me.retrieveAllTypes();
+      me._types = me.convertTypes(types);
+    }
+  },
+
+<span id='sol-common-ix-services-StandardTypes-method-retrieveAllTypes'>  /**
+</span>   * @private
+   * Retrieves all type Sord objects.
+   * @returns {de.elo.ix.client.Sord[]}
+   */
+  retrieveAllTypes: function () {
+    var me = this,
+        searchConf, types;
+
+    searchConf = {
+      includeFolders: true,
+      includeDocuments: false,
+      includeReferences: true,
+      sordZ: SordC.mbAllIndex
+    };
+
+    types = sol.common.RepoUtils.findChildren(me.$types.path, searchConf);
+
+    return types;
+  },
+
+<span id='sol-common-ix-services-StandardTypes-method-convertTypes'>  /**
+</span>   * @private
+   * Converts from Sords to Objects
+   * @param {de.elo.ix.client.Sord[]} typeSords
+   * @returns {Object[]}
+   */
+  convertTypes: function (typeSords) {
+    var converted = [];
+    if (typeSords &amp;&amp; (typeSords.length &gt; 0)) {
+      typeSords.forEach(function (sord) {
+        converted.push({
+          objId: sord.id,
+          name: sord.name,
+          desc: sord.desc
+        });
+      });
+    }
+    return converted;
+  }
+
+});
+
+
+<span id='sol-common-ix-services-StandardTypes-static-method-RF_sol_common_service_StandardTypes'>/**
+</span> * @member sol.common.ix.services.StandardTypes
+ * @method RF_sol_common_service_StandardTypes
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_StandardTypes(ec, args) {
+  var config, service, result;
+
+  logger.enter(&quot;RF_sol_common_service_StandardTypes&quot;, args);
+
+  config = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args);
+  config.ci = ec.ci;
+  config.user = ec.user;
+
+  service = sol.create(&quot;sol.common.ix.services.StandardTypes&quot;, config);
+  result = sol.common.ix.RfUtils.stringify(service.process());
+
+  logger.exit(&quot;RF_sol_common_service_StandardTypes&quot;, result);
+
+  return result;
+}
+</pre>
+</body>
+</html>

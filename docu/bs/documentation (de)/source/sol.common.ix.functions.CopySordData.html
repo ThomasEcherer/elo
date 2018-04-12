@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.CopySordData&quot; });
+
+<span id='sol-common-ix-functions-CopySordData'>/**
+</span> * Copies index values and map data to another ELO object.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;source&quot;: &quot;1234&quot;,
+ *       &quot;suppressedFields&quot;: [&quot;FIELD1&quot;, &quot;FIELD2&quot;],
+ *       &quot;suppressedMapFields&quot;: [&quot;MAPFIELD1&quot;, &quot;MAPFIELD2&quot;]
+ *     }
+ *
+ * # As IX function call
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_CopySordData&quot;, {
+ *       source: &quot;1111&quot;,
+ *       objId: &quot;2222&quot;,
+ *       suppressedFields: [&quot;FIELD1&quot;, &quot;FIELD2&quot;],
+ *       suppressedMapFields: [&quot;MAPFIELD1&quot;, &quot;MAPFIELD2&quot;],
+ *       suppressedFieldsDelete: true
+ *     });
+ *
+ * # Prerequisites
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ *
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.CopySordData&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-CopySordData-cfg-requiredConfig'>  requiredConfig: [&quot;source&quot;, &quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-CopySordData-cfg-source'>  /** @cfg {String} source (required)
+</span>   * Object ID of the source ELO object.
+   */
+
+<span id='sol-common-ix-functions-CopySordData-cfg-objId'>  /** @cfg {String} objId (required)
+</span>   * Object ID of the destination ELO object.
+   */
+
+<span id='sol-common-ix-functions-CopySordData-cfg-suppressedFields'>  /** @cfg {Array} suppressedFields
+</span>   * Field names of the fields that should not be copied.
+   */
+
+<span id='sol-common-ix-functions-CopySordData-cfg-suppressedMapFields'>  /** @cfg {Array} suppressedMapFields
+</span>   * Map field names of map fields that should not be copied.
+   */
+
+<span id='sol-common-ix-functions-CopySordData-cfg-suppressedFieldsDelete'>  /** @cfg {boolean} suppressedFieldsDelete
+</span>   * If `true`, the suppressedFields will delete.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-CopySordData-method-convertStringArrayToObject'>  /**
+</span>   * @private
+   * Converts a string array to an object
+   * @param {Array} arr
+   * @return {Object}
+   */
+  convertStringArrayToObject: function (arr) {
+    var obj = {};
+    if (arr) {
+      arr.forEach(function (element) {
+        obj[element] = true;
+      }, this);
+    }
+    return obj;
+  },
+
+<span id='sol-common-ix-functions-CopySordData-method-process'>  /**
+</span>   * Performs copying Sord data
+   */
+  process: function () {
+    var me = this,
+        suppressedFieldsObj, suppressedMapFieldsObj, sordZ, srcSord, dstSord,
+        srcKeyValues, i, objKey,
+        dstKeyValues = [];
+
+    suppressedFieldsObj = me.convertStringArrayToObject(me.suppressedFields);
+    suppressedMapFieldsObj = me.convertStringArrayToObject(me.suppressedMapFields);
+
+    sordZ = new SordZ(SordC.mbObjKeys);
+    srcSord = ixConnect.ix().checkoutSord(me.source, new EditInfoZ(0, sordZ), LockC.NO).sord;
+    dstSord = ixConnect.ix().checkoutSord(me.objId, new EditInfoZ(0, sordZ), LockC.NO).sord;
+
+    for (i = 0; i &lt; dstSord.objKeys.length; i++) {
+      objKey = dstSord.objKeys[i];
+      if ((objKey.id &lt; DocMaskLineC.MAX_ID_DOCMASK_LINE) &amp;&amp; !suppressedFieldsObj[objKey.name]) {
+        objKey.data = [sol.common.SordUtils.getObjKeyValue(srcSord, objKey.name)];
+      } else {
+        if (me.suppressedFieldsDelete &amp;&amp; suppressedFieldsObj[objKey.name]) {
+          objKey.data = [&quot;&quot;];
+        }
+      }
+    }
+    ixConnect.ix().checkinSord(dstSord, sordZ, LockC.NO);
+
+    srcKeyValues = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, me.source, null, LockC.NO).items;
+
+    srcKeyValues.forEach(function (keyValue) {
+      if (!suppressedMapFieldsObj[String(keyValue.key).replace(/\d+$/, &quot;&quot;)]) {
+        dstKeyValues.push(keyValue);
+      } else {
+        keyValue.value = null;
+        dstKeyValues.push(keyValue);
+      }
+    }, this);
+    ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.objId, me.objId, dstKeyValues, LockC.NO);
+  }
+});
+
+<span id='sol-common-ix-functions-CopySordData-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.CopySordData
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_CopySordData&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.CopySordData&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_CopySordData&quot;);
+}
+
+<span id='sol-common-ix-functions-CopySordData-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.CopySordData
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_CopySordData&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.CopySordData&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_CopySordData&quot;);
+}
+
+<span id='sol-common-ix-functions-CopySordData-static-method-RF_sol_function_CopySordData'>/**
+</span> * @member sol.common.ix.functions.CopySordData
+ * @method RF_sol_function_CopySordData
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_CopySordData(iXSEContext, args) {
+  var params, module;
+
+  logger.enter(&quot;RF_sol_function_CopySordData&quot;, args);
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;source&quot;, &quot;objId&quot;);
+  module = sol.create(&quot;sol.common.ix.functions.CopySordData&quot;, params);
+  module.process();
+  logger.exit(&quot;RF_sol_function_CopySordData&quot;);
+}
+</pre>
+</body>
+</html>

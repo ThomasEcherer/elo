@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-as-renderer-Fop'>/**
+</span> * Rendering PDF file from a Apache FOP template.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloas
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common.as.renderer.Fop&quot;, {
+
+<span id='sol-common-as-renderer-Fop-cfg-requiredConfig'>  requiredConfig: [&quot;templateId&quot;],
+</span>
+<span id='sol-common-as-renderer-Fop-cfg-templateId'>  /**
+</span>   * @cfg {String} templateId (required)
+   * The template which should be rendered
+   */
+
+<span id='sol-common-as-renderer-Fop-cfg-targetId'>  /**
+</span>   * @cfg {String} targetId
+   * The target folder to store the rendered document.
+   * Either `targetId` or `objId` has to be defined.
+   */
+
+<span id='sol-common-as-renderer-Fop-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * The rendered document will be saved as a version of this object
+   * Either `targetId` or `objId` has to be defined.
+   */
+
+<span id='sol-common-as-renderer-Fop-cfg-toStream'>  /**
+</span>   * @cfg {String} toStream
+   * If true, the renderer will return the output stream
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    if (!me.objId &amp;&amp; !me.targetId &amp;&amp; !me.toStream) {
+      throw &quot;IllegalArgumentException: either &#39;targetId&#39; or &#39;objId&#39; has to defined&quot;;
+    }
+  },
+
+<span id='sol-common-as-renderer-Fop-method-render'>  render: function (name, data) {
+</span>    var me = this,
+        result = {},
+        pdfStream, foContent, foStream, tpl;
+
+    me.maskId = me.maskId || &quot;&quot;;
+
+    try {
+      tpl = sol.create(&quot;sol.common.Template&quot;, {});
+      tpl.load(me.templateId);
+
+      foContent = tpl.apply(data);
+
+      me.logger.debug([&quot;fo={0}&quot;, foContent]);
+
+      foStream = org.apache.commons.io.IOUtils.toInputStream(foContent, &quot;UTF-8&quot;);
+      pdfStream = new ByteArrayOutputStream();
+
+      Packages.de.elo.mover.main.helper.XmlHelper.convertToPdf(foStream, pdfStream);
+
+      if (me.toStream) {
+        result.outputStream = pdfStream;
+      }
+
+      if (me.objId) {
+        result.objId = sol.common.RepoUtils.saveToRepo({
+          objId: me.objId,
+          extension: &quot;pdf&quot;,
+          outputStream: pdfStream
+        });
+      }
+
+      if (me.targetId) {
+        sol.common.RepoUtils.preparePath(me.targetId);
+        result.objId = sol.common.RepoUtils.saveToRepo({
+          name: name,
+          parentId: me.targetId,
+          maskId: me.maskId,
+          extension: &quot;pdf&quot;,
+          outputStream: pdfStream
+        });
+      }
+    } catch (ex) {
+      me.logger.error([&quot;error rendering report &#39;{0}&#39; (templateId=&#39;{1}&#39;)&quot;, name, me.templateId], ex);
+    } finally {
+      if (foStream) {
+        foStream.close();
+      }
+      if (pdfStream) {
+        pdfStream.close();
+      }
+    }
+    return result;
+  }
+});</pre>
+</body>
+</html>

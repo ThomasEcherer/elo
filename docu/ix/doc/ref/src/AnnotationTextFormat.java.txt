@@ -1,0 +1,154 @@
+
+package de.elo.ix.examples;
+
+import java.rmi.RemoteException;
+
+/**
+ * <p>Helper class for creating annotation text. Builds a string 46 characters 
+ * long for the font definition used in an Annotation (createNote() class).</p>
+ * <p>character 1 - subtype, 5 = text, 8 = picture<br> 
+ * characters 2 - 4, fontsize including preceeding + or - according to the Windows API<br>
+ * characters 5 - 10, colour as hex RGB value<br>
+ * character 11 - fontStyle, 4 = undeline, 8 = strikethrough, c = underline & strikethrough, 0 = none<br>
+ * characters 12 - 45 font name, maximum 34 characters
+ * character 46 - empty character
+ * </p>
+ * <p>Calling makeFontText() returns the formatted text.</p>
+ * <p> THIS CLASS IS INTENDED ONLY AS A HELPER CLASS FOR THE PROGRAMMING EXAMPLES!</p>
+ * <p>Copyright: Copyright (c) 2004</p>
+ * <p>Organisation: ELO Digital Office GmbH</p>
+ *
+ * @see IXServicePortIF#createNote IXServicePortIF.createNote...)
+ */
+public class AnnotationTextFormat{
+ 
+
+  
+  /**
+   *  Subtype - 1 character.   5 = picture, 8 = text
+   */
+  protected Character subType;
+  
+ /**
+  * fontSize - the size of the font in pixels. 3 characters long +/-XX
+  * Coding according to the Windows API
+  */ 
+  protected String fontSize;
+  
+ /**
+  * color - the colour of the text - hex value RGB (6 characters) in Litte Endian order
+  */  
+  protected String color;
+ 
+ /**
+  * fontStyle - 1 character - 4 = undeline, 8 = strikethrough, c = underline & strikethrough
+  */  
+  protected Character fontStyle;
+  
+ /**
+  * fontName - the name of the font. Up to 34 characters
+  */
+  protected String fontName;
+  
+ /**
+  * end - 1 blank character at the end of the string
+  */  
+  protected Character end;
+
+  public AnnotationTextFormat() {
+  }
+
+  public AnnotationTextFormat(Character type, String size, String col, Character style, String name) {
+    this.subType = type;
+    this.fontSize = size;
+    this.color = col;
+    this.fontStyle = style;
+    this.fontName = name;
+  }
+
+  public String makeFontText() throws RemoteException{
+      
+     // Format a string supplying the font information for an annotation note      
+      String textString = new String(subType.toString());
+      
+      // add fontSize
+      if (fontSize.length() == 3){
+          textString = textString + fontSize;
+          
+      } else {   
+          RemoteException re = new RemoteException("ERROR - AnnotationTextFormat - fontSize invalid!");
+          throw re;
+      }
+      
+      // add color
+      if (color.length() == 6){
+          textString = textString + color;
+          
+      } else {   
+          RemoteException re = new RemoteException("ERROR - AnnotationTextFormat - color invalid!");
+          throw re;
+      }
+      
+      // add fontStyle
+      textString = textString + fontStyle.toString();
+      
+      // add fontName - assumes no blank characters appear at front of name
+      if (fontName.length() == 0 || fontName.length() > 34){   
+          RemoteException re = new RemoteException("ERROR - AnnotationTextFormat - fontSize invalid!");
+          throw re;
+      } else {
+          String longName = fontName;
+          for (int i = fontName.length(); i < 34; i++ ) {
+              longName = longName + " ";
+          }
+          textString = textString + longName;
+      }
+      
+      // Add empty character at end
+      textString = textString + " ";
+   
+      return textString;
+  }
+
+  public void setSubType(Character sType){
+      subType = sType;
+  }
+
+  public void setFontSize(String size){
+      fontSize = size;
+  }
+
+  public void setColor(String col){
+      color = col;
+  }
+
+  public void setFontStyle(Character style){
+      fontStyle = style;
+  }
+
+  public void setFontName(String fName){
+      fontName = fName;
+  }
+
+  public Character getSubType(){
+      return subType;
+  }
+  
+  public String getFontSize(){
+      return fontSize;
+  }
+  
+  public String getColor(){
+      return color;
+  }
+  
+  public Character getFontStyle(){
+      return fontStyle;
+  }
+  
+  public String getFontName(){
+      return fontName;
+  }
+  
+ 
+}

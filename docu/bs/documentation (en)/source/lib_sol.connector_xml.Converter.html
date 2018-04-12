@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.text);
+
+//@include lib_Class.js
+
+<span id='sol-connector_xml-Converter'>/**
+</span> * Contains the value converters
+ *
+ * A converter needs to have a convert function to register:
+ *
+ *     {
+ *       convert: function (value, config, fields) { ... }
+ *     }
+ *
+ * The following converters are registered by default:
+ *
+ * - {@link sol.connector_xml.converter.DefaultConverter DefaultConverter}
+ * - {@link sol.connector_xml.converter.DateConverter DateConverter}
+ * - {@link sol.connector_xml.converter.DynamicKwlLookup DynamicKwlLookup}
+ *
+ * @author Pascal Zipfel, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ */
+sol.define(&quot;sol.connector_xml.Converter&quot;, {
+  singleton: true,
+
+<span id='sol-connector_xml-Converter-property-registry'>  /**
+</span>   * @private
+   * Converter registry
+   */
+  registry: {},
+
+<span id='sol-connector_xml-Converter-method-convert'>  /**
+</span>   * Converts a value using one of the registered converters.
+   *
+   * The appropriate converter will be looked up by the config.type property.
+   *
+   * @param {String} value The vaule which should be converted
+   * @param {Object} config Configuration Object for the converter, the reguired properties depend on the used converter
+   * @param {Object} fields Key-Value object with fields the converter might depend on; this might be optional, depending on the used converter
+   * @param {Object} mapObj Map object
+   * @return {String}
+   */
+  convert: function (value, config, fields, mapObj) {
+    if (!value) {
+      throw &quot;Illegal Argument : No &#39;value&#39; to convert&quot;;
+    }
+    if (!config) {
+      throw &quot;Illegal Argument : No &#39;config&#39; for converter&quot;;
+    }
+    if (!config.type) {
+      throw &quot;Illegal Argument : No &#39;config.type&#39; defined&quot;;
+    }
+    if (!this.registry[config.type]) {
+      throw &quot;Illegal Argument : No converter for type &#39;&quot; + config.type + &quot;&#39; registered&quot;;
+    }
+
+    return this.registry[config.type].convert(value, config, fields, mapObj);
+  },
+
+<span id='sol-connector_xml-Converter-method-register'>  /**
+</span>   * Registers a converter in the registry.
+   * @param {String} type The name for the converter lookup
+   * @param {Object} converter A object having a convert function.
+   */
+  register: function (type, converter) {
+    if (!converter) {
+      throw &quot;Converter is empty&quot;;
+    }
+    if (!this.isFunction(converter.convert)) {
+      throw converter + &quot; needs to implement the &#39;convert&#39; function&quot;;
+    }
+    this.registry[type] = converter;
+  },
+
+<span id='sol-connector_xml-Converter-method-remove'>  /**
+</span>   * Removes a converter from the registry.
+   * @param {String} type The name for the converter lookup
+   */
+  remove: function (type) {
+    this.registry[type] = undefined;
+  },
+
+<span id='sol-connector_xml-Converter-method-isFunction'>  /**
+</span>   * @private
+   * Checks, if an object is a function
+   * @param {Object} object
+   * @return {Boolean}
+   */
+  isFunction: function (object) {
+    return object &amp;&amp; (Object.prototype.toString.call(object) === &quot;[object Function]&quot;);
+  }
+});
+
+
+<span id='sol-connector_xml-Converter-DefaultConverter'>/**
+</span> * Simply sets a default value, if the value is empty.
+ *
+ * @author Pascal Zipfel, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.StringUtils
+ *
+ */
+sol.define(&quot;sol.connector_xml.Converter.DefaultConverter&quot;, {
+  singleton: true,
+
+<span id='sol-connector_xml-Converter-DefaultConverter-method-convert'>  /**
+</span>   * This convert method needs config.defaultValue
+   *
+   * @param {String} value The vaule which should be converted
+   * @param {Object} config Configuration Object for the conversion
+   * @return {String}
+   */
+  convert: function (value, config) {
+    if (!config.defaultValue) {
+      throw &quot;Illegal Argument : &#39;DefaultConverter&#39; needs a &#39;defaultValue&#39; in the config object&quot;;
+    }
+
+    return (!sol.common.StringUtils.isBlank(value)) ? value : config.defaultValue;
+  }
+});
+
+
+<span id='sol-connector_xml-Converter-DateConverter'>/**
+</span> * Converts a Date from one format to another.
+ *
+ * @author Pascal Zipfel, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.StringUtils
+ *
+ */
+sol.define(&quot;sol.connector_xml.Converter.DateConverter&quot;, {
+  singleton: true,
+
+<span id='sol-connector_xml-Converter-DateConverter-method-convert'>  /**
+</span>   * This convert method needs config.fromPattern and config.toPattern
+   *
+   * The patterns have to be in Javas SimpleDateFormat syntax
+   *
+   * @param {String} value The vaule which should be converted
+   * @param {Object} config Configuration Object for the conversion
+   * @return {String}
+   */
+  convert: function (value, config) {
+    if (!sol.common.StringUtils.isBlank(value)) {
+      if (!config.fromPattern || !config.toPattern) {
+        throw &quot;Illegal Argument : &#39;DateConverter&#39; needs a &#39;fromPattern&#39; and a &#39;toPattern&#39; in the config object&quot;;
+      }
+      var fromSDF = new SimpleDateFormat(config.fromPattern),
+          toSDF = new SimpleDateFormat(config.toPattern);
+
+      value = toSDF.format(fromSDF.parse(value));
+    }
+    return value;
+  }
+});
+
+
+<span id='sol-connector_xml-Converter-DynamicKwlLookup'>/**
+</span> * Uses the value to lookup another value in a dynamic keyword list.
+ *
+ * @author Pascal Zipfel, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.StringUtils
+ *
+ */
+sol.define(&quot;sol.connector_xml.Converter.DynamicKwlLookup&quot;, {
+  singleton: true,
+
+<span id='sol-connector_xml-Converter-DynamicKwlLookup-method-convert'>  /**
+</span>   * Configuration Parameter:
+   *
+   * - kwl:             The name of the script containing the dynamic kwl
+   * - focusfield:      The field which contains the &quot;to be converted&quot; value
+   * - returnfield:     The field which contains the convterted/return value
+   * - dependentFields: Array of fields which are needed by the kwl (if specified, the fields-map needs to provide the corresponting values)
+   * - defaultValue:    Default value if no (or more than one) result was found / if not defined, the unconverted value will be returned
+   *
+   * @param {String} value The vaule which should be converted
+   * @param {Object} config Configuration Object for the conversion
+   * @param {Object} fields Key-Value object with fields the converter might depend on; this might be optional, depending on the used converter
+   * @return {String}
+   */
+  convert: function (value, config, fields) {
+    var map, kdi, result, i, length, keyName;
+
+    if (!sol.common.StringUtils.isBlank(value)) {
+      if (!config.kwl || !config.focusfield || !config.returnfield) {
+        throw &quot;Illegal Argument : &#39;DynamicKwlLookup&#39; needs a &#39;kwl&#39;, a &#39;focusfield&#39; and a &#39;returnfield&#39; in the config object&quot;;
+      }
+
+      map = this.fillDependentFields(fields, config.dependentFields);
+      kdi = new KeywordsDynamicInfo();
+
+      if (!config.focusfield) {
+        config.focusfield = config.returnfield;
+      }
+
+      if (!map[config.focusfield]) {
+        map[config.focusfield] = value;
+      }
+
+      kdi.mapData = map;
+      kdi.mapLineFocus = config.focusfield;
+      kdi.mapScriptName = config.kwl;
+
+      result = ixConnect.ix().checkoutKeywordsDynamic(kdi);
+
+      if (result &amp;&amp; result.table &amp;&amp; (result.table.size() == 1)) {
+        length = result.keyNames.size();
+        for (i = 0; i &lt; length; i++) {
+          keyName = result.keyNames.get(i);
+          keyName = (keyName.startsWith(&quot;IX_MAP_&quot;)) ? keyName.substring(7) : keyName;
+          keyName = (keyName.endsWith(&quot;{i}&quot;)) ? keyName.substring(0, keyName.length() - 3) : keyName;
+          if (keyName == config.returnfield) {
+            return result.table.get(0).get(i);
+          }
+        }
+      }
+      return config.defaultValue ? config.defaultValue : value;
+    }
+    return value;
+  },
+
+<span id='sol-connector_xml-Converter-DynamicKwlLookup-method-fillDependentFields'>  /**
+</span>   * @private
+   * Matches the fields against a list of dependent fields
+   * @param {Object} fields Contains all available key-value pairs
+   * @param {Array} dependentFields (optional) List of the values needed for the keyword list
+   * @return {Object}
+   */
+  fillDependentFields: function (fields, dependentFields) {
+    var map = {},
+        i, field;
+
+    if (!dependentFields) {
+      for (field in fields) {
+        map[field] = new java.lang.String(fields[field]);
+      }
+    } else if (dependentFields.length &gt; 0) {
+      for (i = 0; i &lt; dependentFields.length; i++) {
+        field = dependentFields[i];
+        if (fields[field]) {
+          map[field] = fields[field];
+        } else {
+          throw &quot;not all dependent fields defined; missing field: &quot; + field;
+        }
+      }
+    }
+
+    return map;
+  }
+});
+
+<span id='sol-connector_xml-Converter-SetIfEmpty'>/**
+</span> * Sets a value if it&#39;s empty
+ *
+ * @param {String} value The vaule which should be converted
+ * @param {Object} config Configuration Object for the conversion
+ * @param {Object} fields Key-Value object with fields the converter might depend on; this might be optional, depending on the used converter
+ * @return {String}
+ */
+sol.define(&quot;sol.connector_xml.Converter.SetIfEmpty&quot;, {
+  singleton: true,
+
+<span id='sol-connector_xml-Converter-SetIfEmpty-method-convert'>  convert: function (value, config, fields, mapObj) {
+</span>    var currentValue;
+
+    currentValue = (fields[mapObj.key] || &quot;&quot;) + &quot;&quot;;
+
+    if (currentValue) {
+      return currentValue;
+    } else {
+      return value;
+    }
+  }
+});
+
+sol.connector_xml.Converter.register(&quot;DefaultConverter&quot;, sol.connector_xml.Converter.DefaultConverter);
+sol.connector_xml.Converter.register(&quot;DateConverter&quot;, sol.connector_xml.Converter.DateConverter);
+sol.connector_xml.Converter.register(&quot;DynamicKwlLookup&quot;, sol.connector_xml.Converter.DynamicKwlLookup);
+sol.connector_xml.Converter.register(&quot;SetIfEmpty&quot;, sol.connector_xml.Converter.SetIfEmpty);
+</pre>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Decide&quot; });
+
+<span id='sol-common-ix-functions-Decide'>/**
+</span> * Makes a decision on field values by regular expressions and sets the workflow status
+ *
+ * # Example
+ *
+ *     {
+ *       &quot;checks&quot;: [
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;PROJECT_NO&quot;, &quot;regex&quot;: &quot;^AB(\\d+)$&quot;, &quot;writeMatches&quot;: [{ &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;COMPANY_NAME&quot; }] },
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;PROJECT_NAME&quot;, &quot;regex&quot;: &quot;My(Project)&quot;, &quot;writeMatches&quot;: [{ &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;VENDOR_NAME&quot; }] }
+ *       ],
+ *       &quot;trueStatus&quot;: &quot;TRUE&quot;,
+ *       &quot;falseStatus&quot;: &quot;FALSE&quot;
+ *     }
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.Decide&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Decide-cfg-requiredConfig'>  requiredConfig: [&quot;wfDiagram&quot;, &quot;nodeId&quot;, &quot;checks&quot;],
+</span>
+<span id='sol-common-ix-functions-Decide-cfg-wfDiagram'>  /**
+</span>   * @cfg {de.elo.ix.client.wfDiagram} wfDiagram (required)
+   * The workflow which should be checked.
+   */
+
+<span id='sol-common-ix-functions-Decide-cfg-trueStatus'>  /**
+</span>   * @cfg {String} [trueStatus=TRUE]
+   * Status value for ´true´
+   */
+
+<span id='sol-common-ix-functions-Decide-cfg-falseStatus'>  /**
+</span>   * @cfg {String} [falseStatus=FALSE]
+   * Status value for ´false´
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-Decide-method-process'>  /**
+</span>   * Perform the checks.
+   */
+  process: function () {
+    var me = this,
+        decision, statusValue;
+
+    me.sord = ixConnect.ix().checkoutSord(me.wfDiagram.objId, SordC.mbAllIndex, LockC.NO);
+    decision = me.checkAndWrite();
+
+    me.trueStatus = me.trueStatus || &quot;TRUE&quot;;
+    me.falseStatus = me.falseStatus || &quot;FALSE&quot;;
+
+    statusValue = decision ? me.trueStatus : me.falseStatus;
+
+    sol.common.WfUtils.setWorkflowStatus(me.wfDiagram, statusValue);
+  },
+
+<span id='sol-common-ix-functions-Decide-method-checkAndWrite'>  checkAndWrite: function () {
+</span>    var me = this,
+        updates = [],
+        result = true,
+        i, j, singleCheck, value, regExp, matches, match, mapEntries,
+        fieldDefIndex, fieldDefRef, fieldDef;
+
+    for (i = 0; i &lt; me.checks.length; i++) {
+      singleCheck = me.checks[i];
+
+      value = String(sol.common.SordUtils.getValue(me.sord, singleCheck) || &quot;&quot;);
+      if (!value) {
+        me.logger.debug([&quot;Check: Field is emtpy: type={0}, key={1}&quot;, singleCheck.type, singleCheck.key]);
+        result = false;
+        break;
+      }
+
+      regExp = new RegExp(singleCheck.regex);
+      matches = value.match(regExp);
+
+      if (!matches || (matches.length == 0)) {
+        me.logger.debug([&quot;Check: Field value doesn&#39;t match: type={0}, key={1}, value={2}, regex={3}&quot;, singleCheck.type, singleCheck.key, value, singleCheck.regex]);
+        result = false;
+        break;
+      }
+
+      if (singleCheck.writeMatches) {
+
+        for (j = 1; j &lt; matches.length; j++) {
+          match = matches[j];
+          fieldDefIndex = j - 1;
+          fieldDefRef = singleCheck.writeMatches[fieldDefIndex];
+          if (fieldDefRef) {
+            fieldDef = sol.common.ObjectUtils.clone(fieldDefRef);
+            fieldDef.value = match;
+            me.logger.debug([&quot;Write match to field: {0}&quot;, JSON.stringify(fieldDef)]);
+            updates.push(fieldDef);
+          }
+        }
+      }
+    }
+
+    if (updates.length &gt; 0) {
+      mapEntries = sol.common.SordUtils.updateSord(me.sord, updates);
+      ixConnect.ix().checkinSord(me.sord, SordC.mbAllIndex, LockC.NO);
+      if (mapEntries) {
+        ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.sord.id, me.sord.id, mapEntries, LockC.NO);
+      }
+    }
+
+    me.logger.debug(&quot;Check: All fields match&quot;);
+    return result;
+  }
+});
+
+<span id='sol-common-ix-functions-Decide-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Decide
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_Decide&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.wfDiagram = wfDiagram;
+  params.nodeId = nodeId;
+  module = sol.create(&quot;sol.common.ix.functions.Decide&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_Decide&quot;);
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common_sig.ix.services.UploadSignature&quot; });
+
+<span id='sol-common_sig-ix-services-UploadSignature'>/**
+</span> * Uploads a signature
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.ix.ServiceBase
+ * 
+ * # IX function call example:
+ *
+ *     var result = sol.common.IxUtils.execute(&quot;RF_sol_visitor_service_UploadSignature&quot;, { flowId: ELO_PARAMS.ELO_FLOWID, base64Content: base64Content });
+ *     
+ */
+sol.define(&quot;sol.common_sig.ix.services.UploadSignature&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+<span id='sol-common_sig-ix-services-UploadSignature-cfg-requiredConfig'>  requiredConfig: [&quot;visitorObjId&quot;, &quot;base64Content&quot;],
+</span>  
+<span id='sol-common_sig-ix-services-UploadSignature-property-signatureDataNodeName'>  signatureDataNodeName: &quot;[data] signature&quot;,
+</span>  
+<span id='sol-common_sig-ix-services-UploadSignature-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common_sig-ix-services-UploadSignature-method-process'>  /**
+</span>   * Uploads the given file base64 content
+   * @return {Object} An Object containing the `flowId`
+   */
+  process: function () {
+    var me = this,
+        wfDiagram, signatureDataNode;
+
+    wfDiagram = sol.common.WfUtils.getWorkflow(me.flowId);
+    signatureDataNode = sol.common.WfUtils.getNodeByName(wfDiagram, me.signatureDataNodeName);
+    if (!signatureDataNode) {
+      throw &quot;Node &#39;&quot; + me.signatureDataNodeName + &quot;&#39; not found&quot;;
+    }
+    if (!me.base64Content) {
+      throw &quot;Base64 content is empty&quot;;
+    }
+    
+    signatureDataNode.properties = me.base64Content;
+    
+    ixConnect.ix().checkinWorkFlow(wfDiagram, WFDiagramC.mbAll, LockC.NO);
+    
+    return { flowId: me.flowId };
+  }
+});
+
+<span id='sol-common_sig-ix-services-UploadSignature-static-method-RF_sol_common_sig_service_UploadSignature'>/**
+</span> * @member sol.common_sig.ix.services.UploadSignature
+ * @method RF_sol_common_sig_service_UploadSignature
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_sig_service_UploadSignature(iXSEContext, args) {
+  var params, service, result;
+  
+  logger.enter(&quot;RF_sol_common_sig_service_UploadSignature&quot;, args);
+  
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;flowId&quot;, &quot;base64Content&quot;);
+  service = sol.create(&quot;sol.common_sig.ix.services.UploadSignature&quot;, { flowId: params.flowId, base64Content: params.base64Content, extension: &quot;jpg&quot; });
+  result = JSON.stringify(service.process());
+  
+  logger.exit(&quot;RF_sol_common_sig_service_UploadSignature&quot;, result);
+  return result;
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,181 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.LinkSordC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This example demonstrates the use of linkSord()
+ * 
+ */
+public class LinkSords {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;   
+    private static LinkSordC LINK_SORD;
+    private static LockC LOCK;
+
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            linkSords();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void linkSords() throws RemoteException {
+        
+        // Create Sord s1
+        EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+        Sord s1 = ed.getSord();
+        s1.setName("s1 Example LinkSord");
+        s1.setId(ix.ix().checkinSord(s1, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Created Sord with Id " + s1.getId() + 
+                           " and name " + s1.getName());
+        
+        // Create Sord o1
+        ed = ix.ix().createSord(s1.getGuid(), null, EDIT_INFO.getMbSord());
+        Sord o1 = ed.getSord();
+        o1.setName("o1");
+        o1.setId(ix.ix().checkinSord(o1, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Created Sord with Id " + o1.getId() + 
+                           " and name " + o1.getName());
+        
+        // Create Sord o2
+        ed = ix.ix().createSord(s1.getGuid(), null, EDIT_INFO.getMbSord());
+        Sord o2 = ed.getSord();
+        o2.setName("o2");
+        o2.setId(ix.ix().checkinSord(o2, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Created Sord with Id " + o2.getId() + 
+                           " and name " + o2.getName());
+        
+        // Create Sord o1
+        ed = ix.ix().createSord(s1.getGuid(), null, EDIT_INFO.getMbSord());
+        Sord o3 = ed.getSord();
+        o3.setName("o3");
+        o3.setId(ix.ix().checkinSord(o3, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Created Sord with Id " + o3.getId() + 
+                           " and name " + o3.getName());
+        
+        // Link 01 to 02 and 03
+        ix.ix().linkSords(
+                        o1.getGuid(), 
+                        new String[] {o2.getGuid(), 
+                        o3.getGuid()}, 
+                        LINK_SORD.getNOTHING());
+        System.out.println("LinkSords completed!....");
+        
+        // Dump links
+        internalDumpLinks(o1.getGuid());
+        internalDumpLinks(o2.getGuid());
+        internalDumpLinks(o3.getGuid());
+        
+        // Delete link o1 -> 02
+        ix.ix().unlinkSords(
+                          o1.getGuid(), 
+                          new String[] {o2.getGuid()}, 
+                          LINK_SORD.getNOTHING());
+        System.out.println("Link o1 -> o2 deleted!");
+        
+        // Dump links
+        internalDumpLinks(o1.getGuid());
+        internalDumpLinks(o2.getGuid());
+        internalDumpLinks(o3.getGuid());
+        
+
+        // Sord is deleted twice - once to logically delete Sord
+        // and once to permanently delete the Sord
+        // Set delete = true to delete
+        boolean delete = false;
+        if (delete == true){
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted!");
+        }
+        
+        
+    }
+    
+    private static void internalDumpLinks(String guid){
+        
+        // Checkout sord to get new links
+        try {
+            EditInfo ed = ix.ix().checkoutSord(guid, EDIT_INFO.getMbSord(), LOCK.getNO());
+            Sord sord = ed.getSord();
+            System.out.println("Links from sord " + sord.getName() + ":...");
+            for (int i = 0; i < sord.getLinksGoOut().length; i++){
+                EditInfo ed2 = ix.ix().checkoutSord(
+                                                  sord.getLinksGoOut() [i].getId(), 
+                                                  EDIT_INFO.getMbSordLean(), 
+                                                  LOCK.getNO());
+                Sord linkFromSord = ed2.getSord();
+                System.out.println("    -> " + linkFromSord.getName());
+            }
+            System.out.println("Links to sord " + sord.getName() + ":...");
+            for (int i = 0; i < sord.getLinksComeIn().length; i++){
+                EditInfo ed3 = ix.ix().checkoutSord(
+                                                  sord.getLinksComeIn() [i].getId(), 
+                                                  EDIT_INFO.getMbSordLean(), 
+                                                  LOCK.getNO());
+                Sord linkToSord = ed3.getSord();
+                System.out.println("    -> " + linkToSord.getName());
+            }
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+        }    
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        LINK_SORD = CONS.getLINK_SORD();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

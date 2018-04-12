@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace wf
+<span id='wf'>/**
+</span> * @class wf
+ * @singleton
+ */
+var wf = new Object();
+wf = {
+
+<span id='wf-method-readWorkflow'> /**
+</span>  * Liefert den Workflow mit der angegebenen ID zurück.
+  * 
+  * @param {String} workflowId Workflow-ID
+  * @param {Boolean} withLock Workflow-Sperre setzen
+  * @returns {WFDiagram} Workflow-Diagramm
+  */
+  readWorkflow: function (workflowId, withLock) {
+    log.debug(&quot;Read Workflow Diagram, WorkflowId = &quot; + workflowId);
+    return ixConnect.ix().checkoutWorkFlow(String(workflowId), WFTypeC.ACTIVE, WFDiagramC.mbAll, (withLock) ? LockC.YES : LockC.NO);
+  },
+
+<span id='wf-method-readActiveWorkflow'> /**
+</span>  * Liefert den aktiven Workflow mit der eingegebenen ID zurück.
+  * 
+  * @param {Boolean} withLock Workflow-Sperre setzen
+  * @returns {WFDiagram} Workflow-Diagramm
+  */
+  readActiveWorkflow: function (withLock) {
+    var flowId = EM_WF_NODE.getFlowId();
+    return wf.readWorkflow(flowId, withLock);
+  },
+
+<span id='wf-method-writeWorkflow'> /**
+</span>  * Speichert den angegebenen Workflow.
+  * 
+  * @param {WFDiagram} wfDiagram Workflow-Diagramm
+  */
+  writeWorkflow: function (wfDiagram) {
+    ixConnect.ix().checkinWorkFlow(wfDiagram, WFDiagramC.mbAll, LockC.YES);
+  },
+
+<span id='wf-method-unlockWorkflow'> /**
+</span>  * Entsperrt den angegebenen Workflow.
+  * 
+  * @param {WFDiagram} wfDiagram
+  */
+  unlockWorkflow: function (wfDiagram) {
+    ixConnect.ix().checkinWorkFlow(wfDiagram, WFDiagramC.mbOnlyLock, LockC.YES);
+  },
+
+<span id='wf-method-getNodeByName'> /**
+</span>  * Liefert den Workflow-Knoten mit dem angegebenen Namen zurück.
+  * 
+  * @param {WFDiagram} wfDiagram Workflow-Diagramm
+  * @param {String} nodeName Knotenname
+  * @returns {WFNode} Workflowknoten
+  */
+  getNodeByName: function (wfDiagram, nodeName) {
+    var nodes = wfDiagram.getNodes();
+    for (var i = 0; i &lt; nodes.length; i++) {
+      var node = nodes[i];
+      if (node.getName() == nodeName) {
+        return node;
+      }
+    }
+
+    return null;
+  },
+
+<span id='wf-method-changeNodeUser'> /**
+</span>  * Setzt den angegebenen Knoten-Benutzer im angegebenen Workflow-Knoten.
+  * 
+  * @param {String} nodeName Knotenname
+  * @param {String} nodeUserName Knotenbenutzer
+  */
+  changeNodeUser: function (nodeName, nodeUserName) {
+    var diag = wf.readActiveWorkflow(true);
+    var node = wf.getNodeByName(diag, nodeName);
+    if (node) {
+      node.setUserName(nodeUserName);
+      wf.writeWorkflow(diag);
+    } else {
+      wf.unlockWorkflow(diag);
+    }
+  },
+
+<span id='wf-method-changeAllUsers'> /**
+</span>  * Ersetzt den angegebenen Benutzer.
+  * 
+  * @param {String} oldUser Aktueller Benutzer
+  * @param {String} newUser Neuer Benutzer
+  */
+  changeAllUsers: function (oldUser, newUser) {
+    var changed = false;
+    var diag = wf.readActiveWorkflow(true);
+    var nodes = diag.getNodes();
+    for (var i = 0; i &lt; nodes.length; i++) {
+      var node = nodes[i];
+      if (node.userName == oldUser) {
+        node.userName = newUser;
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      wf.writeWorkflow(diag);
+    } else {
+      wf.unlockWorkflow(diag);
+    }
+  },
+
+<span id='wf-method-copyNodeUser'> /**
+</span>  * Kopiert den Knotenbenutzer vom Quellknoten in den Zielknoten.
+  * 
+  * @param {type} sourceNodeName
+  * @param {type} destinationNodeName
+  * @returns {Object.copyNodeUser.user}
+  */
+  copyNodeUser: function (sourceNodeName, destinationNodeName) {
+    var diag = wf.readActiveWorkflow(true);
+    var sourceNode = wf.getNodeByName(diag, sourceNodeName);
+    var destNode = wf.getNodeByName(diag, destinationNodeName);
+
+    if (sourceNode &amp;&amp; destNode) {
+      var user = sourceNode.getUserName();
+      destNode.setUserName(user);
+      wf.writeWorkflow(diag);
+
+      return user;
+    } else {
+      wf.unlockWorkflow(diag);
+      return null;
+    }
+  },
+
+<span id='wf-method-startWorkflow'> /**
+</span>  * Startet einen neuen Workflow mit den angegebenen Daten.
+  * 
+  * @param {String} templateName Workflow-Vorlage
+  * @param {String} flowName Workflow-Name
+  * @param {String} objectId Objekt-ID
+  * @returns {Number} ID des neuen Workflows
+  */
+  startWorkflow: function (templateName, flowName, objectId) {
+    return ixConnect.ix().startWorkFlow(templateName, flowName, objectId);
+  },
+  
+<span id='wf-method-getNodeProperties'> /**
+</span>  * Liefert die Properties des angegebenen Workflow-Knotens zurück.
+  * 
+  * @param {WFNode} node Workflow-Knoten
+  * @returns {Object} Knoten-Eigenschaften
+  */ 
+  getNodeProperties: function(node) {
+    var desc = (node.nodeComment) ? node.nodeComment : node.comment;
+    log.debug(&quot;Props of &quot; + ((node.nodeName) ? node.nodeName : node.name) + &quot; : &quot; + desc);
+    var props = new java.util.Properties();
+    var reader = new java.io.StringReader(desc);
+    props.load(reader);
+    
+    return props;
+  },
+  
+<span id='wf-method-getSuccessor'> /**
+</span>  * Liefert den Nachfolgerknoten des angegebenen Workflow-Knotens zurück.
+  * 
+  * @param {WFNode} node Workflow-Knoten
+  * @returns {Object} Knoten-Nachfolger
+  */ 
+  getSuccessor: function(node) {
+    var editNode = ixConnect.ix().beginEditWorkFlowNode(node.flowId, node.nodeId, LockC.NO);
+    var succNodes = editNode.succNodes;
+    if (succNodes &amp;&amp; succNodes.length &gt; 0) {
+      return succNodes[0];
+    } else {
+      return null;
+    }
+  },
+  
+<span id='wf-method-fillupFlow'> /**
+</span>  * Setzt die angegebenen Knoten-Eigenschaften.
+  * 
+  * @param {WFDiagram} flow Workflow
+  * @param {String} flowId Workflow-ID
+  * @param {String} objId ID des Archiveintrags
+  * @param {Number} sourceWaitId ID des Nachfolgerknotens
+  * @param {Number} newOwner Neuer Eigentümer
+  * @param {Number} returnTo
+  * @param {Number} flowObjId
+  * @returns {undefined}
+  */ 
+  fillupFlow: function(flow, flowId, objId, sourceWaitId, newOwner, returnTo, flowObjId) {
+    flow.objId = flowObjId;
+    flow.id = -1;
+    flow.type = WFTypeC.ACTIVE;
+  
+    var nodes = flow.nodes;
+    for (var i = 0; i &lt; nodes.length; i++) {
+      var node = nodes[i];
+      var props = this.getNodeProperties(node);
+      if (props.getProperty(&quot;type&quot;) == &quot;return&quot;) {
+        var desc = node.comment + &quot;\r\nflowid=&quot; + flowId + 
+                                  &quot;\r\nnodeid=&quot; + sourceWaitId + 
+                                  &quot;\r\nrootid=&quot; + objId + 
+                                  &quot;\r\nserver=&quot; + returnTo + &quot;\r\n&quot;;
+        node.comment = desc;        
+      }
+      
+      if (newOwner &amp;&amp; (node.id != 0) &amp;&amp; (newOwner != &quot;null&quot;) &amp;&amp; (node.userId == -2)) {
+        node.userId = -1;
+        node.userName = newOwner;
+      }
+    }
+  },
+  
+<span id='wf-method-createOrConfirmFlowFromZip'>  /**
+</span>   * Erstellt oder leitet einen Workflow weiter aus der ZIP-Datei.
+   * 
+   * @param {Object} flowData Workflow-Daten
+   * @param {Boolean} hasError Fehler vorhanden
+   * @param {String} errorMessage Fehlermeldung
+   */
+  createOrConfirmFlowFromZip: function(flowData, hasError, errorMessage) {
+    if (flowData.flowName == &quot;&quot;) {
+      this.confirmFlowFromZip(flowData, hasError, errorMessage);
+    } else {
+      this.createFlowFromZip(flowData, hasError, errorMessage);
+    }
+  },
+  
+<span id='wf-method-createFlowFromZip'>  /**
+</span>   * Erstellt einen Workflow aus der ZIP-Datei.
+   * 
+   * @param {Object} flowData Workflow-Daten
+   * @param {Boolean} hasError Fehler vorhanden
+   * @param {String} errorMessage Fehlermeldung
+   */
+  createFlowFromZip: function(flowData, hasError, errorMessage) {
+    var flow = ixConnect.ix().checkoutWorkFlow(flowData.flowName, WFTypeC.TEMPLATE, WFDiagramC.mbAll, LockC.NO);
+    if (flowData.subName) {
+      flow.name = flowData.subName;
+    }
+    
+    var objGuid = flowData.eloObjGuid;
+    if (flowData.remoteWfObjId &amp;&amp; (flowData.remoteWfObjId.length == 38)) {
+      objGuid = flowData.remoteWfObjId;
+    }
+    
+    this.fillupFlow(flow, flowData.waitFlowId, flowData.eloObjGuid, flowData.waitNodeId, flowData.newOwner, flowData.returnTo, objGuid);
+    
+    log.info(&quot;Start Subworkflow: &quot; + flowData.flowName);
+    ixConnect.ix().checkinWorkFlow(flow, WFDiagramC.mbAll, LockC.NO);
+  },
+  
+<span id='wf-method-confirmFlowFromZip'>  /**
+</span>   * Leitet einen Workflow aus der ZIP-Datei weiter.
+   * 
+   * @param {Object} flowData Workflow-Daten
+   * @param {Boolean} hasError Fehlermeldung vorhanden
+   * @param {String} errorMessage Fehlermeldung
+   */
+  confirmFlowFromZip: function(flowData, hasError, errorMessage) {
+    var flowId = flowData.waitFlowId;
+    var nodeId = flowData.waitNodeId;
+    try {
+      var flowNode = ixConnect.ix().beginEditWorkFlowNode(flowId, nodeId, LockC.YES);
+      var nodeComment = flowNode.node.comment;
+      
+      if (hasError) {
+        nodeComment = nodeComment + &quot;\r\n\r\n&quot; + errorMessage;
+      }
+      
+      var succNodes = flowNode.succNodes;
+      var succNodeIds = new Array();
+      for (var n = 0; n &lt; succNodes.length; n++) {
+        var succNode = succNodes[n];
+        var isErrorNode = succNode.name == &quot;OnError&quot;;
+        
+        if (isErrorNode == hasError) {
+          succNodeIds.push(succNode.id);
+        }
+      }
+      ixConnect.ix().endEditWorkFlowNode(flowId, nodeId, false, false, flowNode.node.name, nodeComment, succNodeIds);
+    } catch(e) {
+      // only unlock
+      ixConnect.ix().endEditWorkFlowNode(flowId, nodeId, false, true, null, null, null);
+      throw(e);
+    }
+  },
+  
+<span id='wf-method-startRemoteFlow'>  /**
+</span>   * Startet einen Workflow mit den angegebenen Daten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Object} props Workflow-Properties
+   */
+  startRemoteFlow: function(node, props) {
+    var serverName = props.getProperty(&quot;server&quot;);
+    var flowName = props.getProperty(&quot;call&quot;);
+    var destination = props.getProperty(&quot;destination&quot;);
+    var newOwner = props.getProperty(&quot;newowner&quot;);
+    if (!newOwner) {
+      newOwner = &quot;&quot;;
+    }
+    var returnTo = props.getProperty(&quot;returnto&quot;);
+    if (flowName) {
+      var succ = this.getSuccessor(node);
+      if (serverName == &quot;local&quot;) {
+        var flow = ixConnect.ix().checkoutWorkFlow(flowName, WFTypeC.TEMPLATE, WFDiagramC.mbAll, LockC.NO);
+        this.fillupFlow(flow, node.flowId, node.objId, succ.id, newOwner, returnTo, &quot;&quot;);
+        ixConnect.ix().checkinWorkFlow(flow, WFDiagramC.mbAll, LockC.NO);
+      } else {
+        var flowData = new Object();
+        this.fillStandardProps(node, props, flowData);
+        flowData.serverName = String(serverName);
+        flowData.flowName = String(flowName);
+        flowData.destination = String(destination);
+        flowData.waitFlowId = String(node.flowId);
+        flowData.waitNodeId = String(succ.id);
+        flowData.eloObjGuid = String(node.objGuid);
+        flowData.newOwner = String(newOwner);
+        flowData.returnTo = String(returnTo);
+        this.createExport(node, flowData, false);
+      }
+      EM_WF_NEXT = &quot;0&quot;;
+    }
+  },
+  
+<span id='wf-method-fillStandardProps'>  /**
+</span>   * Setzt die Standard-Properties im angegebenen Workflow-Knoten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Object} props Workflow-Properties
+   * @param {Object} flowData Workflow-Daten
+   */
+  fillStandardProps: function(node, props, flowData) {
+    flowData.jsonClass = &quot;TfFlowData&quot;;
+    
+    var restrict = this.sanitize(props.getProperty(&quot;restrict&quot;));
+    flowData.restrictGroup = restrict;
+    
+    var masks = props.getProperty(&quot;masks&quot;);
+    if (masks) {
+      masks = String(masks);
+      flowData.masks = new Object();
+      var items = masks.split(&quot;¶&quot;);
+      for (var it = 0; it &lt; items.length; it++) {
+        flowData.masks[items[it]] = true;
+      }
+    } else {
+      flowData.masks = null;
+    }
+    
+    var subname = this.sanitize(props.getProperty(&quot;subname&quot;));
+    flowData.subName = subname;
+    
+    var exportMode = this.sanitize(props.getProperty(&quot;export&quot;));
+    flowData.exportMode = exportMode;
+    
+    var scriptName = this.sanitize(props.getProperty(&quot;scriptbeforesend&quot;));
+    flowData.scriptBeforeSend = scriptName;
+    scriptName = this.sanitize(props.getProperty(&quot;scriptbeforereturn&quot;));
+    flowData.scriptBeforeReturn = scriptName;
+    scriptName = this.sanitize(props.getProperty(&quot;scriptafterreturn&quot;));
+    flowData.scriptAfterReturn = scriptName;
+  },
+  
+<span id='wf-method-sanitize'>  /**
+</span>   * Liefert einen String aus dem angegebenen Text zurück.
+   * 
+   * @param text Text
+   * @returns {String}
+   */
+  sanitize: function(text) {
+    if (text) {
+      text = String(text);
+    } else {
+      text = &quot;&quot;;
+    }
+    
+    return text;
+  },
+  
+<span id='wf-method-createExport'>  /**
+</span>   * Exportiert den angegebenen Workflow-Knoten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Object} flowData Workflow-Daten
+   * @param {Boolean} isReturn Zurückgeben
+   */
+  createExport: function(node, flowData, isReturn) {
+    var fileName = EM_WF_EXPORT_ROOT + &quot;\\&quot; + flowData.serverName + &quot;\\EX&quot; + node.flowId + &quot;.&quot; + node.nodeId + &quot;.&quot; + Math.floor(Math.random() * 1000000000) + &quot;.zip&quot;;
+    tfex.doWfExport(flowData, fileName, isReturn);
+  },
+  
+<span id='wf-method-returnRemoteFlow'>  /**
+</span>   * Gibt den angegebenen Workflow-Knoten zurück.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Object} props Workflow-Properties
+   */
+  returnRemoteFlow: function(node, props) {
+    var remoteFlowId = props.getProperty(&quot;flowid&quot;);
+    var remoteNodeId = props.getProperty(&quot;nodeid&quot;);
+    if ((remoteFlowId &gt;= 0) &amp;&amp; (remoteNodeId &gt;= 0)) {
+      var editNode = ixConnect.ix().beginEditWorkFlowNode(remoteFlowId, remoteNodeId, LockC.YES);
+      
+      var succList = [editNode.succNodes[0].id];
+      ixConnect.ix().endEditWorkFlowNode(remoteFlowId, remoteNodeId, false, false, editNode.node.name, &quot;returned from &quot; + node.nodeName, succList);
+    }
+    EM_WF_NEXT= &quot;0&quot;;
+  },
+  
+<span id='wf-method-exportRemoteFlow'>  /**
+</span>   * Exportiert einen Remote Workflow-Knoten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Object} props Workflow-Properties
+   */
+  exportRemoteFlow: function(node, props) {
+    var flowData = new Object();
+    this.fillStandardProps(node, props, flowData);
+    flowData.serverName = String(props.getProperty(&quot;server&quot;));
+    flowData.flowName = String(&quot;&quot;);
+    flowData.destination = String(&quot;&quot;);
+    flowData.waitFlowId = String(props.getProperty(&quot;flowid&quot;));
+    flowData.waitNodeId = String(props.getProperty(&quot;nodeid&quot;));
+    var rootId = String(props.getProperty(&quot;rootid&quot;));
+    if (rootId.length != 38) {
+      rootId = String(node.objGuid);
+    }
+    flowData.eloObjGuid = rootId;
+    flowData.newOwner = String(&quot;&quot;);
+    flowData.returnTo = String(&quot;&quot;);
+    this.createExport(node, flowData, true);
+    EM_WF_NEXT= &quot;0&quot;;
+  },
+  
+<span id='wf-method-processRemoteWorkflow'>  /**
+</span>   * Bearbeitet einen Remote Workflow Knoten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   */
+  processRemoteWorkflow: function(node) {
+    var workflow;
+    try {
+      workflow = ixConnect.ix().checkoutWorkFlow(node.flowId , WFTypeC.ACTIVE, WFDiagramC.mbOnlyLock, LockC.YES);
+    } catch(e) {
+      log.info(&quot;Locked workflow ignored: &quot; + node.flowId);
+      EM_WF_NEXT = &quot;&quot;;
+      return;
+    }
+    log.debug(&quot;Lock Ok&quot;);
+  
+    var props = this.getNodeProperties(node);
+    var type = props.getProperty(&quot;type&quot;);
+	
+    if (type == &quot;remoteflow&quot;) {
+      this.startRemoteFlow(node, props);
+    } else if (type == &quot;return&quot;) {
+      var server = props.getProperty(&quot;server&quot;);
+      if (!server || (server == &quot;local&quot;)) {
+        this.returnRemoteFlow(node, props);
+      } else {
+        this.exportRemoteFlow(node, props);
+      }
+    }
+    
+    if (EM_WF_NEXT == &quot;&quot;) {
+      // Unlock wird nicht vom ELOas durchgeführt
+      log.debug(&quot;Unlock by wf modul&quot;);
+      try {
+        ixConnect.ix().checkinWorkFlow(workflow, WFDiagramC.mbOnlyLock, LockC.YES);
+      } catch (ex2) {
+        log.error(&quot;Cannot unlock Workflow: &quot; + ex2);
+      }
+    }
+  },
+  
+<span id='wf-method-createWFReport'>  /**
+</span>   * Erstellt einen Workflow-Report für den angegebenen Workflow-Knoten.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   * @param {Sord} sord Verschlagwortung eines Archiveintrags
+   */
+  createWFReport: function(node, sord) {
+    var flow = this.readWorkflow(node.flowId, false);
+    var text = new Array();
+    
+    this.fillHeader(text, flow);
+    this.fillNodes(text, flow);
+    this.fillFooter(text);
+    
+    this.storeReport(text, sord);
+  },
+  
+<span id='wf-method-storeReport'>  /**
+</span>   * Speichert den Report für den angegebenen Archiveintrag.
+   * 
+   * @param {String} text Text
+   * @param {Sord} sord Verschlagwortung eines Archiveintrags
+   */
+  storeReport: function(text, sord) {
+    var name = fu.clearSpecialChars(sord.name);
+    var file = File.createTempFile(name, &quot;.html&quot;);
+    FileUtils.writeStringToFile(file, text.join(&quot;&quot;), &quot;UTF-8&quot;);
+    
+    if (sord.type &lt; 254) {
+      // insert document
+      var docInfo = ixConnect.ix().createSord(sord.id, &quot;0&quot;, EditInfoC.mbSord);
+      var docSord = docInfo.sord;
+      docSord.name = &quot;Workflow Report&quot;;
+      ix.addDocument(docSord, file);
+    } else {
+      // insert attachment
+      ix.addAttachment(sord.id, file);
+    }
+  },
+  
+<span id='wf-method-formatIsoDate'>  /**
+</span>   * Liefert das formattierte ISO-Datum zurück.
+   * 
+   * @param {String} isoDate ISO-Datum
+   * @returns {String} formattiertes ISO-Datum
+   */
+  formatIsoDate: function(isoDate) {
+    isoDate = String(isoDate);
+    if (isoDate.length &gt; 11) {
+      return isoDate.substring(6, 8) + &quot;.&quot; + isoDate.substring(4, 6) + &quot;.&quot; + isoDate.substring(0, 4) + &quot; - &quot; + isoDate.substring(8, 10) + &quot;:&quot; + isoDate.substring(10, 12);
+    } else if (isoDate.length &gt; 7) {
+      return isoDate.substring(6, 8) + &quot;.&quot; + isoDate.substring(4, 6) + &quot;.&quot; + isoDate.substring(0, 4);
+    } else if (isoDate.length == 0) {
+      return &quot;&quot;;
+    } else {
+      return isoDate;
+    }
+  },
+  
+<span id='wf-method-fillHeader'>  /**
+</span>   * Fügt die Anfangs HTML-Zeilen im angegebenen Text ein.
+   * 
+   * @param {String} text Text
+   * @param {WFDiagram} flow Workflow-Diagramm
+   */
+  fillHeader: function(text, flow) {
+    var wfName = www.toHtml(flow.name)
+    text.push(&quot;&lt;html&gt;&lt;head&gt;&lt;title&gt;Workflow-Report : &quot;);
+    text.push(wfName);
+    text.push('&lt;/title&gt;&lt;/head&gt;&lt;body bgcolor=&quot;#ffffff&quot; text=&quot;#000000&quot; style=&quot;font-family:Tahoma,Arial,sans-serif;&quot;&gt;');
+    text.push('&lt;table&gt;&lt;tr&gt;&lt;td colspan=2&gt;&lt;h1&gt;Workflow Abschlussbericht&lt;/h&gt;&lt;/td&gt;&lt;/tr&gt;');
+    text.push(&quot;&lt;tr&gt;&lt;td&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Workflowname&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;&quot;);
+    text.push(wfName);
+    text.push(&quot;&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Abschlussdatum&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;&quot;);
+    text.push(new Date());
+    text.push(&quot;&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;p&gt;&quot;);
+    text.push('&lt;table border=&quot;0&quot; CELLPADDING=&quot;8&quot; cellspacing=&quot;0&quot;&gt;');
+    text.push('&lt;tr bgcolor=&quot;#c0d0ff&quot;&gt;&lt;th align=&quot;left&quot;&gt;Nr.&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;Startdatum&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;Endedatum&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;Anwender&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;Knoten&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;Bemerkung&lt;/th&gt;&lt;/tr&gt;');
+  },
+  
+<span id='wf-method-fillFooter'>  /**
+</span>   * Fügt die abschließende HTML-Zeile im angegebenen Text ein.
+   * 
+   * @param {String} text Text
+   */
+  fillFooter: function(text) {
+    text.push(&quot;&lt;/table&gt;&lt;/body&gt;&lt;/html&gt;&quot;);
+  },
+  
+<span id='wf-method-fillNodes'>  /**
+</span>   * Setzt den Text in allen Workflow-Knoten im angegebenen Workflow.
+   * 
+   * @param {String} text Text
+   * @param {WFDiagram} flow Workflow
+   * @returns {undefined}
+   */
+  fillNodes: function(text, flow) {
+    var nodes = flow.nodes;
+    var line = 1;
+    
+    for (var i = 0; i &lt; nodes.length; i++) {
+      var node = nodes[i];
+      if (node.type == 2) {
+        this.fillNode(text, node, line);
+        line++;
+      }
+    }
+  },
+  
+<span id='wf-method-fillNode'> /**
+</span>  * Setzt die Eigenschaften im angegebenen Workflow-Knoten.
+  * 
+  * @param {String} text Text
+  * @param {WFNode} node Workflow-Knoten
+  * @param {Number} line Zeile
+  */ 
+  fillNode: function(text, node, line) {
+    var user = node.userTerminate;
+    if (user == &quot;&quot;) {
+      user = node.userName;
+    }
+    
+    text.push(&quot;&lt;tr bgcolor=&quot;);
+    text.push( (line % 2) ? &quot;#f5f8ff&quot; : &quot;#eef0ff&quot; );
+    text.push('&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(line);
+    text.push('&lt;/td&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(this.formatIsoDate(node.enterDateIso));
+    text.push('&lt;/td&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(this.formatIsoDate(node.exitDateIso));
+    text.push('&lt;/td&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(www.toHtml(user));
+    text.push('&lt;/td&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(www.toHtml(node.name));
+    text.push('&lt;/td&gt;&lt;td valign=&quot;top&quot; align=&quot;left&quot;&gt;');
+    text.push(www.toHtml(node.comment));
+    text.push(&quot;&lt;/td&gt;&lt;/tr&gt;&quot;);
+  }
+
+}
+// end of namespace wf</pre>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Status&quot; });
+
+<span id='sol-common-ix-functions-Status'>/**
+</span> * Writes a status into a index field, either directly or tries to read it from a keyword list.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ *
+ * Following configuration should be applied to the comments field for a status update:
+ *
+ *     {
+ *       &quot;group&quot;: &quot;INVOICE_STATUS&quot;,
+ *       &quot;status&quot;: &quot;DONE&quot;,
+ *     }
+ *
+ * Following configuration should be applied to the comments field and will load a status from the fields KWL staring with &#39;3&#39;
+ *
+ *     {
+ *       &quot;group&quot;: &quot;INVOICE_STATUS&quot;,
+ *       &quot;status&quot;: &quot;3&quot;,
+ *       &quot;useKwl&quot;: true
+ *     }
+ *
+ * Following configuration will load a status from the fields dynamic KWL staring with &#39;M&#39; (e.g. M - month) from a localized dynamic KWL
+ *
+ *     {
+ *       &quot;group&quot;: &quot;REMINDER_PERIOD_UNIT&quot;,
+ *       &quot;status&quot;: &quot;M&quot;,
+ *       &quot;useDynKwl&quot;: true,
+ *       &quot;dynKwlCfg&quot;: {
+ *         &quot;returnColumn&quot;: 2,
+ *         &quot;filterColumn&quot;: 0
+ *       }
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_function_Status&#39;, {
+ *       objId: &quot;4711&quot;,
+ *       group: &quot;INVOICE_STATUS&quot;,
+ *       status: &quot;3&quot;,
+ *       useKwl: true
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.003
+ *
+ * @eloix
+ * @requires sol.Logger
+ * @requires sol.common.SordUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.Status&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Status-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;group&quot;, &quot;status&quot;],
+</span>
+<span id='sol-common-ix-functions-Status-cfg-group'>  /**
+</span>   * @cfg {string} group (required)
+   * group field to write the change to
+   */
+  group: undefined,
+
+<span id='sol-common-ix-functions-Status-cfg-status'>  /**
+</span>   * @cfg {string} status (required)
+   * If neither `useKwl` nor `useDynKwl` is defined, this value will be written to the group field.
+   * If one of both is defined though, this will be used as a &#39;startsWith&#39; filter on the KWL entries.
+   */
+  status: undefined,
+
+<span id='sol-common-ix-functions-Status-cfg-useTemplating'>  /**
+</span>   * @cfg {Boolean} [useTemplating=false] (optional)
+   * If specified, the {@link #status} will be handled as a handlebars string (see {@link sol.common.Template} for more information).
+   * The templating will be processed before any further executions (like `useKwl` or `useDynKwl`).
+   * The template has access to at least the current sord:
+   *
+   *     { &quot;group&quot;: &quot;INVOICE_STATUS&quot;, &quot;useTemplating&quot;: true, &quot;status&quot;: &quot;OPEN_{{sord.objKeys.INVOICE_TYPE}}&quot; }
+   *     { &quot;group&quot;: &quot;INVOICE_NUMBER&quot;, &quot;useTemplating&quot;: true, &quot;status&quot;: &quot;{{count &#39;MY_INVOICE_COUNTER&#39;}}&quot; }
+   *
+   */
+  useTemplating: undefined,
+
+<span id='sol-common-ix-functions-Status-cfg-useKwl'>  /**
+</span>   * @cfg {Boolean} [useKwl=false] (optional)
+   * If specified, the script reads the KWL from group field and retrieves keyword starting with status
+   */
+  useKwl: undefined,
+
+<span id='sol-common-ix-functions-Status-cfg-useDynKwl'>  /**
+</span>   * @cfg {Boolean} [useDynKwl=false] (optional)
+   * If specified, the script reads the KWL from group field and retrieves keyword starting with status
+   */
+  useDynKwl: undefined,
+
+<span id='sol-common-ix-functions-Status-cfg-dynKwlCfg'>  /**
+</span>   * @cfg {Object} dynKwlCfg (optional)
+   * @cfg {Object} dynKwlCfg.returnColumn (optional)
+   * @cfg {Object} dynKwlCfg.filterColumn (optional)
+   * Additional configuration for dynamic KWL queries (see {@link sol.common.SordUtils#getDynamicKeywordlistValue})
+   */
+  dynKwlCfg: undefined,
+
+<span id='sol-common-ix-functions-Status-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-Status-method-process'>  /**
+</span>   * Sets the status.
+   */
+  process: function () {
+    var me = this,
+        conn, sord, statusKey, newStatus, oldStatus;
+
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+
+    sord = conn.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+    statusKey = sol.common.SordUtils.getObjKey(sord, me.group);
+    newStatus = me.getStatus(sord);
+
+    if (me.useKwl) {
+      newStatus = me.getStatusFromKwl(newStatus, me.group);
+    } else if (me.useDynKwl) {
+      newStatus = me.getStatusFromDynKwl(sord.maskName, newStatus, me.group, me.dynKwlCfg);
+    }
+
+    if (statusKey) {
+      oldStatus = statusKey.data[0] || &quot;&quot;;
+      statusKey.data = [newStatus];
+      conn.ix().checkinSord(sord, SordC.mbAll, LockC.NO);
+      me.logger.info([&quot;changed &#39;{0}&#39; status from &#39;{1}&#39; to &#39;{2}&#39;&quot;, me.group, oldStatus, newStatus]);
+    }
+  },
+
+<span id='sol-common-ix-functions-Status-method-getStatus'>  /**
+</span>   * @private
+   * Retrieves the status. If `useTemplating===true` it will apply handlebars using the current sord as data.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {String}
+   */
+  getStatus: function (sord) {
+    var me = this,
+        status = me.status;
+
+    if (me.useTemplating === true) {
+      status = sol.create(&quot;sol.common.Template&quot;, { source: status }).applySord(sord);
+    }
+
+    return status;
+  },
+
+<span id='sol-common-ix-functions-Status-method-getStatusFromKwl'>  /**
+</span>   * @private
+   * Retrieves a status string from the keyword list of the spezified field.
+   * It checks, if one of the entries in the keyword list starts with the statusPrefix.
+   * @param {String} statusPrefix
+   * @param {String} field
+   * @return {String} The found item from the keyword list or the statusPrefix, if nothing was found
+   */
+  getStatusFromKwl: function (statusPrefix, field) {
+    var kwl = ixConnect.ix().checkoutKeywordList(field, KeywordC.mbView, 30, LockC.NO),
+        items, i, item;
+
+    if (kwl) {
+      items = kwl.children;
+      for (i = 0; i &lt; items.length; i++) {
+        item = items[i].text;
+        if (item.startsWith(statusPrefix)) {
+          return item;
+        }
+      }
+    } else {
+      this.logger.warn([&quot;no keywordlist for field &#39;{0}&#39;&quot;, field]);
+    }
+
+    this.logger.warn([&quot;no keywordlist match for: &#39;{0}&#39;&quot;, statusPrefix]);
+    return statusPrefix;
+  },
+
+<span id='sol-common-ix-functions-Status-method-getStatusFromDynKwl'>  /**
+</span>   * @private
+   * Retrieves a status string from the dynamic keyword list of the spezified field.
+   * It checks, if one of the entries in the keyword list starts with the statusPrefix.
+   * @param {String} maskName
+   * @param {String} statusPrefix
+   * @param {String} field
+   * @param {Object} cfg
+   * @return {String} The found item from the keyword list or the statusPrefix, if nothing was found
+   */
+  getStatusFromDynKwl: function (maskName, statusPrefix, field, cfg) {
+    var params = { data: statusPrefix },
+        result;
+
+    if (cfg) {
+      params.returnColumn = cfg.returnColumn;
+      params.filterColumn = cfg.filterColumn;
+    }
+
+    result = sol.common.SordUtils.getDynamicKeywordlistValue(maskName, field, params);
+
+    if (result.length &lt;= 0) {
+      this.logger.warn([&quot;no keywordlist match for: &#39;{0}&#39;&quot;, statusPrefix]);
+    } else if (result.length &gt; 1) {
+      this.logger.warn([&quot;no unique keywordlist match for: &#39;{0}&#39;&quot;, statusPrefix]);
+    } else {
+      statusPrefix = result[0];
+    }
+
+    return statusPrefix;
+  }
+
+});
+
+
+<span id='sol-common-ix-functions-Status-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Status
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onEnterNode_Status&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;group&quot;, &quot;status&quot;);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Status&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Status&quot;);
+}
+
+
+<span id='sol-common-ix-functions-Status-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Status
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onExitNode_Status&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;group&quot;, &quot;status&quot;);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Status&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_Status&quot;);
+}
+
+
+<span id='sol-common-ix-functions-Status-static-method-RF_sol_function_Status'>/**
+</span> * @member sol.common.ix.functions.Status
+ * @method RF_sol_function_Status
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Status(iXSEContext, args) {
+  var params, module;
+  logger.enter(&quot;RF_sol_function_Status&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;, &quot;group&quot;, &quot;status&quot;);
+  module = sol.create(&quot;sol.common.ix.functions.Status&quot;, params);
+
+  sol.common.ix.RfUtils.checkMainAdminRights(iXSEContext.user, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_Status&quot;);
+}
+</pre>
+</body>
+</html>

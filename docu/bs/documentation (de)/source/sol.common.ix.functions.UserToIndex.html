@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.UserToIndex&quot; });
+
+<span id='sol-common-ix-functions-UserToIndex'>/**
+</span> * Writes a username into a index field directly.
+ *
+ * If used on a workflow user node the name of the user responsible for the node is set. All other cases will set the user name of the current session.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;fieldName&quot;: &quot;INVOICE_USER&quot;
+ *     }
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires  sol.Logger
+ * @requires  sol.common.ObjectUtils
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.UserToIndex&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-UserToIndex-cfg-fieldName'>  /**
+</span>   * @cfg {string} fieldName (required)
+   * Index field for username
+   */
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-nodeId'>  /**
+</span>   * @cfg {string} nodeId
+   * If specified, the nodeId of the current workflow node
+   */
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-clear'>  /**
+</span>   * @cfg {Boolean} [clear=false] optional
+   * If true the field will be cleared
+   */
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-append'>  /**
+</span>   * @cfg {Boolean} [append=false] (optional)
+   * If true the username will be appended
+   */
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-distinct'>  /**
+</span>   * @cfg {Boolean} [distinct=true] (optional)
+   * If `true` a username will only be appended if it is not already in the field (prevents duplicates). Parameter is only used if `append = true`.
+   */
+
+<span id='sol-common-ix-functions-UserToIndex-cfg-sort'>  /**
+</span>   * @cfg {Boolean} [sort=true] (optional)
+   * If `true` the usernames will be ordered alphabetically. In order to preserve the sequence of entry this has to be set to false. Parameter is only used if `append = true`.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-UserToIndex-method-process'>  /**
+</span>   * Sets the username.
+   */
+  process: function () {
+    var me = this,
+        newUserNames = [],
+        sord, conn, userNames, i;
+
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect,
+
+    me.fieldName = me.fieldName || &quot;CURRENT_USER&quot;;
+
+    sord = conn.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+
+    if (!me.userName) {
+      me.userName = sol.common.WfUtils.getNodeUser(me.wfDiagram, me.nodeId, { useSessionUserAlternatively: true }) + &quot;&quot;;
+    }
+
+    if (me.clear) {
+      sol.common.SordUtils.setObjKeyValues(sord, me.fieldName, null);
+      me.logger.info([&quot;Clear users from index field &#39;{0}&#39;&quot;, me.fieldName]);
+    } else if (me.append) {
+      userNames = sol.common.SordUtils.getObjKeyValues(sord, me.fieldName) || [];
+      for (i = 0; i &lt; userNames.length; i++) {
+        newUserNames.push(userNames[i] + &quot;&quot;);
+      }
+
+      if ((me.distinct === false) || (newUserNames.indexOf(me.userName) &lt; 0)) {
+        newUserNames.push(me.userName);
+        if (me.sort !== false) {
+          newUserNames.sort();
+        }
+        sol.common.SordUtils.setObjKeyValues(sord, me.fieldName, newUserNames);
+        me.logger.info([&quot;Add user name &#39;{0}&#39; to index field &#39;{1}&#39;&quot;, me.userName, me.fieldName]);
+      }
+    } else {
+      sol.common.SordUtils.setObjKeyValue(sord, me.fieldName, me.userName);
+      me.logger.info([&quot;Set index field &#39;{0}&#39; to user name &#39;{1}&#39;&quot;, me.fieldName, me.userName]);
+    }
+
+    conn.ix().checkinSord(sord, SordC.mbAllIndex, LockC.NO);
+  }
+});
+
+
+<span id='sol-common-ix-functions-UserToIndex-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.UserToIndex
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_UserToIndex&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  params.nodeId = nodeId;
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  module = sol.create(&quot;sol.common.ix.functions.UserToIndex&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_UserToIndex&quot;);
+}
+
+
+<span id='sol-common-ix-functions-UserToIndex-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.UserToIndex
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_UserToIndex&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  params.nodeId = nodeId;
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  module = sol.create(&quot;sol.common.ix.functions.UserToIndex&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_UserToIndex&quot;);
+}
+
+<span id='sol-common-ix-functions-UserToIndex-static-method-RF_sol_function_UserToIndex'>/**
+</span> * @member sol.common.ix.functions.UserToIndex
+ * @method RF_sol_function_UserToIndex
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_UserToIndex(ec, args) {
+  var params, module;
+
+  logger.enter(&quot;RF_sol_function_UserToIndex&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;objId&quot;);
+
+  sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+  module = sol.create(&quot;sol.common.ix.functions.UserToIndex&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_UserToIndex&quot;);
+}</pre>
+</body>
+</html>

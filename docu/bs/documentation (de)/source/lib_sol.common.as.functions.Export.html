@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+<span id='sol-common-as-functions-Export'>/**
+</span> * @private
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.as.FunctionBase
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common.as.functions.Export&quot;, {
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+<span id='sol-common-as-functions-Export-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;exporterClassName&quot;, &quot;tplObjId&quot;, &quot;dstDirPath&quot;],
+</span>
+<span id='sol-common-as-functions-Export-cfg-S-config'>  /**
+</span>   * @cfg {String} $config
+   * Repository path of the config file
+   */
+
+<span id='sol-common-as-functions-Export-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * Object ID
+   */
+
+<span id='sol-common-as-functions-Export-cfg-exporterClassName'>  /**
+</span>   * @cfg {String} exporterClassName
+   * Exporter class name
+   */
+
+<span id='sol-common-as-functions-Export-cfg-tplObjId'>  /**
+</span>   * @cfg {String} tplObjId
+   * Template object ID
+   */
+
+<span id='sol-common-as-functions-Export-cfg-dstDirPath'>  /**
+</span>   * @cfg {String} dstDirPath
+   * Destination directory path
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.config = sol.common.ConfigMixin.mergeConfiguration(config);
+  },
+
+<span id='sol-common-as-functions-Export-method-process'>  process: function () {
+</span>    var me = this,
+        exporter;
+
+    if (!me.config.exporterClassName) {
+      throw &quot;Exporter class name is empty.&quot;;
+    }
+
+    exporter = sol.create(me.config.exporterClassName, me.config);
+    return exporter.process();
+  }
+});
+
+<span id='sol-common-as-ExporterBase'>/**
+</span> *
+ * Base class for exporter classes
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.as.FunctionBase
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common.as.ExporterBase&quot;, {
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+<span id='sol-common-as-ExporterBase-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.payloadIds = [];
+  },
+
+<span id='sol-common-as-ExporterBase-property-tempExtension'>  tempExtension: &quot;$$$&quot;,
+</span>
+<span id='sol-common-as-ExporterBase-method-export'>  export: function () {
+</span>    var me = this,
+        nameTpl, contentTpl, content, metaDataFileName, metaDataTempFilePath, metaDataFilePath,
+        i, payloadId, payloadName, numberOfPayloads, sord, tplSord;
+
+    try {
+      sord = ixConnect.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+      tplSord = sol.common.SordUtils.getTemplateSord(sord);
+
+      me.logger.debug(&quot;content=&quot; + JSON.stringify(tplSord));
+
+      if (!sol.common.FileUtils.exists(me.dstDirPath)) {
+        throw &quot;Destination directory doesn&#39;t exist: &quot; + me.dstDirPath;
+      }
+
+      nameTpl = sol.create(&quot;sol.common.Template&quot;, { source: me.nameTplString });
+      me.name = nameTpl.apply(tplSord);
+
+      contentTpl = sol.create(&quot;sol.common.Template&quot;, { objId: me.tplObjId });
+      content = contentTpl.apply(tplSord.sord);
+
+      metaDataFileName = me.name + &quot;.&quot; + me.extension;
+      metaDataTempFilePath = me.dstDirPath + File.separator + metaDataFileName + &quot;.&quot; + me.tempExtension;
+
+      if (me.overwrite) {
+        sol.common.FileUtils.deleteFiles({ dirPath: me.dstDirPath, prefix: me.name });
+      }
+
+      sol.common.FileUtils.writeStringToFile(metaDataTempFilePath, content);
+
+      numberOfPayloads = me.payloadIds.length;
+      for (i = 0; i &lt; numberOfPayloads; i++) {
+        payloadId = me.payloadIds[i];
+        payloadName = me.name;
+        if (numberOfPayloads &gt; 1) {
+          payloadName += &quot;_&quot; + sol.common.StringUtils.padLeft(i, 3);
+        }
+        sol.common.RepoUtils.downloadToFile(payloadId, { dstDirPath: me.dstDirPath, fileName: payloadName });
+      }
+
+      metaDataFilePath = sol.common.FileUtils.rename(metaDataTempFilePath, metaDataFileName);
+    } catch (ex) {
+      me.writeErrorFile(ex);
+      throw ex;
+    }
+
+    log.info(&quot;insideTomcat:&quot; + sol.common.ExecUtils.insideTomcat());
+
+    if (me.debug &amp;&amp; !sol.common.ExecUtils.insideTomcat()) {
+      sol.common.ExecUtils.open(metaDataFilePath);
+    }
+
+    return { passOn: true };
+  },
+
+<span id='sol-common-as-ExporterBase-method-writeErrorFile'>  writeErrorFile: function (message) {
+</span>    var me = this,
+        errorFilePath = me.dstDirPath + File.separator + me.name + &quot;.err&quot;;
+    sol.common.FileUtils.delete(errorFilePath);
+    sol.common.FileUtils.writeStringToFile(errorFilePath, message);
+  }
+});
+
+<span id='sol-common-as-SimpleExporter'>/**
+</span> * Simple XML exporter
+ *
+ * Exports the values of an object as XML file and optionally the appropriate payload file
+ *
+ * Some of the parameters could be pre-defined in a configuration file.
+ * This configuration file can be specified by the `$config` property.
+ *
+ * Example:
+ *
+ *     var exporter = sol.create(&quot;sol.common.as.SimpleExporter&quot;, {
+ *       $config: &quot;ARCPATH:/Administration/Business Solutions/invoice/Configuration/sol.invoice.ExportConfig&quot;,
+ *       objId: &quot;ARCPATH:/Invoice/Invoice in-tray/Sample invoice&quot;
+ *     });
+ *     exporter.process();
+ *
+ * Workflow node sample configuration:
+ *
+ *     {
+ *       &quot;$function&quot;: &quot;sol.common.as.Exporter&quot;,
+ *       &quot;$config&quot;: &quot;ARCPATH:/Administration/Business Solutions/invoice/Configuration/sol.invoice.ExportConfig&quot;
+ *     }
+ *
+ * Sample configuration file:
+ *
+ *     {
+ *       &quot;exporterClassName&quot;: &quot;sol.common.as.SimpleExporter&quot;,
+ *       &quot;tplObjId&quot;: &quot;ARCPATH:/Administration/Business Solutions/invoice/Export Templates/sol.invoice.xml&quot;,
+ *       &quot;dstDirPath&quot;: &quot;c:/invoice/export&quot;,
+ *       &quot;payload&quot;: true,
+ *       &quot;overwrite&quot;: true
+ *     }
+ */
+sol.define(&quot;sol.common.as.SimpleExporter&quot;, {
+  extend: &quot;sol.common.as.ExporterBase&quot;,
+
+<span id='sol-common-as-SimpleExporter-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;tplObjId&quot;],
+</span>
+<span id='sol-common-as-SimpleExporter-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * Object ID
+   */
+
+<span id='sol-common-as-SimpleExporter-cfg-tplObjId'>  /**
+</span>   * @cfg {String} tplObjId
+   * Template object ID
+   */
+
+<span id='sol-common-as-SimpleExporter-cfg-nameTplString'>  /**
+</span>   * @cfg {String} nameTplString
+   * Template string for the file name of the export files
+   */
+
+<span id='sol-common-as-SimpleExporter-cfg-extension'>  /**
+</span>   * @cfg {String} extension
+   * Extension of the metadata file
+   */
+
+<span id='sol-common-as-SimpleExporter-cfg-dstDirPath'>  /**
+</span>   * @cfg {String} dstDirPath
+   * Destination directory path
+   */
+
+<span id='sol-common-as-SimpleExporter-cfg-payload'>  /**
+</span>   * @cfg payload
+   * If true the payload document will be exported as well
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.ExporterBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-as-SimpleExporter-method-process'>  process: function () {
+</span>    var me = this;
+    me.nameTplString = me.nameTplString || &quot;{{sord.guid}}&quot;;
+    me.extension = me.extension || &quot;xml&quot;;
+    if (me.payload) {
+      me.payloadIds = me.getPayloadIds();
+    }
+    return me.export();
+  },
+
+<span id='sol-common-as-SimpleExporter-method-getPayloadIds'>  /**
+</span>   * Determinate the payload object IDs
+   * @return {Array}
+   */
+  getPayloadIds: function () {
+    var me = this,
+        sord, sords;
+    sord = sol.common.RepoUtils.getSord(me.objId);
+    if (sol.common.SordUtils.isFolder(sord)) {
+      sords = sol.common.RepoUtils.findChildren(me.objId, { includeFolders: true, includeDocuments: true, sordZ: SordC.mbLean });
+      return sords.map(function (sord) {
+        return sord.id;
+      });
+    }
+    return [me.objId];
+  }
+});
+</pre>
+</body>
+</html>

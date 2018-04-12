@@ -1,0 +1,2048 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-RepoUtils'>/**
+</span> * This class provides basic functionality for repository operations.
+ *
+ * @author NM, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloas
+ * @eloix
+ *
+ * @requires sol.common.Template
+ * @requires sol.common.SordUtils
+ * @requires sol.common.AsyncUtils
+ * @requires sol.common.FileUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.SordTypeUtils
+ *
+ */
+sol.define(&quot;sol.common.RepoUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-RepoUtils-property-pilcrow'><span id='sol-common-RepoUtils-property-bom'>  bom: &quot;\uFEFF&quot;, // ByteOrderMark (BOM);
+</span></span>
+  pilcrow: &quot;\u00b6&quot;,
+
+<span id='sol-common-RepoUtils-method-getSord'>  /**
+</span>   * Checkout a Sord.
+   * @param {String} objId Can be an objId, a GUID or an ARCPATH
+   * @param {Object} params (optional)
+   * @param {de.elo.ix.client.SordZ} [params.sordZ=SordC.mbAllIndex] (optional)
+   * @param {de.elo.ix.client.LockZ} [params.lockZ=LockC.NO] (optional)
+   * @return {de.elo.ix.client.Sord}
+   */
+  getSord: function (objId, params) {
+    var sordZ, lockZ;
+    sordZ = (params &amp;&amp; params.sordZ) ? params.sordZ : SordC.mbAllIndex;
+    lockZ = (params &amp;&amp; params.lockZ) ? params.lockZ : LockC.NO;
+    return ixConnect.ix().checkoutSord(objId, sordZ, lockZ);
+  },
+
+<span id='sol-common-RepoUtils-method-getSords'>  /**
+</span>   * Returns sords by object IDs
+   * @param {Array} objIds Object IDs
+   * @param {Object} config (optional)
+   * @param {de.elo.ix.client.IXConnection} config.connection Index server connection
+   * @param {de.elo.ix.client.SordZ} [config.sordZ=SordC.mbAllIndex] (optional)
+   * @param {Boolean} config.keepOrder Keep the order of the Sords
+   * @return {de.elo.ix.client.Sord[]} Sords
+   */
+  getSords: function (objIds, config) {
+    var me = this,
+        conn, sordZ, findInfo, findResult, idx, sords, i;
+    me.logger.enter(&quot;getSords&quot;, arguments);
+
+    if (!objIds) {
+      throw &quot;Object IDs are empty&quot;;
+    }
+    if (!sol.common.ObjectUtils.isArray(objIds)) {
+      throw &quot;Parameter &#39;objIds&#39; must be an array&quot;;
+    }
+
+    config = config || {};
+    conn = config.connection || ixConnect;
+
+    sordZ = config.sordZ || SordC.mbAllIndex;
+
+    findInfo = new FindInfo();
+    findInfo.findByIndex = new FindByIndex();
+    findInfo.findOptions = new FindOptions();
+    findInfo.findOptions.objIds = objIds;
+
+    idx = 0;
+    findResult = conn.ix().findFirstSords(findInfo, 100, sordZ);
+
+    sords = [];
+
+    while (true) {
+      for (i = 0; i &lt; findResult.sords.length; i++) {
+        sords.push(findResult.sords[i]);
+      }
+      if (!findResult.moreResults) {
+        break;
+      }
+      idx += findResult.sords.Length;
+      findResult = conn.ix().findNextSords(findResult.searchId, idx, 100, sordZ);
+    }
+    conn.ix().findClose(findResult.searchId);
+
+    if (config.keepOrder) {
+      sords = me.sortSordsByObjIdArray(sords, objIds);
+    }
+
+    me.logger.exit(&quot;getSords&quot;, sords);
+    return sords;
+  },
+
+<span id='sol-common-RepoUtils-method-sortSordsByObjIdArray'>  /**
+</span>   * Sorts an array of sords by another array of object IDs
+   * @param {de.elo.ix.client.Sord[]} sords Sords
+   * @param {Array} objIds Object IDs
+   * @return {de.elo.ix.client.Sord[]} Sords
+   */
+  sortSordsByObjIdArray: function (sords, objIds) {
+    var me = this,
+        sordsObj, resultArr;
+    me.logger.enter(&quot;sortSordsByObjIdArray&quot;, arguments);
+    sordsObj = {};
+    resultArr = [];
+
+    if (!sords) {
+      throw &quot;Sords array is empty&quot;;
+    }
+    if (!objIds) {
+      throw &quot;Object ID array is empty&quot;;
+    }
+    sords.forEach(function (sord) {
+      sordsObj[String(sord.id)] = sord;
+    });
+    objIds.forEach(function (objId) {
+      var sord;
+      sord = sordsObj[String(objId)];
+      if (sord) {
+        resultArr.push(sord);
+      }
+    });
+    me.logger.exit(&quot;sortSordsByObjIdArray&quot;, resultArr);
+    return resultArr;
+  },
+
+<span id='sol-common-RepoUtils-method-createTempFileWithSordName'>  /**
+</span>   * Creates a temp file from a repository document with it&#39;s element name as file name
+   * and downloads the document
+   * @param {String} objId Object ID of the repository document.
+   * @return {java.io.File} Temporary file.
+   */
+  createTempFileWithSordName: function (objId) {
+    var me = this,
+        editInfo, url, fileName, tempDir, tempFile;
+    me.logger.enter(&quot;createTempFileWithSordName&quot;, arguments);
+    editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDoc, LockC.NO);
+    url = editInfo.document.docs[0].url;
+    fileName = sol.common.FileUtils.sanitizeFilename(editInfo.sord.name) + &quot;.&quot; + editInfo.document.docs[0].ext;
+    tempDir = new File(java.lang.System.getProperty(&quot;java.io.tmpdir&quot;) + &quot;ELO_&quot; + java.lang.System.nanoTime());
+    tempDir.mkdir();
+    tempFile = new File(tempDir.absolutePath + File.separator + fileName);
+    ixConnect.download(url, tempFile);
+    tempFile.deleteOnExit();
+    tempDir.deleteOnExit();
+    me.logger.exit(&quot;createTempFileWithSordName&quot;, tempFile + &quot;&quot;);
+    return tempFile;
+  },
+
+<span id='sol-common-RepoUtils-method-findChildren'>  /**
+</span>   * Finds the children of an element.
+   * @param {String} objId
+   * @param {Object} config
+   * @param {Boolean} config.includeFolders
+   * @param {Boolean} config.includeDocuments
+   * @param {Boolean} [config.includeReferences=false] (optional)
+   * @param {de.elo.ix.client.SordZ} [config.sordZ=SordC.mbAll] (optional) `SordC.mbOnlyId` and `SordC.mbOnlyGuid` are not working
+   * @param {Boolean} [config.recursive=false] (optional) If true, subfolders will be included (use carefully)
+   * @param {Number} [config.level=3] (optional) If subfolders are included, this restricts the search depth (`-1` for max. depth)
+   * @param {String} [config.maskId] (optional) If set, find objects related to this mask ID or name
+   * @param {de.elo.ix.client.FindOptions} config.findOptions (optional) If set, this `FindOptions` will be applied the the search
+   * @param {Object} config.objKeysObj (optional) Find by values
+   * @param {String} config.name (optional) Filters the result by the sord name (all elements containing `name`, for exact matches see `exactName`)
+   * @param {String} config.ownerId (optional) Filters the result by the owner ID
+   * @param {Boolean} [config.exactName=false] (optional) If this is `true`, only objects will be returned, where the name matches exactly `name`
+   * @param {de.elo.ix.client.IXConnection} ixConn (optional) This will be used instead of `ìxConnect` (usfull when the search should run in a different user context)
+   * @returns {de.elo.ix.client.Sord[]}
+   */
+  findChildren: function (objId, config, ixConn) {
+    var me = this,
+        children, findInfo, findChildren, findByType, findByIndex, includeReferences,
+        sordZ, recursive, level, objKeys, key, idx, findResult, i;
+    me.logger.enter(&quot;findChildren&quot;, arguments);
+    children = [];
+    findInfo = new FindInfo();
+    findChildren = new FindChildren();
+    findByType = new FindByType();
+    findByIndex = new FindByIndex();
+    includeReferences = config.includeReferences || false;
+    sordZ = config.sordZ || SordC.mbAll;
+    recursive = config.recursive || false;
+    level = config.level || 3;
+    objKeys = [];
+
+    ixConn = ixConn || ixConnect;
+
+    findChildren.parentId = objId;
+    findChildren.mainParent = !includeReferences;
+    findChildren.endLevel = (recursive) ? level : 1;
+
+    if (config.includeFolders != undefined) {
+      findByType.typeStructures = config.includeFolders;
+    }
+    if (config.includeDocuments != undefined) {
+      findByType.typeDocuments = config.includeDocuments;
+    }
+
+    if (config.maskId != undefined) {
+      findByIndex.maskId = config.maskId;
+    }
+    if (config.name !== undefined) {
+      findByIndex.name = config.name;
+      if (config.exactName === true) {
+        findByIndex.exactName = true;
+      }
+    }
+    if (config.objKeysObj) {
+      for (key in config.objKeysObj) {
+        if (config.objKeysObj.hasOwnProperty(key)) {
+          objKeys.push(me.createObjKey(&quot;&quot;, key, config.objKeysObj[key]));
+        }
+      }
+      findByIndex.objKeys = objKeys;
+    }
+
+    if (config.ownerId != undefined) {
+      findByIndex.ownerId = config.ownerId;
+    }
+
+    findInfo.findChildren = findChildren;
+    findInfo.findByIndex = findByIndex;
+
+    if (config.includeFolders || config.includeDocuments) {
+      findInfo.findByType = findByType;
+    }
+    if (config.findOptions != undefined) {
+      findInfo.findOptions = config.findOptions;
+    }
+
+    try {
+      idx = 0;
+      findResult = ixConn.ix().findFirstSords(findInfo, 1000, sordZ);
+      while (true) {
+        for (i = 0; i &lt; findResult.sords.length; i++) {
+          children.push(findResult.sords[i]);
+        }
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.sords.length;
+        findResult = ixConn.ix().findNextSords(findResult.searchId, idx, 1000, sordZ);
+      }
+    } finally {
+      if (findResult) {
+        ixConn.ix().findClose(findResult.searchId);
+      }
+    }
+    me.logger.exit(&quot;findChildren&quot;, children);
+    return children;
+  },
+
+<span id='sol-common-RepoUtils-method-findSords'>  /**
+</span>   * Finds sords
+   * @param {Object} params Parameters
+   * @param {Object} params.objKeysObj Map that contains key-value pairs
+   * @param {de.elo.ix.client.SordZ} [params.sordZ=SordC.mbAll] (optional) `SordC.mbOnlyId` and `SordC.mbOnlyGuid` are not working
+   * @param {de.elo.ix.client.IXConnection} ixConn (optional) This will be used instead of `ìxConnect` (usfull when the search should run in a different user context)
+   * @returns {de.elo.ix.client.Sord[]}
+   */
+  findSords: function (params) {
+    var me = this,
+        objKeys = [],
+        sords = [],
+        findInfo, sordZ, key, i, idx, findResult, ixConn;
+
+    me.logger.enter(&quot;findSords&quot;, params);
+
+    params = params || {};
+
+    ixConn = params.ixConn || ixConnect;
+
+    sordZ = params.sordZ || SordC.mbAll;
+
+    findInfo = new FindInfo();
+
+    if (params.objKeysObj) {
+      findInfo.findByIndex = new FindByIndex();
+      for (key in params.objKeysObj) {
+        if (params.objKeysObj.hasOwnProperty(key)) {
+          objKeys.push(me.createObjKey(&quot;&quot;, key, params.objKeysObj[key]));
+        }
+      }
+      findInfo.findByIndex.objKeys = objKeys;
+    }
+
+    try {
+      idx = 0;
+      findResult = ixConn.ix().findFirstSords(findInfo, 1000, sordZ);
+      while (true) {
+        for (i = 0; i &lt; findResult.sords.length; i++) {
+          sords.push(findResult.sords[i]);
+        }
+        if (!findResult.moreResults) {
+          break;
+        }
+        idx += findResult.sords.length;
+        findResult = ixConn.ix().findNextSords(findResult.searchId, idx, 1000, sordZ);
+      }
+    } finally {
+      if (findResult) {
+        ixConn.ix().findClose(findResult.searchId);
+      }
+    }
+    me.logger.exit(&quot;findSords&quot;, sords);
+
+    return sords;
+  },
+
+<span id='sol-common-RepoUtils-method-buildOrValuesSearchString'>  /**
+</span>   * Builds a search value string for an OR search
+   * @param {Array} values
+   * @returns {String}
+   */
+  buildOrValuesSearchString: function (values) {
+    if (!values) {
+      return &quot;&quot;;
+    }
+    if (values.length == 1) {
+      return values[0];
+    }
+    return values.map(function (value) {
+      return &quot;\&quot;&quot; + value + &quot;\&quot;&quot;;
+    }).join(&quot; OR &quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToFile'>  /**
+</span>   * Downloads a document from the repository
+   * @param {String} objId Object ID of the document
+   * @param {Object} config Configuration
+   * @param {String} config.dstDirPath Destination directory path
+   * @param {String} config.fileName File name
+   * @param {String} config.extension Extention
+   * @param {String} config.file Destination file
+   * @param {String} config.createUniqueFileName If true the filename will be extended by a number if necessary
+   * @return {String} Path of the downloaded file
+   */
+  downloadToFile: function (objId, config) {
+    var me = this,
+        editInfo, uniqueFileNamePart, counter,
+        file, url;
+    me.logger.enter(&quot;downloadToFile&quot;, arguments);
+    config = config || {};
+    editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDoc, LockC.NO);
+    uniqueFileNamePart = &quot;&quot;;
+    counter = 0;
+    if (!editInfo.document.docs || (editInfo.document.docs.length == 0)) {
+      me.logger.exit(&quot;downloadToFile&quot;);
+      return;
+    }
+    url = editInfo.document.docs[0].url;
+    config.extension = config.extension || editInfo.document.docs[0].ext;
+
+    do {
+      if (counter &gt; 0) {
+        uniqueFileNamePart = &quot;_&quot; + sol.common.StringUtils.padLeft(counter, 3);
+      }
+      if (config.dstDirPath) {
+        config.fileName = config.fileName || sol.common.FileUtils.sanitizeFilename(editInfo.sord.name);
+        config.filePath = config.dstDirPath + File.separator + config.fileName + uniqueFileNamePart + &quot;.&quot; + config.extension;
+      }
+      file = config.file || new File(config.filePath);
+      if (file.exists() &amp;&amp; !config.createUniqueFileName) {
+        throw &quot;File already exists: &quot; + file.absolutePath;
+      }
+      counter++;
+    } while (file.exists());
+
+    if (config.createDirs) {
+      org.apache.commons.io.FileUtils.forceMkdir(file.parentFile);
+    }
+    ixConnect.download(url, file);
+    me.logger.exit(&quot;downloadToFile&quot;, file.absolutePath + &quot;&quot;);
+    return file.absolutePath;
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToString'>  /**
+</span>   * Downloads the content of a repository document into a string
+   * @param {String} objId Object ID of the document. If a document version should be loaded, this has to be null
+   * @param {String} docId If a docId is supplied, the function will try to download the version only, if objId is null.
+   * @param {Object} params (optional) Additional parameter
+   * @param {Boolean} [params.preserveBOM=false] (optional) If `true`, the BOM will not be removed (if present)
+   * @return {String} Content as string.
+   */
+  downloadToString: function (objId, docId, params) {
+    var me = this,
+        inputStream, content;
+
+    me.logger.enter(&quot;downloadToString&quot;, arguments);
+    inputStream = me.downloadToStream(objId, docId);
+    content = String(Packages.org.apache.commons.io.IOUtils.toString(inputStream, &quot;UTF-8&quot;));
+    inputStream.close();
+    if (params &amp;&amp; (params.preserveBOM === true)) {
+      me.logger.exit(&quot;downloadToString&quot;, content);
+      return content;
+    }
+    me.logger.exit(&quot;downloadToString&quot;);
+    return content.replace(me.bom, &quot;&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToBase64String'>  /**
+</span>   * Downloads the content of a repository document into a base64 string
+   * @param {String} objId Object ID of the document. If a document version should be loaded, this has to be null
+   * @param {String} docId If a docId is supplied, the function will try to download the version only, if objId is null.
+   * @return {String} Content as base64 string.
+   */
+  downloadToBase64String: function (objId, docId) {
+    var me = this,
+        bytes;
+    me.logger.enter(&quot;downloadToBase64String&quot;, arguments);
+    bytes = me.downloadToByteArray(objId, docId);
+    me.logger.exit(&quot;downloadToBase64String&quot;);
+    return String(Packages.org.apache.commons.codec.binary.Base64.encodeBase64String(bytes));
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToByteArray'>  /**
+</span>   * Downloads the content of a repository document into a byte array
+   * @param {String} objId Object ID of the document. If a document version should be loaded, this has to be null
+   * @param {String} docId If a docId is supplied, the function will try to download the version only, if objId is null.
+   * @return {java.lang.Byte[]} Content as byte array.
+   */
+  downloadToByteArray: function (objId, docId) {
+    var me = this,
+        inputStream, bytes;
+    inputStream = me.downloadToStream(objId, docId);
+    bytes = Packages.org.apache.commons.io.IOUtils.toByteArray(inputStream);
+    inputStream.close();
+    return bytes;
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToStream'>  /**
+</span>   * @private
+   * @param {String} objId
+   * @param {String} docId
+   * @return {java.io.InputStream}
+   */
+  downloadToStream: function (objId, docId) {
+    var me = this,
+        url;
+    url = me.getDownloadUrl(objId, docId);
+    return ixConnect.download(url, 0, -1);
+  },
+
+<span id='sol-common-RepoUtils-method-getDownloadUrl'>  /**
+</span>   * @private
+   * @param {String} objId
+   * @param {String} docId
+   * @return {java.io.InputStream}
+   */
+  getDownloadUrl: function (objId, docId) {
+    var editInfo, docs;
+    if (!objId &amp;&amp; !docId) {
+      throw &quot;objId and docId are both empty&quot;;
+    }
+    if (objId) {
+      editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDoc, LockC.NO);
+    } else if (docId) {
+      editInfo = ixConnect.ix().checkoutDoc(null, docId, EditInfoC.mbDocument, LockC.NO);
+    }
+    docs = editInfo.document.docs;
+    if (!docs || (docs.length == 0)) {
+      throw &quot;There are no documents&quot;;
+    }
+    return String(docs[0].url);
+  },
+
+<span id='sol-common-RepoUtils-property-contentTypeExtensions'>  contentTypeExtensions: {
+</span>    bmp: &quot;image/bmp&quot;,
+    ico: &quot;image/x-ico&quot;,
+    jpg: &quot;image/jpeg&quot;,
+    png: &quot;image/png&quot;
+  },
+
+<span id='sol-common-RepoUtils-method-downloadToFileData'>  /**
+</span>   * @private
+   * @param {String} objId
+   * @param {String} docId
+   * @param {Object} config Configuration
+   * @param {String} config.extension Extension
+   * @return {java.io.InputStream}
+   */
+  downloadToFileData: function (objId, docId, config) {
+    var me = this,
+        inputStream, fileData;
+    me.logger.enter(&quot;downloadToFileData&quot;, arguments);
+    config = config || {};
+    inputStream = me.downloadToStream(objId, docId);
+    fileData = new FileData();
+    fileData.contentType = me.contentTypeExtensions[config.extension] || &quot;application/octet-stream&quot;;
+    fileData.data = Packages.org.apache.commons.io.IOUtils.toByteArray(inputStream);
+    inputStream.close();
+    me.logger.exit(&quot;downloadToFileData&quot;);
+    return fileData;
+  },
+
+<span id='sol-common-RepoUtils-method-downloadSmallContentToString'>  /**
+</span>   * Downloads the content of a small repository document into a string
+   * @param {String} objId Object ID of the document. If a document version should be loaded, this has to be null
+   * @param {String} docId If a docId is supplied, the function will try to download the version only, if objId is null.
+   * @return {String} Content as string.
+   */
+  downloadSmallContentToString: function (objId, docId) {
+    var me = this,
+        ed, configStr;
+    me.logger.enter(&quot;downloadSmallContentToString&quot;, arguments);
+
+    if (objId) {
+      ed = ixConnect.ix().checkoutSord(objId, new EditInfoZ(0, new SordZ(SordC.mbSmallDocumentContent)), LockC.NO);
+      configStr = new java.lang.String(ed.sord.docVersion.fileData.data, &quot;UTF-8&quot;);
+    } else {
+      ed = ixConnect.ix().checkoutDoc(null, docId, EditInfoC.mbSordDocSmallContent, LockC.NO);
+      configStr = new java.lang.String(ed.document.docs[0].fileData.data, &quot;UTF-8&quot;);
+    }
+    me.logger.exit(&quot;downloadSmallContentToString&quot;);
+    return configStr.replace(me.bom, &quot;&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-uploadSmallContent'>  /**
+</span>   * Uploads the content of a small repository document
+   * @param {String} objId Object ID of the document.
+   * @param {String} content Content as string.
+   */
+  uploadSmallContent: function (objId, content) {
+    var me = this,
+        fileContent, editInfo, sordZ;
+    me.logger.enter(&quot;uploadSmallContent&quot;, arguments);
+    sordZ = new SordZ(SordC.mbSmallDocumentContent);
+
+    fileContent = new java.lang.String(content);
+    editInfo = ixConnect.ix().checkoutSord(objId, new EditInfoZ(0, sordZ), LockC.NO);
+    editInfo.document = new Packages.de.elo.ix.client.Document();
+    editInfo.document.docs = [new DocVersion()];
+    editInfo.document.docs[0].workVersion = true;
+    editInfo.document.docs[0].ext = editInfo.sord.docVersion.ext;
+    editInfo.document.docs[0].contentType = editInfo.sord.docVersion.contentType;
+    editInfo.document.docs[0].fileData = new FileData();
+    editInfo.document.docs[0].fileData.data = fileContent.getBytes(java.nio.charset.Charset.forName(&quot;UTF-8&quot;));
+    ixConnect.ix().checkinDocEnd(editInfo.sord, sordZ, editInfo.document, LockC.NO);
+    me.logger.exit(&quot;uploadSmallContent&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-saveToRepo'>  /**
+</span>   * Creates a new repository document or saves a new version to an existing document.
+   * @param {Object} saveToRepoConfig
+   * @param {String} saveToRepoConfig.name Name
+   * @param {String} saveToRepoConfig.objId Object which should be updated (`parentId`, `repoPath` and `tryUpdate` are redundant in this case); objId will be used first
+   * @param {String} saveToRepoConfig.parentId Parent folder object ID
+   * @param {String} saveToRepoConfig.repoPath Complete destination repository path
+   * @param {String} saveToRepoConfig.maskId Mask ID
+   * @param {Object} saveToRepoConfig.objKeysObj Map that contains key-value pairs
+   * @param {java.io.File} saveToRepoConfig.file File
+   * @param {String} saveToRepoConfig.extension
+   * @param {String} saveToRepoConfig.contentString String to save
+   * @param {String} saveToRepoConfig.withoutBom Saves a string without BOM
+   * @param {Object} saveToRepoConfig.contentObject Object to save
+   * @param {java.io.OutputStream} saveToRepoConfig.outputStream Output stream to save
+   * @param {String} saveToRepoConfig.base64Content Base64 encoded content to save
+   * @param {Boolean} saveToRepoConfig.tryUpdate Inserts a new version if the object already exists
+   * @return {String} Object ID
+   */
+  saveToRepo: function (saveToRepoConfig) {
+    var me = this,
+        parentRepoPath, bytes, inputStream, editInfo, objKeys, key, objId;
+    me.logger.enter(&quot;saveToRepo&quot;, arguments);
+
+    if (saveToRepoConfig.repoPath) {
+      saveToRepoConfig.name = me.getNameFromPath(saveToRepoConfig.repoPath);
+      parentRepoPath = me.getParentPath(saveToRepoConfig.repoPath);
+      saveToRepoConfig.parentId = me.getObjId(parentRepoPath);
+    }
+
+    saveToRepoConfig.objKeysObj = saveToRepoConfig.objKeysObj || {};
+
+    saveToRepoConfig.maskId = saveToRepoConfig.maskId || &quot;&quot;;
+
+    if (saveToRepoConfig.objId || (saveToRepoConfig.tryUpdate &amp;&amp; saveToRepoConfig.repoPath)) {
+      try {
+        objId = saveToRepoConfig.objId || me.getObjId(saveToRepoConfig.repoPath);
+        if (objId) {
+          editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDoc, LockC.NO);
+        }
+      } catch (ignore) {
+        // Object not found
+      }
+    }
+
+    if (editInfo &amp;&amp; !saveToRepoConfig.name) {
+      saveToRepoConfig.name = editInfo.sord.name;
+    }
+
+    if (!editInfo) {
+      editInfo = ixConnect.ix().createDoc(saveToRepoConfig.parentId, saveToRepoConfig.maskId, null, EditInfoC.mbSordDocAtt);
+      objKeys = Array.prototype.slice.call(editInfo.sord.objKeys);
+      objKeys.push(me.createObjKey(DocMaskLineC.ID_FILENAME, DocMaskLineC.NAME_FILENAME, &quot;&quot;));
+      editInfo.sord.objKeys = objKeys;
+    }
+
+    if (saveToRepoConfig.base64Content) {
+      bytes = Packages.org.apache.commons.codec.binary.Base64.decodeBase64(saveToRepoConfig.base64Content);
+    }
+
+    if (saveToRepoConfig.outputStream) {
+      bytes = saveToRepoConfig.outputStream.toByteArray();
+      saveToRepoConfig.outputStream.close();
+    }
+
+    if (saveToRepoConfig.contentObject) {
+      saveToRepoConfig.contentString = JSON.stringify(saveToRepoConfig.contentObject, null, 2);
+      saveToRepoConfig.extension = saveToRepoConfig.extension || &quot;json&quot;;
+    }
+
+    if (saveToRepoConfig.contentString) {
+      if (!saveToRepoConfig.withoutBom) {
+        saveToRepoConfig.contentString = me.bom + saveToRepoConfig.contentString;
+      }
+      bytes = new java.lang.String(saveToRepoConfig.contentString).getBytes(&quot;UTF-8&quot;);
+    }
+
+    if (saveToRepoConfig.file) {
+      saveToRepoConfig.fileName = saveToRepoConfig.file.name;
+      if (!saveToRepoConfig.name) {
+        saveToRepoConfig.name = Packages.org.apache.commons.io.FilenameUtils.removeExtension(saveToRepoConfig.file.name);
+      }
+      if (!saveToRepoConfig.extension) {
+        saveToRepoConfig.extension = Packages.org.apache.commons.io.FilenameUtils.getExtension(saveToRepoConfig.file.absolutePath);
+      }
+    } else if (bytes) {
+      saveToRepoConfig.fileName = saveToRepoConfig.name + &quot;.&quot; + saveToRepoConfig.extension;
+    }
+    editInfo.sord.name = saveToRepoConfig.name;
+
+    for (key in saveToRepoConfig.objKeysObj) {
+      if (saveToRepoConfig.objKeysObj.hasOwnProperty(key)) {
+        sol.common.SordUtils.setObjKeyValue(editInfo.sord, key, saveToRepoConfig.objKeysObj[key]);
+      }
+    }
+
+    if (saveToRepoConfig.fileName) {
+      sol.common.SordUtils.setObjKeyValue(editInfo.sord, DocMaskLineC.NAME_FILENAME, saveToRepoConfig.fileName);
+    }
+
+    editInfo.document.docs = [new DocVersion()];
+    editInfo.document.docs[0].ext = saveToRepoConfig.extension;
+    editInfo.document.docs[0].pathId = editInfo.sord.path;
+    editInfo.document.docs[0].encryptionSet = editInfo.sord.details.encryptionSet;
+    editInfo.document = ixConnect.ix().checkinDocBegin(editInfo.document);
+
+    if (saveToRepoConfig.file) {
+      editInfo.document.docs[0].uploadResult = ixConnect.upload(editInfo.document.docs[0].url, saveToRepoConfig.file);
+    } else if (bytes) {
+      inputStream = new java.io.ByteArrayInputStream(bytes);
+      editInfo.document.docs[0].uploadResult = ixConnect.upload(editInfo.document.docs[0].url, inputStream, bytes.length, &quot;application/octet-stream&quot;);
+      inputStream.close();
+    } else {
+      throw &quot;Input data is missing.&quot;;
+    }
+
+    editInfo.document = ixConnect.ix().checkinDocEnd(editInfo.sord, SordC.mbAll, editInfo.document, LockC.NO);
+    objId = editInfo.document.objId;
+
+    me.logger.debug(&quot;Document saved to repository: objId=&quot; + objId);
+    me.logger.exit(&quot;saveToRepo&quot;);
+    return String(objId);
+  },
+
+<span id='sol-common-RepoUtils-method-createObjKey'>  /**
+</span>   * @private
+   * Creates an ObjKey object
+   * @param {String} id ID of the ObjKey
+   * @param {String} name Name of the ObjKey
+   * @param {String} value
+   * @return {de.elo.ix.client.ObjKey} Created ObjKey
+   */
+  createObjKey: function (id, name, value) {
+    var objKey = new ObjKey();
+    if (id) {
+      objKey.id = id;
+    }
+    objKey.name = name;
+    objKey.data = [value];
+    return objKey;
+  },
+
+<span id='sol-common-RepoUtils-method-exportRepoData'>  /**
+</span>   * Exports a repository folder into an ELO ZIP file
+   * @param {java.io.File} exportZipFile
+   * @param {Object} exportOptions Export options, see de.elo.ix.client.ExportExtOptions
+   */
+  exportRepoData: function (exportZipFile, exportOptions) {
+    var me = this,
+        exportExtOptions, prop, exportId, exportZipUrl;
+    me.logger.enter(&quot;exportRepoData&quot;, arguments);
+    if (!exportOptions) {
+      throw &quot;Export options are missing.&quot;;
+    }
+    if (exportOptions.srcList) {
+      exportOptions.srcList.forEach(function (objId) {
+        ixConnect.ix().checkoutSord(objId, SordC.mbOnlyId, LockC.NO);
+      });
+    }
+    exportExtOptions = new ExportExtOptions();
+    for (prop in exportOptions) {
+      if (exportOptions.hasOwnProperty(prop)) {
+        exportExtOptions[prop] = exportOptions[prop];
+      }
+    }
+    exportId = ixConnect.ix().startExportExt(exportExtOptions);
+    sol.common.AsyncUtils.waitForJob(exportId);
+    exportZipUrl = ixConnect.ix().getExportZipUrl(exportId);
+    ixConnect.download(exportZipUrl, exportZipFile);
+    ixConnect.ix().finishExport(exportId);
+    me.logger.exit(&quot;exportRepoData&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-importRepoData'>  /**
+</span>   * Imports a ELO ZIP file into the repository
+   * @param {java.io.File} importZipFile
+   * @param {String} dstRepoPath Destination repository path
+   * @param {Number} guidMethod GUID method, see de.elo.ix.client.ImportOptionsC
+   * @param {Number} options Import options, see de.elo.ix.client.ImportOptionsC
+   */
+  importRepoData: function (importZipFile, dstRepoPath, guidMethod, options) {
+    var me = this,
+        importId, importZipUrl, dstObjId;
+    me.logger.enter(&quot;importRepoData&quot;, arguments);
+    if (typeof guidMethod === &quot;undefined&quot;) {
+      guidMethod = ImportOptionsC.GUIDS_KEEP;
+    }
+    if (typeof options === &quot;undefined&quot;) {
+      options = 0;
+    }
+    if (dstRepoPath) {
+      dstObjId = me.preparePath(dstRepoPath);
+    } else {
+      options |= ImportOptionsC.USE_EXPORTED_PATH;
+    }
+    importId = ixConnect.ix().startImport(dstObjId, guidMethod, options);
+    importZipUrl = ixConnect.ix().getImportZipUrl(importId);
+    ixConnect.upload(importZipUrl, importZipFile);
+    sol.common.AsyncUtils.waitForJob(importId);
+    me.logger.exit(&quot;importRepoData&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-getObjId'>  /**
+</span>   * Returns the object ID of a given repository path
+   * @param {String} path Repository path. The path separator is defined by the first character or the first charcter after &quot;ARCPATH:&quot;
+   * @return {String} The ID of the new element, or null if it does not exist
+   */
+  getObjId: function (path) {
+    var me = this,
+        conn, editInfo;
+    me.logger.enter(&quot;getObjId&quot;, arguments);
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+    if (me.isObjId(path) || me.isGuid(path)) {
+      me.logger.exit(&quot;getObjId&quot;, path);
+      return path;
+    }
+    path = me.normalizePath(path, true);
+    try {
+      editInfo = conn.ix().checkoutSord(path, EditInfoC.mbOnlyId, LockC.NO);
+      me.logger.exit(&quot;getObjId&quot;, editInfo.sord.id);
+      return editInfo.sord.id;
+    } catch (ignore) {
+      // Object not found
+    }
+    me.logger.exit(&quot;getObjId&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-getGuid'>  /**
+</span>   * Returns the object GUID of a given Object ID
+   * @param {String} objId Object ID
+   * @return {String} GUID
+   */
+  getGuid: function (objId) {
+    var me = this,
+        conn, sord;
+    me.logger.enter(&quot;getGuid&quot;, arguments);
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+    try {
+      sord = conn.ix().checkoutSord(objId, SordC.mbOnlyGuid, LockC.NO);
+      me.logger.exit(&quot;getGuid&quot;, sord.guid);
+      return sord.guid;
+    } catch (ignore) {
+      // Object not found
+    }
+    me.logger.exit(&quot;getGuid&quot;);
+  },
+
+
+<span id='sol-common-RepoUtils-method-exists'>  /**
+</span>   * Checks wether a path exists
+   * @param {String} repoPath Repository path
+   * @return {Boolean}
+   */
+  exists: function (repoPath) {
+    var me = this;
+    return !!me.getObjId(repoPath);
+  },
+
+<span id='sol-common-RepoUtils-method-isObjId'>  /**
+</span>   * Returns true if the given string is an object ID
+   * @param {String} str Input string
+   * @return {Boolean}
+   */
+  isObjId: function (str) {
+    return /^[\d]{1,20}$/.test(String(str));
+  },
+
+<span id='sol-common-RepoUtils-method-isGuid'>  /**
+</span>   * Returns true if the given string is an object ID
+   * @param {String} str Input string
+   * @return {Boolean}
+   */
+  isGuid: function (str) {
+    return /^\(\w{8}-\w{4}-\w{4}-\w{4}-\w{12}\)$/.test(String(str));
+  },
+
+<span id='sol-common-RepoUtils-method-getObjIdByIndex'>  /**
+</span>   * Looks up an objId by an index field value.
+   *
+   *     sol.common.RepoUtils.getObjIdByIndex( { mask: &quot;Invoice&quot;, objKeyData: [ { key: &quot;INVOICE_ID&quot;, value: &quot;12345&quot; } ] } );
+   *
+   * @param {Object} filter
+   * @param {String} filter.mask (optional) Additional limit search by mask
+   * @param {Object[]} filter.objKeyData Objects with key and value for the lookup
+   * @returns {String} The objId
+   * @throws Throws an exception, if result is not unique
+   * @throws Throws an exception, if there is no result
+   */
+  getObjIdByIndex: function (filter) {
+    var me = this,
+        findInfo, objKeys,
+        findResult, ids, _result, i, sord;
+    me.logger.enter(&quot;getObjIdByIndex&quot;, arguments);
+    findInfo = new FindInfo();
+    objKeys = [];
+
+    if (!filter || !filter.objKeyData || !Array.isArray(filter.objKeyData)) {
+      throw &quot;illegal filter: &#39;objKeyData&#39; cannot be undefined and has to be an Array &quot;;
+    }
+
+    filter.objKeyData.forEach(function (data) {
+      if (data.key &amp;&amp; data.value) {
+        objKeys.push(me.createObjKey(null, data.key, data.value));
+      }
+    });
+
+    findInfo.findByIndex = new FindByIndex();
+    findInfo.findByIndex.objKeys = objKeys;
+
+    if (filter.mask) {
+      findInfo.findByIndex.maskId = filter.mask;
+    }
+
+    findResult = ixConnect.ix().findFirstSords(findInfo, 2, SordC.mbOnlyId);
+    if (findResult.ids) { // Expected result when searching with SordC.mbOnlyId
+      ids = findResult.ids;
+    } else if (findResult.sords) { // in some cases the results will be returned this way, regardless of the SordC.mbOnlyId selector
+      ids = [];
+      for (i = 0; i &lt; findResult.sords.length; i++) {
+        sord = findResult.sords[i];
+        ids.push(sord.id);
+      }
+    }
+    if (!ids || ids.length &lt;= 0) {
+      throw &quot;no element found&quot;;
+    }
+    if (ids.length &gt; 1) {
+      throw &quot;no unique result&quot;;
+    }
+    _result = ids[0];
+    me.logger.exit(&quot;getObjIdByIndex&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-getObjIdFromRelativePath'>  /**
+</span>   * Returns the object ID of an object which is defined by a start object and an additional relative path
+   *
+   *    var objId = sol.common.RepoUtils.getObjIdFromRelativePath(123, &quot;/.eloinst&quot;);
+   *    var objId = sol.common.RepoUtils.getObjIdFromath(&quot;ARCPATH:/Administration&quot;, &quot;/common/Configuration&quot;);
+   *
+   * If the start folder is adynamic register, this method handels the request a little different:
+   *
+   * - it determines all children
+   * - it searches for a child element with the name specified by &#39;ath&#39;
+   * - unlike the same call on a normal folder, this does not support nested paths (i.e. `ath` can just have one level)
+   *
+   * @param {String} startFolderId
+   * @param {String} relativePath Should start with a separator
+   * @returns {String}
+   */
+  getObjIdFromRelativePath: function (startFolderId, relativePath) {
+    var me = this,
+        startObjId, startSord, children, objId, _result;
+
+    me.logger.enter(&quot;getObjIdFromRelativePath&quot;, arguments);
+
+    if (!startFolderId) {
+      throw &quot;Start folder ID is empty&quot;;
+    }
+
+    startObjId = me.getObjId(startFolderId);
+
+    if (!relativePath) {
+      return startObjId;
+    }
+
+    startSord = ixConnect.ix().checkoutSord(startObjId, SordC.mbAllIndex, LockC.NO);
+
+    if (sol.common.SordUtils.isDynamicFolder(startSord)) {
+      relativePath = relativePath.substring(1, relativePath.length);
+      children = me.findChildren(startSord.id, {
+        includeFolders: true,
+        includeDocuments: true,
+        includeReferences: true
+      });
+      children.some(function (child) {
+        if (child.name == relativePath) {
+          objId = child.id;
+          return true;
+        }
+      });
+      me.logger.exit(&quot;getObjIdFromRelativePath&quot;, objId);
+      return objId;
+    } else {
+      _result = ixConnect.ix().checkoutSord(&quot;ARCPATH[&quot; + startSord.id + &quot;]:&quot; + relativePath, SordC.mbOnlyId, LockC.NO).id;
+      me.logger.exit(&quot;getObjIdFromRelativePath&quot;, _result);
+      return _result;
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-getPath'>  /**
+</span>   * Returns repository path of a Sord object
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Boolean} withPrefix If true the ARCPATH: prefix will be added.
+   * @param {Object} config (optional)
+   * @param {String} [config.separator=&quot;/&quot;] (optional)
+   * @return {String} Repository path
+   */
+  getPath: function (sord, withPrefix, config) {
+    var me = this,
+        repoPathParts = [],
+        separator, prefix, i, idNames, _result;
+    me.logger.enter(&quot;getPath&quot;, arguments);
+    if (!sord || !sord.refPaths || !sord.refPaths[0]) {
+      me.logger.exit(&quot;getPath&quot;, &quot;&quot;);
+      return &quot;&quot;;
+    }
+
+    idNames = sord.refPaths[0].path;
+    for (i = 0; i &lt; idNames.length; i++) {
+      repoPathParts.push(idNames[i].name + &quot;&quot;);
+    }
+    repoPathParts.push(sord.name + &quot;&quot;);
+    prefix = withPrefix ? &quot;ARCPATH:&quot; : &quot;&quot;;
+    separator = (config &amp;&amp; config.separator) ? config.separator : &quot;/&quot;;
+    _result = prefix + separator + repoPathParts.join(separator);
+    me.logger.exit(&quot;getPath&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-getPathFromObjId'>  /**
+</span>   * Returns repository path of an object ID
+   * @param {String} objId Object ID
+   * @param {Object} config (optional)
+   * @param {String} [config.separator=&quot;/&quot;] (optional)
+   * @return {String} Repository path
+   */
+  getPathFromObjId: function (objId, config) {
+    var me = this,
+        sord, _result;
+    me.logger.enter(&quot;getPathFromObjId&quot;, arguments);
+    try {
+      sord = ixConnect.ix().checkoutSord(objId, new SordZ(SordC.mbRefPaths), LockC.NO);
+    } catch (ignore) {
+      //ignore
+    }
+    if (sord) {
+      _result = me.getPath(sord, false, config);
+      me.logger.exit(&quot;getPathFromObjId&quot;, _result);
+      return _result;
+    }
+    me.logger.exit(&quot;getPathFromObjId&quot;, &quot;&quot;);
+    return &quot;&quot;;
+  },
+
+<span id='sol-common-RepoUtils-method-preparePath'>  /**
+</span>   * Checks and creates a repository path.
+   *
+   * The `repoPath` can be in handlebars [handlebars](http://handlebarsjs.com/) syntax and is applied via {@link sol.common.Template}.
+   *
+   * @param {String} repoPath Repository path. The path separator is defined by the first character or the first charcter after &quot;ARCPATH:&quot;
+   * @param {Object} params (optional)
+   * @param {String} params.mask (optional) If set, newly created parts of the path get that mask
+   * @param {Object|de.elo.ix.client.Sord} params.data (optional) If set, this is applied to the repoPath, while the repoPath has to be in `handlebars` syntax
+   * @param {String|Number} params.sordType (optional) Name or ID of a sord type which will be set on all new elements
+   * @return {String} The ID of the new element, or null if something went wrong
+   */
+  preparePath: function (repoPath, params) {
+    var me = this,
+        objId, _result;
+    me.logger.enter(&quot;preparePath&quot;, arguments);
+
+    if (params &amp;&amp; params.data) {
+      if (params.data instanceof Sord) {
+        params.data = sol.common.SordUtils.getTemplateSord(params.data);
+      }
+      repoPath = sol.create(&quot;sol.common.Template&quot;, { source: repoPath }).apply(params.data);
+    }
+
+    objId = me.getObjId(repoPath);
+
+    if (objId) {
+      me.logger.exit(&quot;preparePath&quot;, objId);
+      return objId;
+    }
+    _result = me.createPath(repoPath, params);
+    me.logger.exit(&quot;preparePath&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-checkRepoPath'>  /**
+</span>   * Checks wether the repository path contains an empty path part
+   * @private
+   * @param {String} repoPath Repository path
+   * @throws {Exception}
+   */
+  checkRepoPath: function (repoPath) {
+    var me = this,
+        separator, illegalString;
+
+    if (!repoPath) {
+      throw &quot;Repository path is empty&quot;;
+    }
+
+    separator = me.getPathSeparator(repoPath);
+    illegalString = separator + separator;
+    if (repoPath.indexOf(illegalString) &gt; -1) {
+      throw &quot;Repository path must not contain an empty path part: &quot; + repoPath;
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-createPath'>  /**
+</span>   * Creates a repository path.
+   *
+   * If the path contains dynamic content, use {@link #preparePath} instead.
+   *
+   * @param {String} repoPath A path. The path separator is defined by the first character or the first character after &quot;ARCPATH:&quot;
+   * @param {Object} params (optional)
+   * @param {String} params.mask (optional) If set, newly created parts of the path get that mask
+   * @param {Object} params.rightsConfig Rights configuration
+   * @param {String|Number} params.sordType Name or ID of a sord type which will be set on all new elements
+   * @return {String} The ID of the new element, or null if something went wrong
+   */
+  createPath: function (repoPath, params) {
+    var me = this,
+        delim, sordNames, sords, ids, parentIdMatch, parentId, aclItemInherit, aclItems, fixedSordType, dynSordType,
+        accessCode, userAcls, conn;
+    me.logger.enter(&quot;createPath&quot;, arguments);
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+    params = params || {};
+    parentIdMatch = repoPath.match(/^ARCPATH\[([^\]]+)\]/);
+    parentId = parentIdMatch ? parentIdMatch[1] : &quot;1&quot;;
+    repoPath = me.normalizePath(repoPath);
+    delim = me.getPathSeparator(repoPath);
+    me.checkRepoPath(repoPath);
+    sordNames = repoPath.substring(1).split(delim);
+    sords = [];
+
+    params.mask = params.mask || &quot;&quot;;
+
+    aclItemInherit = new AclItem();
+    aclItemInherit.type = AclItemC.TYPE_INHERIT;
+    aclItems = [aclItemInherit];
+
+    if (params.rightsConfig &amp;&amp; params.rightsConfig.users) {
+      if (params.rightsConfig.rights) {
+        accessCode = sol.common.AclUtils.createAccessCode(params.rightsConfig.rights);
+      }
+      if ((params.rightsConfig.mode == &quot;SET&quot;) || (params.rightsConfig.mode == &quot;REPLACE&quot;)) {
+        aclItems = [];
+      }
+      userAcls = sol.common.AclUtils.retrieveUserAcl(params.rightsConfig.users, accessCode);
+      if (userAcls) {
+        userAcls.forEach(function (userAcl) {
+          aclItems.push(userAcl);
+        });
+      }
+    }
+
+    try {
+      fixedSordType = (params &amp;&amp; params.sordType) ? ((typeof params.sordType !== &quot;number&quot;) ? sol.common.SordTypeUtils.getSordTypeId(params.sordType) : params.sordType) : null;
+      sordNames.forEach(function (name) {
+        var sord = conn.ix().createSord(parentId, params.mask, SordC.mbAll);
+        dynSordType = (!dynSordType) ? ((sord.type &lt;= 6) ? sord.type : 6) : ((dynSordType &lt;= 6) ? dynSordType : 6);
+        sord.name = name;
+        sord.aclItems = aclItems;
+        sord.type = fixedSordType || dynSordType;
+        sords.push(sord);
+        dynSordType++;
+      });
+
+      ids = conn.ix().checkinSordPath(parentId, sords, SordC.mbAll);
+      me.logger.exit(&quot;createPath&quot;, ids[ids.length - 1]);
+      return ids[ids.length - 1];
+
+    } catch (e) {
+      this.logger.error(&quot;error creating archive path&quot;, e);
+    }
+    me.logger.exit(&quot;createPath&quot;, null);
+    return null;
+  },
+
+<span id='sol-common-RepoUtils-method-getPathSeparator'>  /**
+</span>   * Returns the repository path separator character
+   * @param {String} repoPath Repository path
+   * @return {String} Repository path separator
+   */
+  getPathSeparator: function (repoPath) {
+    var me = this,
+        matches, _result;
+    me.logger.enter(&quot;getPathSeparator&quot;, arguments);
+    repoPath = me.normalizePath(repoPath);
+    if (repoPath &amp;&amp; (repoPath.length &gt; 0)) {
+      if (repoPath.indexOf(&quot;{&quot;) == 0) {
+        matches = repoPath.match(&quot;(?:{+)(?:[^}]+)(?:}+)(.)&quot;);
+        if (matches &amp;&amp; (matches.length == 2)) {
+          me.logger.exit(&quot;getPathSeparator&quot;, matches[1]);
+          return matches[1];
+        }
+      } else {
+        _result = String(repoPath).substring(0, 1);
+        me.logger.exit(&quot;getPathSeparator&quot;, _result);
+        return _result;
+      }
+    }
+    me.logger.exit(&quot;getPathSeparator&quot;, &quot;/&quot;);
+    return &quot;/&quot;;
+  },
+
+<span id='sol-common-RepoUtils-method-changePathSeparator'>  /**
+</span>   * Changes the path separator
+   * @param {String} path Repository path
+   * @param {String} newSeparator New separator
+   * @return {String} Repository path that contains the new separator
+   */
+  changePathSeparator: function (path, newSeparator) {
+    var me = this,
+        separator, _result;
+    me.logger.enter(&quot;changePathSeparator&quot;, arguments);
+    path = String(path);
+    separator = me.getPathSeparator(path);
+    newSeparator = newSeparator || me.pilcrow;
+    _result = sol.common.StringUtils.replaceAll(path, separator, newSeparator);
+    me.logger.exit(&quot;changePathSeparator&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-getNameFromPath'>  /**
+</span>   * Returns the name part of a repository path
+   * @param {String} repoPath Repository path
+   * @return {String} Name part of the repository path
+   */
+  getNameFromPath: function (repoPath) {
+    var me = this,
+        separator, _result;
+    me.logger.enter(&quot;getNameFromPath&quot;, arguments);
+    repoPath = me.normalizePath(repoPath);
+    separator = me.getPathSeparator(repoPath);
+    _result = String(repoPath).split(separator).pop();
+    me.logger.exit(&quot;getNameFromPath&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-getParentPath'>  /**
+</span>   * Returns the parent repository path
+   * @param {String} repoPath Repository path
+   * @return {String} Repository path of the parent folder
+   */
+  getParentPath: function (repoPath) {
+    var me = this,
+        separator, _result;
+    me.logger.enter(&quot;getParentPath&quot;, arguments);
+    separator = me.getPathSeparator(repoPath);
+    _result = String(repoPath).substring(0, repoPath.lastIndexOf(separator));
+    me.logger.exit(&quot;getParentPath&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-normalizePath'>  /**
+</span>   * Normalizes a repository path
+   * @param {String} repoPath Repository path
+   * @param {Boolean} withPrefix If true the ARCPATH: prefix will be added.
+   * @return {String} Normalized repository path
+   */
+  normalizePath: function (repoPath, withPrefix) {
+    repoPath = String(repoPath);
+    if (repoPath.indexOf(&quot;ARCPATH&quot;) == 0) {
+      if (withPrefix) {
+        return repoPath;
+      } else {
+        return repoPath.replace(/^ARCPATH[^:]*:/, &quot;&quot;);
+      }
+    } else {
+      if (withPrefix) {
+        return &quot;ARCPATH:&quot; + repoPath;
+      } else {
+        return repoPath;
+      }
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-deleteAllReferences'>  /**
+</span>   * Deletes all references
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Array} Reference parent IDs
+   */
+  deleteAllReferences: function (sord) {
+    var i, refPath, refParentId,
+        refParentIds = [],
+        deleteOptions;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+    if (!sord.refPaths) {
+      throw &quot;Reference paths are empty&quot;;
+    }
+    if (sord.refPaths.length &lt;= 1) {
+      return;
+    }
+
+    deleteOptions = new DeleteOptions();
+
+    for (i = 1; i &lt; sord.refPaths.length; i++) {
+      refPath = sord.refPaths[i];
+      if (refPath.path.length &gt; 0) {
+        refParentId = String(refPath.path[refPath.path.length - 1].id);
+      } else {
+        refParentId = 1;
+      }
+      refParentIds.push(refParentId);
+      ixConnect.ix().deleteSord(refParentId, sord.id, LockC.NO, deleteOptions);
+    }
+
+    return refParentIds;
+  },
+
+<span id='sol-common-RepoUtils-method-deleteSord'>  /**
+</span>   * Deletes a sord
+   * @param {String} objId Object ID
+   * @param {Object} config Configuration
+   * @param {Object} config.parentId parentId Parent ID
+   * @param {Boolean} config.deleteFinally
+   * @param {Boolean} config.silent
+   */
+  deleteSord: function (objId, config) {
+    var me = this,
+        deleteOptions, id;
+    me.logger.enter(&quot;deleteSord&quot;, arguments);
+    config = config || {};
+    config.parentId = config.parentId || &quot;&quot;;
+
+    id = me.getObjId(objId);
+    if (!id) {
+      if (!config.silent) {
+        throw &quot;Object not found: &quot; + objId;
+      }
+      me.logger.exit(&quot;deleteSord&quot;);
+      return;
+    }
+    ixConnect.ix().deleteSord(config.parentId, id, LockC.NO, null);
+    if (config.deleteFinally) {
+      deleteOptions = new DeleteOptions();
+      deleteOptions.deleteFinally = true;
+      ixConnect.ix().deleteSord(config.parentId, id, LockC.NO, deleteOptions);
+    }
+    me.logger.exit(&quot;deleteSord&quot;);
+  },
+
+<span id='sol-common-RepoUtils-property-specialFolders'>  /**
+</span>   * @property {Object}
+   * Special folders that can be referenced by GUIDs
+   */
+  specialFolders: {
+    administrationFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:&quot;, &quot;ARCPATH:/Administration&quot;],
+    bsFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-B10B10B10B00)]:&quot;, &quot;{{administrationFolderPath}}/Business Solutions&quot;],
+    jcScriptingBaseFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E11)]:&quot;, &quot;{{administrationFolderPath}}/Java Client Scripting Base&quot;],
+    ixScriptingBaseFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E12)]:&quot;, &quot;{{administrationFolderPath}}/IndexServer Scripting Base&quot;],
+    webClientScriptingBaseFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E16)]&quot;, &quot;{{administrationFolderPath}}/Webclient Scripting Base&quot;],
+    localizationBaseFolder: [&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E1A)]:&quot;, &quot;{{administrationFolderPath}}/Localization&quot;],
+    asBaseFolder: [&quot;{{administrationFolderPath}}/ELOas Base&quot;],
+    wfBaseFolder: [&quot;{{administrationFolderPath}}/ELOwf Base&quot;],
+    appsBaseFolder: [&quot;{{administrationFolderPath}}/ELOapps&quot;]
+  },
+
+<span id='sol-common-RepoUtils-method-resolveSpecialFolder'>  /**
+</span>   * Resolve special folders by GUID (see {@link #specialFolders})
+   *
+   *     var ressourcePath = sol.common.RepoUtils.resolveSpecialFolder(&quot;{{administrationFolderPath}}/Ressources&quot;);
+   *
+   * Supported variables:
+   *
+   *     {{administrationFolderPath}}
+   *     {{bsFolderPath}}
+   *     {{jcScriptingBaseFolderPath}}
+   *     {{ixScriptingBaseFolderPath}}
+   *     {{webClientScriptingBaseFolderPath}}
+   *     {{localizationBaseFolderPath}}
+   *     {{asBaseFolderPath}}
+   *     {{wfBaseFolderPath}}
+   *     {{appsBaseFolderPath}}
+   *
+   * @param {String} path Path to be resolved
+   * @param {Object} paramObj Additional properties: packageName, packageBaseFolderPath
+   * @return {String} Resolved Path
+   */
+  resolveSpecialFolder: function (path, paramObj) {
+    var me = this,
+        key;
+    me.logger.enter(&quot;resolveSpecialFolder&quot;, arguments);
+    if (!me.specialFolderPathsDeterminated) {
+      me.determinateSpecialFolders();
+    }
+    paramObj = paramObj || {};
+    for (key in me.specialFolderPaths) {
+      paramObj[key] = me.specialFolderPaths[key];
+    }
+    if (paramObj.packageName) {
+      if (paramObj.packageBaseFolderPath) {
+        paramObj.packageBaseFolderPath = sol.create(&quot;sol.common.Template&quot;, { source: paramObj.packageBaseFolderPath, isRepoPath: true }).apply(paramObj);
+      } else {
+        paramObj.packageBaseFolderPath = paramObj.bsFolderPath;
+      }
+      paramObj.packageFolderPath = paramObj.packageBaseFolderPath + me.pilcrow + paramObj.packageName;
+    }
+    path = sol.create(&quot;sol.common.Template&quot;, { source: path, isRepoPath: true }).apply(paramObj);
+    me.logger.exit(&quot;resolveSpecialFolder&quot;, path);
+    return path;
+  },
+
+<span id='sol-common-RepoUtils-method-determinateSpecialFolders'>  /**
+</span>   * @private
+   * Determinates special folders by its GUID or alternatively by a default path
+   */
+  determinateSpecialFolders: function () {
+    var me = this,
+        paths, path, folderKey, i;
+    me.logger.enter(&quot;determinateSpecialFolders&quot;, arguments);
+    me.specialFolderPaths = {};
+    for (folderKey in me.specialFolders) {
+      paths = me.specialFolders[folderKey];
+      for (i = 0; i &lt; paths.length; i++) {
+        path = paths[i].replace(&quot;/&quot;, me.pilcrow);
+        if (path.indexOf(&quot;{{&quot;) &gt; -1) {
+          path = sol.create(&quot;sol.common.Template&quot;, { source: path }).apply(me.specialFolderPaths);
+        }
+        try {
+          ixConnect.ix().checkoutSord(path, SordC.mbOnlyId, LockC.NO);
+          break;
+        } catch (ignore) {
+          // Object not found
+        }
+      }
+      me.specialFolderPaths[folderKey + &quot;Path&quot;] = path;
+    }
+    me.specialFolderPathsDeterminated = true;
+    me.logger.exit(&quot;determinateSpecialFolders&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-checkVersion'>  /**
+</span>   * Checks the version of ELO components
+   * @param {String} currentVersionString
+   * @param {String} requiredVersionString
+   * @return {Boolean} Return true if the current version is equal or higher then the required version
+   */
+  checkVersion: function (currentVersionString, requiredVersionString) {
+    var me = this,
+        result = true,
+        currentRegex, requiredRegex, currentVersionMatch, requiredVersionMatch, currentPart, requiredPart;
+
+    me.logger.enter(&quot;checkVersion&quot;, arguments);
+
+    currentRegex = /([0-9]+(\\.[0-9]+)*)/g;
+    requiredRegex = /([0-9]+(\\.[0-9]+)*)/g;
+    currentVersionMatch = currentRegex.exec(currentVersionString);
+    requiredVersionMatch = requiredRegex.exec(requiredVersionString);
+
+    while (requiredVersionMatch !== null) {
+      currentPart = (currentVersionMatch) ? parseInt(currentVersionMatch[0], 10) : 0;
+      requiredPart = parseInt(requiredVersionMatch[0], 10);
+      if (requiredPart &gt; currentPart) {
+        result = false;
+        break;
+      } else if (requiredPart &lt; currentPart) {
+        result = true;
+        break;
+      }
+      currentVersionMatch = currentRegex.exec(currentVersionString);
+      requiredVersionMatch = requiredRegex.exec(requiredVersionString);
+    }
+
+    me.logger.exit(&quot;checkVersion&quot;, result);
+
+    return result;
+  },
+
+<span id='sol-common-RepoUtils-method-getRepoPathObjIds'>  /**
+</span>   * Returns the object IDs of the repository path elements in ascending order
+   * @param {String} objId object ID
+   * @return {Array} Array of object IDs
+   */
+  getRepoPathObjIds: function (objId) {
+    var me = this,
+        sord, objIds, i,
+        repoPathElements, repoPathElement;
+    me.logger.enter(&quot;getRepoPathObjIds&quot;, arguments);
+
+    sord = ixConnect.ix().checkoutSord(objId, new SordZ(SordC.mbRefPaths), LockC.NO);
+    objIds = [objId];
+    if (!sord.refPaths || (sord.refPaths.length == 0)) {
+      throw &quot;sord.refPaths is empty&quot;;
+    }
+
+    objIds = [objId];
+    repoPathElements = sord.refPaths[0].path;
+    for (i = repoPathElements.length - 1; i &gt;= 0; i--) {
+      repoPathElement = repoPathElements[i];
+      objIds.push(repoPathElement.id);
+    }
+    me.logger.exit(&quot;getRepoPathObjIds&quot;, objIds);
+    return objIds;
+  },
+
+<span id='sol-common-RepoUtils-method-getValidParent'>  /**
+</span>   * Finds a valid parent of a sord with specified index field
+   * @param {String} objId Object ID
+   * @param {String} type Name of group
+   * @param {String[]} values Values
+   * @return {de.elo.ix.client.Sord.id} objId
+   */
+  getValidParent: function (objId, type, values) {
+    var me = this,
+        sord;
+    me.logger.enter(&quot;getValidParent&quot;, arguments);
+
+    if (typeof values == &quot;string&quot;) {
+      values = [values];
+    }
+
+    sord = sol.common.RepoUtils.findInHierarchy(objId, { objKeyName: type, objKeyValues: values });
+    if (sord != undefined) {
+      me.logger.exit(&quot;getValidParent&quot;, sord.id);
+      return sord.id;
+    } else {
+      me.logger.exit(&quot;getValidParent&quot;, null);
+      return null;
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-findObjectTypeInHierarchy'>  /**
+</span>   * Finds a sord in the hierarchy by the index field &#39;SOL_TYPE&#39;
+   * @param {String} objId Object ID
+   * @param {String[]} values Values
+   * @param {Object} config Configuration
+   * @param {de.elo.ix.client.IXConnection} config.connection Index server connection
+   * @return {de.elo.ix.client.Sord} Sord
+   */
+  findObjectTypeInHierarchy: function (objId, values, config) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;findObjectTypeInHierarchy&quot;, arguments);
+    config = config || {};
+    _result = me.findInHierarchy(objId, { objKeyName: &quot;SOL_TYPE&quot;, objKeyValues: values, connection: config.connection });
+    me.logger.exit(&quot;findObjectTypeInHierarchy&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-RepoUtils-method-findInHierarchy'>  /**
+</span>   * Find a sord in the hierarchy
+   * @param {String} objId Object ID
+   * @param {Object} config Optional parameters
+   * @param {String[]} config.sordTypeNames Name of sord types
+   * @param {String} config.objKeyName Name of the oject key
+   * @param {String[]} config.objKeyValues Values of the object key
+   * @param {de.elo.ix.client.IXConnection} config.connection Index server connection
+   * @param {de.elo.ix.client.SordZ} config.sordZ Element selector
+   * @param {Boolean} throwException If true a exception is thrown if no sord was found
+   * @return {de.elo.ix.client.Sord} Sord
+   */
+  findInHierarchy: function (objId, config) {
+    var me = this,
+        conn, objIds, sords, i, sord, j, sordTypeIds, sordTypeId,
+        objKeyName, objKeyValues, objKeyValue, currentValue;
+    me.logger.enter(&quot;findInHierarchy&quot;, arguments);
+
+    config = config || {};
+    conn = config.connection || ixConnect;
+
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    if (config.sordTypeNames) {
+      if (!sol.common.ObjectUtils.isArray(config.sordTypeNames)) {
+        throw &quot;Sord type names must be an array&quot;;
+      }
+
+      config.sordZ = config.sordZ || SordC.mbLean;
+
+      sordTypeIds = config.sordTypeNames.map(function (sordTypeName) {
+        return sol.common.SordTypeUtils.getSordTypeId(sordTypeName);
+      });
+    }
+
+    if (config.objKeyName) {
+      if (!sol.common.ObjectUtils.isArray(config.objKeyValues)) {
+        throw &quot;Objkey values must be an array&quot;;
+      }
+
+      config.sordZ = config.sordZ || SordC.mbAllIndex;
+    }
+
+    config.sordZ = config.sordZ || SordC.mbAll;
+
+    objIds = me.getRepoPathObjIds(objId);
+    objKeyName = config.objKeyName;
+    objKeyValues = config.objKeyValues;
+
+    sords = me.getSords(objIds, { sordZ: config.sordZ, keepOrder: true, connection: conn });
+    for (i = 0; i &lt; sords.length; i++) {
+      sord = sords[i];
+      if (sordTypeIds) {
+        for (j = 0; j &lt; sordTypeIds.length; j++) {
+          sordTypeId = sordTypeIds[j];
+          if (sord.type == sordTypeId) {
+            me.logger.exit(&quot;findInHierarchy&quot;, sord);
+            return sord;
+          }
+        }
+      }
+      if (objKeyName) {
+        currentValue = sol.common.SordUtils.getObjKeyValue(sord, objKeyName);
+        if (currentValue) {
+          for (j = 0; j &lt; objKeyValues.length; j++) {
+            objKeyValue = objKeyValues[j];
+            if (objKeyValue == currentValue) {
+              me.logger.exit(&quot;findInHierarchy&quot;, sord);
+              return sord;
+            }
+          }
+        }
+      }
+    }
+    if (config.throwException) {
+      throw &quot;No appropriate predecessor found: objId=&quot; + objId + &quot;, config=&quot; + sol.common.JsonUtils.stringifyAll(config);
+    }
+    me.logger.exit(&quot;findInHierarchy&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-moveToStoragePath'>  /**
+</span>   * Moves documents to a given storage path
+   * @param {String} startObjId Start object ID
+   * @param {String} dstStoragePathId
+   */
+  moveToStoragePath: function (startObjId, dstStoragePathId) {
+    var me = this,
+        navInfo, procInfo, jobState;
+    me.logger.enter(&quot;moveToStoragePath&quot;, arguments);
+
+    if (!startObjId) {
+      throw &quot;Start object ID is empty&quot;;
+    }
+
+    if (!dstStoragePathId) {
+      throw &quot;Storage path name is empty&quot;;
+    }
+
+    navInfo = new NavigationInfo();
+    navInfo.startIDs = [startObjId];
+
+    procInfo = new ProcessInfo();
+    procInfo.desc = &quot;Move to storage path&quot;;
+    procInfo.errorMode = ProcessInfoC.ERRORMODE_SKIP_PROCINFO;
+
+    procInfo.procMoveDocumentsToStoragePath = new ProcessMoveDocumentsToStoragePath();
+    procInfo.procMoveDocumentsToStoragePath.pathId = dstStoragePathId;
+
+    jobState = ixConnect.ix().processTrees(navInfo, procInfo);
+
+    sol.common.AsyncUtils.waitForJob(jobState.jobGuid);
+    me.logger.exit(&quot;moveToStoragePath&quot;);
+  },
+
+<span id='sol-common-RepoUtils-method-setSessionOption'>  /**
+</span>   * Sets a session option
+   * @param {Number} sessionOption Session option
+   * @param {Boolean|String} value Value
+   */
+  setSessionOption: function (sessionOption, value) {
+    var me = this,
+        sessionOptions = {};
+
+    if (typeof sessionOption == &quot;undefined&quot;) {
+      throw &quot;Option is empty&quot;;
+    }
+
+    if (typeof value == &quot;undefined&quot;) {
+      throw &quot;Value is empty&quot;;
+    }
+
+    if (typeof value == &quot;boolean&quot;) {
+      value = value ? &quot;true&quot; : &quot;false&quot;;
+    }
+
+    sessionOptions[sessionOption] = value;
+
+    me.setSessionOptions(sessionOptions);
+  },
+
+<span id='sol-common-RepoUtils-method-setSessionOptions'>  /**
+</span>   * Sets session options
+   * @param {Object} newOptions Options, e.g. { SessionOptionsC.START_DOC_WORKFLOWS: true }
+   */
+  setSessionOptions: function (newOptions) {
+    var sessionOptions, sessionOptionsObj, key, currOption, newValue;
+
+    if (!newOptions) {
+      throw &quot;Options are empty&quot;;
+    }
+
+    sessionOptions = ixConnect.ix().sessionOptions;
+    sessionOptionsObj = sol.common.ObjectUtils.getObjectFromArray(sessionOptions.options, &quot;key&quot;);
+
+    for (key in newOptions) {
+      if (newOptions.hasOwnProperty(key)) {
+        currOption = sessionOptionsObj[String(key)];
+        newValue = newOptions[key];
+        if (currOption) {
+          currOption.value = newValue;
+        } else {
+          sessionOptionsObj[String(key)] = new KeyValue(key, newValue);
+        }
+      }
+    }
+    sessionOptions.options = sol.common.ObjectUtils.getValues(sessionOptionsObj);
+    ixConnect.ix().setSessionOptions(sessionOptions);
+  },
+
+<span id='sol-common-RepoUtils-method-getSessionOptions'>  /**
+</span>   * Get session options
+   * @returns {Object}
+   */
+  getSessionOptions: function () {
+    var sessionOptions,
+        sessionOptionsObj = {},
+        i, keyValue;
+
+    sessionOptions = ixConnect.ix().sessionOptions;
+
+    for (i = 0; i &lt; sessionOptions.length; i++) {
+      keyValue = sessionOptions[i];
+      sessionOptionsObj[keyValue.key + &quot;&quot;] = keyValue.value + &quot;&quot;;
+    }
+
+    return sessionOptionsObj;
+  },
+
+<span id='sol-common-RepoUtils-method-createConnFact'>  /**
+</span>   * Creates a new connection factory
+   * @param {java.util.Properties} connProps Connection properties
+   * @param {java.util.Properties} sessOpts Session options
+   * @param {Object} overrideParams Overide Parameters
+   * @param {de.elo.ix.client.IXConnection} overrideParams.conn Connection
+   * @param {Object} overrideParams.connProps Change connection properties
+   * @param {Number} overrideParams.timeoutSeconds Timeout seconds
+   * @returns {Object}
+   *
+   * Example:
+   *
+   *     conn = sol.common.RepoUtils.createConnFact(connProps, sessOpts, {
+   *       timeoutSeconds: 300
+   *     });
+   */
+  createConnFact: function (connProps, sessOpts, overrideParams) {
+    var connFact, key;
+
+    connProps = connProps || new java.util.Properties();
+    sessOpts = sessOpts || new java.util.Properties();
+
+    overrideParams = overrideParams || {};
+    overrideParams.connProps = overrideParams.connProps || {};
+
+    for (key in overrideParams.connProps) {
+      connProps.setProperty(key, overrideParams.connProps[key]);
+    }
+
+    if (overrideParams.timeoutSeconds) {
+      connProps.setProperty(IXConnFactory.PROP_TIMEOUT_SECONDS, overrideParams.timeoutSeconds);
+    }
+
+    connFact = new IXConnFactory(connProps, sessOpts);
+
+    return connFact;
+  },
+
+<span id='sol-common-RepoUtils-method-getColorId'>  /**
+</span>   * Returns the color ID
+   * @param {String} colorName Color name
+   * @return {String} Color ID
+   */
+  getColorId: function (colorName) {
+    var me = this,
+        color;
+
+    if (!me.colors) {
+      me.readColors();
+    }
+    colorName = String(colorName).toLowerCase();
+    color = me.colors[colorName];
+    if (color) {
+      return String(color.id);
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-readColors'>  /**
+</span>   * Returns an object that contains all colors
+   * @return {Object} Colors
+   */
+  readColors: function () {
+    var me = this,
+        colors, i, color, colorName;
+
+    me.colors = {};
+
+    colors = ixConnect.ix().checkoutColors(LockC.NO);
+    for (i = 0; i &lt; colors.length; i++) {
+      color = colors[i];
+      colorName = String(color.name).toLowerCase();
+      me.colors[colorName] = color;
+    }
+
+    return me.colors;
+  },
+
+<span id='sol-common-RepoUtils-method-addColors'>  /**
+</span>   * Adds colors, if they doesn&#39;t exist
+   * @param {Array} newColors Colors, example: [{ name: &quot;sol.solution.processed&quot;, rgb: &quot;2129920&quot; }]
+   * @param {Array} Created color names
+   * @return {String[]}
+   */
+  addColors: function (newColors) {
+    var me = this,
+        createdColorNames = [];
+
+    if (!newColors) {
+      throw &quot;New colors are empty&quot;;
+    }
+
+    newColors.forEach(function (newColor) {
+      var colorData;
+      if (!me.colorExists(newColor.name)) {
+        colorData = new ColorData();
+        colorData.id = -1;
+        colorData.name = newColor.name;
+        colorData.RGB = newColor.rgb;
+        me.colors[newColor.name] = colorData;
+        createdColorNames.push(newColor.name);
+        me.colorsDirty = true;
+      }
+    });
+
+    me.writeColors();
+    return createdColorNames;
+  },
+
+<span id='sol-common-RepoUtils-method-colorExists'>  /**
+</span>   * Checks wether a color exists
+   * @param {String} colorName Color name
+   * @return {Boolean}
+   */
+  colorExists: function (colorName) {
+    var me = this;
+    if (!colorName) {
+      throw &quot;Color name is empty&quot;;
+    }
+    if (!me.colors) {
+      me.readColors();
+    }
+    colorName = String(colorName).toLowerCase();
+    return !!me.colors[colorName];
+  },
+
+<span id='sol-common-RepoUtils-method-writeColors'>  /**
+</span>   * Writes all colors
+   */
+  writeColors: function () {
+    var me = this,
+        colorArr;
+    if (me.colorsDirty) {
+      colorArr = sol.common.ObjectUtils.getValues(me.colors);
+      ixConnect.ix().checkinColors(colorArr, LockC.NO);
+    }
+    me.colors = undefined;
+    me.colorsDirty = false;
+  },
+
+<span id='sol-common-RepoUtils-method-copySords'>  /**
+</span>   * Copy Sords
+   * @param {Array|String} startIds Start object IDs
+   * @param {String} newParentId New parent object ID
+   * @param {Object} params parameters
+   * @param {String} params.targetName Target name
+   * @param {Boolean} [params.copyOnlyBaseElement=true] If true only the base element will be copied
+   * @param {Boolean} [params.copyOnlyWorkversion=true] If true only the work version will be copied
+   * @param {Boolean} [params.copyStructuresAndDocuments=true] If true structures and documents will be copied
+   * @param {Boolean} [params.takeTargetPermissions=true] If true the target permissions will be set
+   * @param {Boolean} [params.keepOriginalPermissions=false] If true the original permissions will be kept
+   * @param {Boolean} [params.keepOriginalPermissions=false] If true the original permissions will be kept
+   * @return {Object}
+   */
+  copySords: function (startIds, newParentId, params) {
+    var me = this,
+        resultObj = {},
+        navInfo, procInfo, jobState, entriesIterator, pair, dstFolderId;
+
+    params = params || {};
+    params.copyOnlyBaseElement = (params.copyOnlyBaseElement == undefined) ? true : params.copyOnlyBaseElement;
+    params.copyOnlyWorkversion = (params.copyOnlyWorkversion == undefined) ? true : params.copyOnlyWorkversion;
+    params.copyStructuresAndDocuments = (params.copyStructuresAndDocuments == undefined) ? true : params.copyStructuresAndDocuments;
+    params.takeTargetPermissions = (params.takeTargetPermissions == undefined) ? true : params.takeTargetPermissions;
+    params.keepOriginalPermissions = (params.keepOriginalPermissions == undefined) ? false : params.keepOriginalPermissions;
+
+    if (sol.common.ObjectUtils.isArray(startIds)) {
+      if (startIds.length == 0) {
+        throw &quot;Start IDs array is empty&quot;;
+      }
+    } else {
+      if (!startIds) {
+        throw &quot;Start IDs are empty&quot;;
+      } else {
+        startIds = [startIds];
+      }
+    }
+
+    if (!newParentId) {
+      throw &quot;Parent ID is empty&quot;;
+    }
+
+    dstFolderId = me.getObjId(newParentId);
+
+    if (!dstFolderId) {
+      throw &quot;Destination folder ID can&#39;t be found&quot;;
+    }
+
+    navInfo = new NavigationInfo();
+    navInfo.startIDs = startIds;
+
+    procInfo = new ProcessInfo();
+    procInfo.desc = &quot;Copy sords&quot;;
+    procInfo.errorMode = ProcessInfoC.ERRORMODE_CRITICAL_ONLY;
+
+    procInfo.procCopyElements = new ProcessCopyElements();
+    procInfo.procCopyElements.copyOptions = new CopyOptions();
+    if (params.targetName) {
+      procInfo.procCopyElements.copyOptions.targetName = params.targetName;
+    }
+
+    procInfo.procCopyElements.createMapping = true;
+    procInfo.procCopyElements.copyOptions.newParentId = dstFolderId;
+    procInfo.procCopyElements.copyOptions.copyOnlyBaseElement = params.copyOnlyBaseElement;
+    procInfo.procCopyElements.copyOptions.copyOnlyWorkversion = params.copyOnlyWorkversion;
+    procInfo.procCopyElements.copyOptions.copyStructuresAndDocuments = params.copyStructuresAndDocuments;
+    procInfo.procCopyElements.copyOptions.takeTargetPermissions = params.takeTargetPermissions;
+    procInfo.procCopyElements.copyOptions.keepOriginalPermissions = params.keepOriginalPermissions;
+
+    me.logger.debug([&quot;Copy sords: startIds = &#39;{0}&#39;, newParent.id = &#39;{1}&#39;&quot;, startIds, newParentId]);
+
+    jobState = ixConnect.ix().processTrees(navInfo, procInfo);
+
+    jobState = sol.common.AsyncUtils.waitForJob(jobState.jobGuid);
+
+    me.logger.debug([&quot;Job &#39;{0}&#39; finished: jobState.countProcessed = &#39;{1}&#39;, jobState.countErrors = &#39;{2}&#39;&quot;, procInfo.desc, jobState.countProcessed, jobState.countErrors]);
+
+    entriesIterator = jobState.procInfo.procCopyElements.copyResult.mapIdsSource2Copy.entrySet().iterator();
+
+    while (entriesIterator.hasNext()) {
+      pair = entriesIterator.next();
+      resultObj[String(pair.key)] = String(pair.value);
+    }
+
+    return resultObj;
+  },
+
+<span id='sol-common-RepoUtils-method-detectScriptEnvironment'>  /**
+</span>   * Detects the runtime context
+   * @return {String} Context, ´JC´, ´AS´ or ´IX´
+   */
+  detectScriptEnvironment: function () {
+    if (typeof workspace != &quot;undefined&quot;) {
+      return &quot;JC&quot;;
+    } else if (typeof emConnect != &quot;undefined&quot;) {
+      return &quot;AS&quot;;
+    } else if (typeof $ENV != &quot;undefined&quot;) {
+      return &quot;SH&quot;;
+    } else {
+      try {
+        java.lang.Class.forName(&quot;de.elo.ix.jscript.DBConnection&quot;);
+        return &quot;IX&quot;;
+      } catch (ignore) {
+        // ignore
+      }
+    }
+    throw &quot;Can&#39;t determinate runtime context.&quot;;
+  },
+
+<span id='sol-common-RepoUtils-method-moveSords'>  /**
+</span>   * Moves Sords
+   * @param {Array} objIds Object IDs
+   * @param {String} dstFolderId Destination folder ID
+   * @param {Object} params parameters
+   * @param {String} [params.adjustAclOverwrite=true] Adjust the ACL
+   */
+  moveSords: function (objIds, dstFolderId, params) {
+    var conn, copyInfo, i, objId;
+
+    if (!objIds || (objIds.length == 0)) {
+      return;
+    }
+
+    if (!dstFolderId) {
+      throw &quot;Destination folder ID is empty&quot;;
+    }
+
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+
+    params = params || {};
+    copyInfo = new CopyInfo();
+    copyInfo.adjustAclOverwrite = (typeof params.adjustAclOverwrite == &quot;undefined&quot;) ? true : params.adjustAclOverwrite;
+
+    for (i = 0; i &lt; objIds.length; i++) {
+      objId = objIds[i];
+      conn.ix().copySord(dstFolderId, objId, copyInfo, CopySordC.MOVE);
+    }
+  },
+
+<span id='sol-common-RepoUtils-method-createExternalLink'>  /**
+</span>   * Creates an external link
+   * @param {Object} params Parameters
+   * @param {String} params.objId Object ID
+   * @param {String} params.limitTo Limit to
+   * @param {String} [params.limitToUnit=d] Limit to unit, e.g. days
+   * @param {Number} params.times times Times
+   * @return {String} URL
+   */
+  createExternalLink: function (params) {
+    var downloadOptions, publicDownload, expiration, expirationIso, url;
+
+    params = params || {};
+    params.limitToUnit = params.limitToUnit || &quot;d&quot;;
+    params.times = params.times || java.lang.Integer.MAX_VALUE;
+
+    if (!params.objId) {
+      throw &quot;Object ID is missing&quot;;
+    }
+
+    downloadOptions = new PublicDownloadOptions();
+    downloadOptions.objId = params.objId;
+
+    if (params.limitTo) {
+      expiration = moment().add(params.limitTo, params.limitToUnit);
+      expirationIso = expiration.format(&quot;YYYYMMDDHHmmss&quot;);
+      downloadOptions.expiration = expirationIso;
+    }
+
+    if (params.times) {
+      downloadOptions.remaining = params.times;
+    }
+    publicDownload = ixConnect.ix().insertPublicDownload(downloadOptions);
+
+    url = publicDownload.url;
+    return url;
+  },
+
+<span id='sol-common-RepoUtils-method-findIds'>  /**
+</span>   * Returns object IDs by a given ´findInfo´ object
+   * @param {de.elo.ix.client.FindInfo} findInfo Find info
+   * @param {Object} params Parameters
+   * @param {String} params.findMax
+   * @param {de.elo.ix.client.SordZ} params.sordZ SordZ
+   * @return {Array}
+   */
+  findIds: function (findInfo, params) {
+    var idx = 0,
+        ids = [],
+        findResult, i;
+
+    if (!findInfo) {
+      throw &quot;FindInfo is empty&quot;;
+    }
+
+    params = params || {};
+    params.findMax = params.findMax || 1000;
+    params.sordZ = params.sordZ || SordC.mbOnlyId;
+
+    findResult = ixConnect.ix().findFirstSords(findInfo, params.findMax, params.sordZ);
+
+    ids = [];
+
+    while (true) {
+      for (i = 0; i &lt; findResult.ids.length; i++) {
+        ids.push(findResult.ids[i] + &quot;&quot;);
+      }
+      if (!findResult.moreResults) {
+        break;
+      }
+      idx += findResult.ids.length;
+      findResult = ixConnect.ix().findNextSords(findResult.searchId, idx, params.findMax, params.sordZ);
+    }
+    ixConnect.ix().findClose(findResult.searchId);
+
+    return ids;
+  }
+});
+</pre>
+</body>
+</html>

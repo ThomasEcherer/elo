@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.CheckMandatoryFields&quot; });
+
+<span id='sol-common-ix-functions-CheckMandatoryFields'>/**
+</span> * Checks if all mandatory fields are set.
+ *
+ * When called as RF it just throws an exception when not all mandatory fields are properly set.
+ *
+ * When used in a workflow script, it either updates the ELO_WF_STATUS field as configured or throws an exception (in case the check fails).
+ * If the `wfStatus` is configured, no exception will be thrown and instead the workflow status will be updated (either the the configured values or the defaults).
+ *
+ * # As workflow node
+ *
+ * `ObjId` is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;mandatory&quot;: [ { &quot;key&quot;: &quot;REFERENCE&quot;, &quot;type&quot;: &quot;GRP&quot; } ],
+ *       &quot;wfStatus&quot;: { &quot;onSuccess&quot;: &quot;yaaay&quot;, &quot;onFailure&quot;: &quot;ohNooo&quot; }
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the `objId` must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_CheckMandatoryFields&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       mandatory: [ { &quot;key&quot;: &quot;REFERENCE&quot;, &quot;type&quot;: &quot;GRP&quot; } ],
+ *       wfStatus: { &quot;onSuccess&quot;: &quot;yaaay&quot;, &quot;onFailure&quot;: &quot;ohNooo&quot; }
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.CheckMandatoryFields&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;mandatory&quot;],
+</span>
+<span id='sol-common-ix-functions-CheckMandatoryFields-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * The object which should be checked.
+   */
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-cfg-mandatory'>  /**
+</span>   * @cfg {Array} mandatory
+   * A list of mandatory fields. The objects need two properties: `key` and `type`.
+   *
+   *     &quot;mandatory&quot;: [ { &quot;key&quot;: &quot;REFERENCE&quot;, &quot;type&quot;: &quot;GRP&quot; } ],
+   *
+   * - `type`: This string can either be &quot;GRP&quot;, &quot;SORD&quot;, &quot;MAP&quot;, or &quot;WFMAP&quot;
+   * - `key`: This is, depending on the `type`, either an index field name, a map field, a workflow map field or a property name of de.elo.ix.client.Sord
+   */
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-cfg-wfStatus'>  /**
+</span>   * @cfg {Object} wfStatus
+   *
+   *     &quot;wfStatus&quot;: { &quot;onSuccess&quot;: &quot;yaaay&quot;, &quot;onFailure&quot;: &quot;ohNooo&quot; }
+   *
+   * This object can override the default workflow states which will be set after the check, if ths was used in a workflow node.
+   * If the is `undefined`, the unction will throw an exception in case the checke fails.
+   *
+   * - `onSuccess`: set as ELO_WF_STATUS after a successfull check
+   * - `onFailure`: set as ELO_WF_STATUS after a check failure
+   */
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-property-DEFAULT_PASSED_STATUS'>  /**
+</span>   * @private
+   * @property {String} [DEFAULT_PASSED_STATUS=&quot;PASSED&quot;] Default workflow status in case of a successful check
+   */
+  DEFAULT_PASSED_STATUS: &quot;PASSED&quot;,
+<span id='sol-common-ix-functions-CheckMandatoryFields-property-DEFAULT_FAILED_STATUS'>  /**
+</span>   * @private
+   * @property {String} [DEFAULT_FAILED_STATUS=&quot;FAILED&quot;] Default workflow status in case of a check failure
+   */
+  DEFAULT_FAILED_STATUS: &quot;FAILED&quot;,
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-method-process'>  /**
+</span>   * Change the node user.
+   */
+  process: function () {
+    var me = this,
+        valid = me.checkMandatoryFields(),
+        startNode, status;
+
+    if (me.wfDiagram) {
+      startNode = sol.common.WfUtils.getNode(me.wfDiagram, 0);
+      if (valid) {
+        status = (me.wfStatus &amp;&amp; me.wfStatus.onSuccess) ? me.wfStatus.onSuccess : me.DEFAULT_PASSED_STATUS;
+      } else {
+        status = (me.wfStatus &amp;&amp; me.wfStatus.onFailure) ? me.wfStatus.onFailure : me.DEFAULT_FAILED_STATUS;
+      }
+      startNode.yesNoCondition = status;
+      me.logger.info([&quot;changed ELO_WF_STATUS to &#39;{0}&#39; (objId={1}, flowId={2})&quot;, status, me.objId, me.wfDiagram.id]);
+    }
+  },
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-method-checkMandatoryFields'>  /**
+</span>   * @private
+   * @return {Boolean} status
+   */
+  checkMandatoryFields: function () {
+    var me = this,
+        sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO),
+        invalid, error;
+
+    me.logger.info([&quot;start check: objId={0}&quot;, me.objId]);
+
+    if (!Array.isArray(me.mandatory)) {
+      throw &quot;&#39;mandatory&#39; has to be an Array&quot;;
+    }
+
+    if (me.mandatory.length &lt;= 0) {
+      throw &quot;&#39;mandatory&#39; attribute can not be empty&quot;;
+    }
+
+    invalid = me.mandatory.some(function (field) {
+      var value, mapitems;
+
+      if (!field.type || !field.key) {
+        throw &quot;invalid field declaration: &quot; + JSON.stringify(field);
+      }
+
+      switch (field.type) {
+        case &quot;GRP&quot;:
+          value = sol.common.SordUtils.getObjKeyValue(sord, field.key);
+          if (me.isEmpty(value)) {
+            error = &quot;missing or empty objkey: &#39;&quot; + field.key + &quot;&#39;&quot;;
+            return true;
+          }
+          break;
+        case &quot;SORD&quot;:
+          value = sord[field.key];
+          if (me.isEmpty(value)) {
+            error = &quot;invalid or empty sordkey: &#39;&quot; + field.key + &quot;&#39;&quot;;
+            return true;
+          }
+          break;
+        case &quot;MAP&quot;:
+          mapitems = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, sord.id, [field.key], LockC.NO).items;
+          if (!mapitems || mapitems.length &lt;= 0) {
+            error = &quot;invalid or empty mapkey: &#39;&quot; + field.key + &quot;&#39;&quot;;
+            return true;
+          }
+          break;
+        case &quot;WFMAP&quot;:
+          mapitems = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_WORKFLOW_ACTIVE, sord.id, [field.key], LockC.NO).items;
+          if (!mapitems || mapitems.length &lt;= 0) {
+            error = &quot;invalid or empty wfmapkey: &#39;&quot; + field.key + &quot;&#39;&quot;;
+            return true;
+          }
+          break;
+        default:
+          throw &quot;unsuported type: &#39;&quot; + field.type + &quot;&#39;&quot;;
+      }
+      return false;
+    });
+
+    if (error) {
+      me.logger.debug(&quot;error in check: &quot;, error);
+    }
+
+    if ((!me.wfDiagram &amp;&amp; invalid) || (me.wfDiagram &amp;&amp; !me.wfStatus &amp;&amp; invalid)) {
+      throw error;
+    }
+
+    me.logger.info([&quot;check finished: objId={0}; successful={1};&quot;, me.objId, !invalid]);
+
+    return !invalid;
+  },
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-method-isEmpty'>  /**
+</span>   * @private
+   * @param {String} str
+   * @return {Boolean} status
+   */
+  isEmpty: function (str) {
+    return !str || Packages.org.apache.commons.lang.StringUtils.isBlank(str);
+  }
+});
+
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.CheckMandatoryFields
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_CheckMandatoryFields&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;mandatory&quot;),
+      module;
+
+  params.objId = wFDiagram.objId;
+  params.wfDiagram = wFDiagram;
+  module = sol.create(&quot;sol.common.ix.functions.CheckMandatoryFields&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_CheckMandatoryFields&quot;);
+}
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.CheckMandatoryFields
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_CheckMandatoryFields&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId, &quot;mandatory&quot;),
+      module;
+
+  params.objId = wFDiagram.objId;
+  params.wfDiagram = wFDiagram;
+  module = sol.create(&quot;sol.common.ix.functions.CheckMandatoryFields&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_CheckMandatoryFields&quot;);
+}
+
+<span id='sol-common-ix-functions-CheckMandatoryFields-static-method-RF_sol_function_CheckMandatoryFields'>/**
+</span> * @member sol.common.ix.functions.CheckMandatoryFields
+ * @method RF_sol_function_CheckMandatoryFields
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_CheckMandatoryFields(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_function_CheckMandatoryFields&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;, &quot;mandatory&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.CheckMandatoryFields&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_CheckMandatoryFields&quot;);
+}
+</pre>
+</body>
+</html>

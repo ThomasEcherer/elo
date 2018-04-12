@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-as-renderer-Word'>/**
+</span> * Rendering Word file from a Word template.
+ *
+ * This can either be used for creating a new Document in the archive (`objId` specified) or can create a new version on an existing object (`parentId`).
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloas
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common.as.renderer.Word&quot;, {
+
+<span id='sol-common-as-renderer-Word-cfg-requiredConfig'>  requiredConfig: [&quot;templateId&quot;],
+</span>
+<span id='sol-common-as-renderer-Word-cfg-templateId'>  /**
+</span>   * @cfg {String} templateId (reqiured)
+   * The template which should be rendered
+   */
+
+<span id='sol-common-as-renderer-Word-cfg-targetId'>  /**
+</span>   * @cfg {String} targetId (optional)
+   * The target folder to store the rendered document
+   */
+
+<span id='sol-common-as-renderer-Word-cfg-objId'>  /**
+</span>   * @cfg {String} objId (optional)
+   * The rendered document will be saved as a version of this object
+   * Either `targetId` or `objId` has to be defined.
+   */
+
+<span id='sol-common-as-renderer-Word-cfg-copyMetaData'>  /**
+</span>   * @cfg {Boolean} copyMetaData (optional)
+   * If `true`, the mask and the metadata of the template will be copied to the new document
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    if (!me.objId &amp;&amp; !me.targetId) {
+      throw &quot;IllegalArgumentException: either &#39;targetId&#39; or &#39;objId&#39; has to defined&quot;;
+    }
+  },
+
+<span id='sol-common-as-renderer-Word-method-render'>  render: function (name, data) {
+</span>    var me = this,
+        config = {},
+        templateSord;
+
+    if (me.objId) {
+      config.objId = me.objId;
+    } else {
+      config.name = name;
+      config.parentId = me.targetId;
+    }
+
+    config.format = &quot;docx&quot;;
+    if (me.copyMetaData === true) {
+      templateSord = ixConnect.ix().checkoutSord(me.templateId, SordC.mbAllIndex, LockC.NO);
+      config.maskId = templateSord.mask;
+      config.objKeysObj = sol.common.SordUtils.getTemplateSord(templateSord).sord.objKeys;
+    }
+
+    return me.renderWord(data, config);
+  },
+
+<span id='sol-common-as-renderer-Word-method-renderWord'>  /**
+</span>   * @private
+   * @param {Object} data
+   * @param {Object} config
+   * @return {Object}
+   */
+  renderWord: function (data, config) {
+    var me = this,
+        result = {},
+        wordDocument;
+
+    try {
+      wordDocument = sol.create(&quot;sol.common.as.WordDocument&quot;, {});
+      wordDocument.openFromRepo({ objId: me.templateId });
+      wordDocument.fillContentControls(data);
+
+      result.objId = wordDocument.saveToRepo(config);
+    } catch (ex) {
+      me.logger.error([&quot;error rendering report &#39;{0}&#39; (templateId=&#39;{1}&#39;)&quot;, config.name, me.templateId], ex);
+    }
+
+    return result;
+  }
+
+});
+</pre>
+</body>
+</html>

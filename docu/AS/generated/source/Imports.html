@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">//Import the IndexServer API classes.
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.de.elo.mover.main);
+importPackage(Packages.java.lang);
+importPackage(Packages.java.sql);
+importPackage(Packages.sun.jdbc.odbc);
+importPackage(Packages.java.io);
+importPackage(Packages.org.apache.commons.io);
+importPackage(Packages.javax.mail);
+importPackage(Packages.javax.mail.internet);
+importPackage(Packages.java.util);
+importPackage(Packages.org.apache.commons.lang);
+importPackage(Packages.org.apache.commons.httpclient);
+importPackage(Packages.org.apache.commons.httpclient.methods);
+
+importPackage(Packages.org.json);
+
+var EM_VERSION_NO = &quot;9.00.000&quot;;
+
+
+var NAME;
+var ARCDATE;
+var DOCDATE;
+var OBJCOLOR;
+var OBJDESC;
+var OBJTYPE;
+var ARCHIVINGMODE;
+var ACL;
+var BACKUP_ACL;
+
+var EM_ACT_SORD;
+
+var EM_PARENT_ID;
+var EM_PARENT_ACL;
+
+var EM_NEW_DESTINATION = new Array();
+var EM_FIND_RESULT = null;
+var EM_START_INDEX = 0;
+var EM_MASK_LOADED = -1;
+var EM_WRITE_CHANGED = false;
+var EM_TW_MAINPARENT = true;
+var EM_WITH_LOCK = false;
+var EM_ALLOWALLMASKS = false;
+
+var EM_TEMP;
+var EM_ERROR;
+
+// Parameter fuer manuell getriggerte Ausfuehrung
+var EM_PARAM1;
+var EM_PARAM2;
+var EM_PARAM3;
+var EM_USERID;
+
+// Tree walk parameter
+var EM_TREE_STATE;
+var EM_PARENT_SORD;
+var EM_ROOT_SORD;
+var EM_INDEX_LOADED;
+var EM_TREE_LEVEL;
+var EM_SAVE_TREE_ROOT;
+var EM_TREE_EVAL_CHILDREN;
+var EM_TREE_ABORT_WALK;
+var EM_TREE_MAX_LEVEL;
+
+// Workflow
+var EM_TASKLIST;
+var EM_WF_NEXT;
+var EM_WF_NODE;
+var EM_WF_STATUS;
+var EM_WF_FILTER_NAME;
+
+var EM_WF_EXPORT_ROOT = &quot;c:\\temp\\wfexport&quot;;
+
+// Mail
+var MAIL_SESSION;
+var MAIL_SMTP_HOST;
+var MAIL_INBOX;
+var MAIL_STORE;
+var MAIL_MESSAGE;
+var MAIL_POINTER;
+var MAIL_MESSAGES;
+var MAIL_DELETE_ARCHIVED;
+var MAIL_ALLOW_DELETE;
+var MAIL_CONNECT_NAME;
+
+
+
+
+// JDBC Database connections
+//
+// driver: Java class name of the JDBC driver, see driver documentation
+// url: Connection URL to the database, see driver documentation
+// user, password: Database login credentials, if needed
+// initdone: internal field, always initialize with false
+// classloaded: internal field, always initialize with false
+// dbcn: internal field, always initialize with null
+
+var EM_connections = [
+    {
+        driver: 'sun.jdbc.odbc.JdbcOdbcDriver',
+        url: 'jdbc:odbc:Driver={Microsoft Access Driver (*.mdb)};DBQ=C:\\Temp\\Fuhrpark.mdb',
+        user: '',
+        password: '',
+        initdone: false,
+        classloaded: false,
+        dbcn: null
+    },
+    {
+        driver: 'com.microsoft.sqlserver.jdbc.SQLServerDriver',
+        url: 'jdbc:sqlserver://srvtdev02:1433',
+        user: 'elodb',
+        password: '87-190-158-17-188-234-240-95',
+        initdone: false,
+        classloaded: false,
+        dbcn: null
+    },
+    {
+        driver: 'oracle.jdbc.OracleDriver',
+        url: 'jdbc:oracle:thin:@srvoracle:1521:eloorcl',
+        user: 'elodb',
+        password: 'elodb',
+        initdone: false,
+        classloaded: false,
+        dbcn: null
+    },
+    {
+        driver: 'com.ibm.db2.jcc.DB2Driver',
+        url: 'jjdbc:db2://srvt02:50000/elotestu',
+        user: 'elodb',
+        password: 'elodb',
+        initdone: false,
+        classloaded: false,
+        dbcn: null
+    }
+];</pre>
+</body>
+</html>

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Set&quot; }); // eslint-disable-line one-var
+
+<span id='sol-common-ix-functions-Set'>/**
+</span> * Edits an existing object by changing the mask or setting different values.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ *
+ * Following configuration should be applied to the comments field for a mask and field update:
+ *
+ * ## Example
+ *
+ *     {
+ *       &quot;entries&quot;: [{
+ *         &quot;type&quot;: &quot;MASK&quot;,        // changes the mask of the sord, if defined more than once, the first one will be used
+ *         &quot;value&quot;: &quot;Basic Entry&quot;
+ *       }, {
+ *         &quot;type&quot;: &quot;SORD&quot;,
+ *         &quot;key&quot;: &quot;name&quot;,
+ *         &quot;value&quot;: &quot;Contract {{sord.objKeys.CONTRACT_NAME}} - {{count &#39;MY_CONTRACT_COUNTER&#39;}}&quot;,
+ *         &quot;useTemplating&quot;: true
+ *       }, {
+ *         &quot;type&quot;: &quot;GRP&quot;,
+ *         &quot;key&quot;: &quot;CONTRACT_STATUS&quot;,
+ *         &quot;value&quot;: &quot;D&quot;,
+ *         &quot;useDynKwl&quot;: true,
+ *         &quot;dynKwlCfg&quot;: {
+ *           &quot;filterColumn&quot;: 0,
+ *           &quot;returnColumn&quot;: 2
+ *         }
+ *       }, {
+ *         &quot;type&quot;: &quot;MAP&quot;,
+ *         &quot;key&quot;: &quot;USER&quot;,
+ *         &quot;value&quot;: &quot;Bill Gates&quot;,
+ *       }, {
+ *         &quot;type&quot;: &quot;WFMAP&quot;,
+ *         &quot;key&quot;: &quot;USER&quot;,
+ *         &quot;value&quot;: &quot;Steve Jobs&quot;
+ *       }]
+ *     }
+ *
+ * Following configuration should be applied to the comments field and will set a value from the fields KWL staring with &#39;3&#39;
+ *
+ *     {
+ *       &quot;entries&quot;: [{
+ *         &quot;type&quot;: &quot;GRP&quot;,
+ *         &quot;key&quot;: &quot;INVOICE_STATUS&quot;,
+ *         &quot;value&quot;: &quot;3&quot;,
+ *         &quot;useKwl&quot;: true
+ *        }]
+ *     }
+ *
+ * Following configuration will set a field from the fields dynamic KWL staring with &#39;M&#39; (e.g. M - month) from a localized dynamic KWL
+ *
+ *     {
+ *       &quot;type&quot;: &quot;GRP&quot;,
+ *       &quot;key&quot;: &quot;REMINDER_PERIOD_UNIT&quot;,
+ *       &quot;value&quot;: &quot;M&quot;,
+ *       &quot;useDynKwl&quot;: true,
+ *       &quot;dynKwlCfg&quot;: {
+ *         &quot;returnColumn&quot;: 2,
+ *         &quot;filterColumn&quot;: 0
+ *       }
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_Set&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       type: &quot;GRP&quot;,
+ *       key: &quot;INVOICE_STATUS&quot;,
+ *       value: &quot;3&quot;,
+ *       useKwl: true
+ *     });
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.02.004
+ *
+ * @eloix
+ * @requires sol.Logger
+ * @requires sol.common.SordUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.Set&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Set-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;entries&quot;],
+</span>
+<span id='sol-common-ix-functions-Set-property-types'>  types: [&quot;MASK&quot;, &quot;SORD&quot;, &quot;GRP&quot;, &quot;MAP&quot;, &quot;FORMBLOB&quot;, &quot;WFMAP&quot;],
+</span>
+
+<span id='sol-common-ix-functions-Set-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID
+   */
+
+<span id='sol-common-ix-functions-Set-cfg-entries'>  /**
+</span>   * @cfg {Object[]} entries (required)
+   * Entries that contains the values to set
+   */
+
+<span id='sol-common-ix-functions-Set-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId
+   * Flow ID
+   */
+
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sordMaskChanged = false;
+  },
+
+<span id='sol-common-ix-functions-Set-method-process'>  /**
+</span>   * Sets a field value
+   */
+  process: function () {
+    var me = this,
+        i, entry, type, func, entries;
+
+    if (!me.entries) {
+      return;
+    }
+
+    me.entries = sol.common.ObjectUtils.clone(me.entries);
+
+    me.separatedEntries = {};
+
+    me.sordData = [];
+
+    me.sordMapKeyValues = [];
+    me.sordFormdataValues = []; //blob
+    me.wfMapKeyValues = [];
+
+    me.sord = sol.common.RepoUtils.getSord(me.objId, { sordZ: SordC.mbAllIndex });
+
+    for (i = 0; i &lt; me.entries.length; i++) {
+      entry = me.entries[i];
+      type = entry.type.toUpperCase();
+      if (me.types.indexOf(entry.type) &lt; 0) {
+        throw &quot;Unsupported type: &quot; + entry.type;
+      }
+      me.separatedEntries[type] = me.separatedEntries[type] || [];
+      me.separatedEntries[type].push(entry);
+    }
+
+    for (i = 0; i &lt; me.types.length; i++) {
+      type = me.types[i];
+      func = me[&quot;processType&quot; + type];
+      entries = me.separatedEntries[type];
+      if (func &amp;&amp; entries) {
+        func.call(me, me.separatedEntries[type]);
+      }
+    }
+
+    me.saveSordValues();
+    me.saveWorkflowValues();
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeMASK'>  processTypeMASK: function (maskEntries) {
+</span>    var me = this,
+        mask;
+
+    if (maskEntries.length &gt; 0) {
+      mask = maskEntries[0].value;
+      if (mask &amp;&amp; sol.common.SordUtils.docMaskExists(mask)) {
+        me.sord = ixConnect.ix().changeSordMask(me.sord, mask, EditInfoC.mbSord).sord;
+        me.sordMaskChanged = true;
+      }
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeSORD'>  processTypeSORD: function (sordEntries) {
+</span>    var me = this;
+    me.applyTemplates(sordEntries);
+    me.sordData = me.sordData.concat(sordEntries);
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeGRP'>  processTypeGRP: function (grpEntries) {
+</span>    var me = this,
+        i, entry;
+
+    me.applyTemplates(grpEntries);
+
+    for (i = 0; i &lt; grpEntries.length; i++) {
+      entry = grpEntries[i];
+      if (entry.useKwl) {
+        entry.value = me.getValueFromKwl(entry.key, entry.value);
+      } else if (entry.useDynKwl) {
+        entry.value = me.getValueFromDynKwl(me.sord.maskName, entry.key, entry.value, entry.dynKwlCfg);
+      }
+    }
+    me.sordData = me.sordData.concat(grpEntries);
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeMAP'>  processTypeMAP: function (sordMapEntries) {
+</span>    var me = this,
+        i, entry;
+    me.applyTemplates(sordMapEntries);
+
+    for (i = 0; i &lt; sordMapEntries.length; i++) {
+      entry = sordMapEntries[i];
+      me.sordMapKeyValues.push(new KeyValue(entry.key, entry.value));
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeFORMBLOB'>  processTypeFORMBLOB: function (sordMapEntries) {
+</span>    var me = this, blb,
+        i, entry;
+    me.applyTemplates(sordMapEntries);
+
+    for (i = 0; i &lt; sordMapEntries.length; i++) {
+      entry = sordMapEntries[i];
+      blb = new MapValue((new java.lang.String(entry.key)), (new FileData(&quot;text/plain&quot;, (new java.lang.String(entry.value)).getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+      me.sordFormdataValues.push(blb);
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-processTypeWFMAP'>  processTypeWFMAP: function (wfMapEntries) {
+</span>    var me = this,
+        i, entry;
+    me.applyTemplates(wfMapEntries);
+
+    for (i = 0; i &lt; wfMapEntries.length; i++) {
+      entry = wfMapEntries[i];
+      me.wfMapKeyValues.push(new KeyValue(entry.key, entry.value));
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-applyTemplates'>  applyTemplates: function (entries) {
+</span>    var me = this,
+        i, entry;
+
+    for (i = 0; i &lt; entries.length; i++) {
+      entry = entries[i];
+      if (entry.useTemplating &amp;&amp; entry.value) {
+        me.tplSord = me.tplSord || sol.common.SordUtils.getTemplateSord(me.sord);
+        entry.value = sol.create(&quot;sol.common.Template&quot;, { source: entry.value }).apply(me.tplSord);
+      }
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-saveSordValues'>  /**
+</span>   * @private
+   */
+  saveSordValues: function () {
+    var me = this,
+        sordDirty = me.sordMaskChanged;
+
+    if (me.sordData &amp;&amp; (me.sordData.length &gt; 0)) {
+      sol.common.SordUtils.updateSord(me.sord, me.sordData);
+      sordDirty = true;
+    }
+    if (sordDirty) {
+      ixConnect.ix().checkinSord(me.sord, SordC.mbAllIndex, LockC.NO);
+    }
+    if (me.sordMapKeyValues &amp;&amp; (me.sordMapKeyValues.length &gt; 0)) {
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.sord.id || me.objId, me.sord.id || me.objId, me.sordMapKeyValues, LockC.NO);
+    }
+    if (me.sordFormdataValues &amp;&amp; (me.sordFormdataValues.length &gt; 0)) { // blob
+      ixConnect.ix().checkinMap(&quot;formdata&quot;, me.sord.id || me.objId, me.sord.id || me.objId, me.sordFormdataValues, LockC.NO);
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-saveWorkflowValues'>  /**
+</span>   * @private
+   */
+  saveWorkflowValues: function () {
+    var me = this;
+    if (me.wfMapKeyValues &amp;&amp; (me.wfMapKeyValues.length &gt; 0)) {
+      if (!me.flowId) {
+        throw &quot;Flow ID is empty&quot;;
+      }
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_WORKFLOW_ACTIVE, me.flowId, me.sord.id || me.objId, me.wfMapKeyValues, LockC.NO);
+    }
+  },
+
+<span id='sol-common-ix-functions-Set-method-getValueFromKwl'>  /**
+</span>   * @private
+   * Retrieves a value from the keyword list of the specified field.
+   * It checks, if one of the entries in the keyword list starts with the valuePrefix.
+   * @param {String} fieldName
+   * @param {String} valuePrefix
+   * @return {String} The found item from the keyword list or the valuePrefix, if nothing was found
+   */
+  getValueFromKwl: function (fieldName, valuePrefix) {
+    var kwl, items, i, item;
+
+    kwl = ixConnect.ix().checkoutKeywordList(fieldName, KeywordC.mbView, 30, LockC.NO);
+
+    if (kwl) {
+      items = kwl.children;
+      for (i = 0; i &lt; items.length; i++) {
+        item = items[i].text;
+        if (item.startsWith(valuePrefix)) {
+          return item;
+        }
+      }
+    } else {
+      this.logger.warn([&quot;No keywordlist for field &#39;{0}&#39;&quot;, fieldName]);
+    }
+
+    this.logger.warn([&quot;No keywordlist match for: &#39;{0}&#39;&quot;, valuePrefix]);
+    return valuePrefix;
+  },
+
+<span id='sol-common-ix-functions-Set-method-getValueFromDynKwl'>  /**
+</span>   * @private
+   * Retrieves a value from the dynamic keyword list of the spezified field.
+   * It checks, if one of the entries in the keyword list starts with the valuePrefix.
+   * @param {String} maskName
+   * @param {String} fieldName
+   * @param {String} valuePrefix
+   * @param {Object} config
+   * @return {String} The found item from the keyword list or the valuePrefix, if nothing was found
+   */
+  getValueFromDynKwl: function (maskName, fieldName, valuePrefix, config) {
+    var params, result;
+
+    params = { data: valuePrefix };
+
+    if (config) {
+      params.returnColumn = config.returnColumn;
+      params.filterColumn = config.filterColumn;
+    }
+
+    result = sol.common.SordUtils.getDynamicKeywordlistValue(maskName, fieldName, params);
+
+    if (result.length &lt;= 0) {
+      this.logger.warn([&quot;No keywordlist match for: &#39;{0}&#39;&quot;, valuePrefix]);
+    } else if (result.length &gt; 1) {
+      this.logger.warn([&quot;No unique keywordlist match for: &#39;{0}&#39;&quot;, valuePrefix]);
+    } else {
+      valuePrefix = result[0];
+    }
+
+    return result;
+  }
+});
+
+<span id='sol-common-ix-functions-Set-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_Set&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId, &quot;entries&quot;),
+
+  params.objId = wfDiagram.objId;
+  params.flowId = wfDiagram.id;
+  module = sol.create(&quot;sol.common.ix.functions.Set&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Set&quot;);
+}
+
+<span id='sol-common-ix-functions-Set-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_Set&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId, &quot;entries&quot;);
+
+  params.objId = wfDiagram.objId;
+  params.flowId = wfDiagram.id;
+  module = sol.create(&quot;sol.common.ix.functions.Set&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_Set&quot;);
+}
+
+
+<span id='sol-common-ix-functions-Set-static-method-RF_sol_function_Set'>/**
+</span> * @member sol.common.ix.functions.Set
+ * @method RF_sol_function_Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Set(ec, args) {
+  logger.enter(&quot;RF_sol_function_Set&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;objId&quot;, &quot;entries&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.Set&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_Set&quot;);
+}
+</pre>
+</body>
+</html>

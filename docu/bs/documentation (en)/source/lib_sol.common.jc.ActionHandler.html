@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importClass(Packages.de.elo.client.scripting.constants.CONSTANTS);
+
+//@include lib_handlebars.js
+//@include lib_Class.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.AsUtils.js
+//@include lib_sol.common.HttpUtils.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.jc.ClipboardUtils.js
+
+<span id='sol-common-jc-ActionHelper'>/**
+</span> * This class provides helper functions for executing complex actions.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ * @requires sol.common.Config
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler
+ */
+sol.define(&quot;sol.common.jc.ActionHelper&quot;, {
+  singleton: true,
+
+<span id='sol-common-jc-ActionHelper-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-jc-ActionHelper-method-executeSimpleAction'>  executeSimpleAction: function (objId, cfg) {
+</span>    var me = this,
+        actionCfg = me.initActionCfg(objId);
+
+    me.logger.info([&quot;executing simple action on objId: {0}&quot;, objId], cfg);
+
+    if (!cfg || !cfg.fct) {
+      throw &quot;executing simple action is missing mandatory config properties.&quot;;
+    }
+
+    me.handleExecuteAction(cfg, actionCfg);
+  },
+
+<span id='sol-common-jc-ActionHelper-method-executeAdvancedAction'>  /**
+</span>   * Helps in executing advanced actions that include precondition checks and
+   * different object types.
+   *
+   * Advanced action configurations are handled in the following order:
+   *
+   * 1.  select types (optional)
+   * 2.  check preconditions (type selection possible if returned by check) (optional)
+   * 3.  select target (optional)
+   * 4.  execute action (IX/ AS) (required)
+   *
+   * Please note that step 1 and 2 can be used for selecting types. If a special function
+   * is used for type selection (Step 1), the user selection is overriden if a second
+   * type selection is handled by step 2.
+   *
+   *     {
+   *       preconditions: {
+   *         fct: &#39;RF_sol_contact_service_CheckContactPreconditions&#39;,
+   *       },
+   *       fct: &#39;RF_sol_contact_action_CreateContact&#39;,
+   *       cfgTemplate: &#39;{
+   *         &quot;parentId&quot;: &quot;{{objId}}&quot;,
+   *         &quot;contactType&quot;: &quot;{{type.name}},
+   *         &quot;templateId&quot;: &quot;{{type.objId}}
+   *       }&#39;,
+   *       locale: {
+   *           errorDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.error.title&#39;],
+   *           typesDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.title&#39;],
+   *           typesDlgHeader: locale[&#39;sol.contact.client.contact.create.dialog.header&#39;],
+   *           typesDlgText: locale[&#39;sol.contact.client.contact.create.dialog.text&#39;],
+   *           typesDlgNoTypes: locale[&#39;sol.contact.client.contact.create.msg.notype&#39;],
+   *
+   *           targetDlgTitle: locale[&#39;sol.contact.client.contact.create.dialog.title&#39;],
+   *           targetDlgHeader: locale[&#39;sol.contact.client.contact.create.dialog.header&#39;],
+   *           targetDlgText: locale[&#39;sol.contact.client.contact.create.dialog.text&#39;],
+   *       }
+   *     }
+   *
+   * @param {String} objId Object ID
+   * @param {Object} cfg Configuration
+   */
+  executeAdvancedAction: function (objId, cfg) {
+    var me = this,
+        actionCfg = me.initActionCfg(objId),
+        checkResult, selectedType, selectedTarget;
+
+    me.logger.info([&quot;executing advanced action on objId: {0}&quot;, objId], cfg);
+
+    if (!cfg || !cfg.fct || !cfg.cfgTemplate) {
+      throw &quot;executing advanced action is missing mandatory config properties.&quot;;
+    }
+
+    // handle type selection
+    if (me.requiresTypeSelection(cfg)) {
+      selectedType = me.handleTypeSelection(cfg, actionCfg);
+      if (!selectedType) {
+        return;
+      }
+      actionCfg.type = selectedType;
+    }
+
+    // handle prepare &amp; preconditions
+    if (me.requiresPrepare(cfg)) {
+      checkResult = sol.common.IxUtils.execute(cfg.preconditions.fct, { targetId: objId });
+      if (checkResult.valid !== true) {
+        workspace.showAlertBox(cfg.locale.errorDlgTitle, checkResult.msg);
+        return;
+      }
+    }
+
+    if (checkResult) {
+      if (checkResult.targetId &amp;&amp; (checkResult.targetId != objId)) {
+        me.logger.info([&quot;changed objId by prepare: {0} -&gt; {1}&quot;, objId, checkResult.targetId]);
+        actionCfg.objId = checkResult.targetId;
+      }
+      if (checkResult.types) {
+        actionCfg.type = me.handleTypeSelection(cfg, actionCfg, checkResult.types);
+        if (!actionCfg.type) {
+          return;
+        }
+      }
+      actionCfg.preconditions = checkResult;
+    }
+
+    // handle target selection
+    if (me.requiresTargetSelection(cfg)) {
+      selectedTarget = me.handleTargetSelection(cfg);
+      if (!selectedTarget) {
+        return;
+      }
+      actionCfg.tree = selectedTarget;
+    }
+
+    // handle execution
+    me.handleExecuteAction(cfg, actionCfg);
+
+  },
+
+<span id='sol-common-jc-ActionHelper-method-initActionCfg'>  initActionCfg: function (objId) {
+</span>    var actionCfg = { objId: objId };
+    return actionCfg;
+  },
+
+<span id='sol-common-jc-ActionHelper-method-getConfigObject'>  getConfigObject: function (cfgTemplate, data) {
+</span>    var str = Handlebars.compile(cfgTemplate)(data);
+    return JSON.parse(str);
+  },
+
+<span id='sol-common-jc-ActionHelper-method-requiresPrepare'>  requiresPrepare: function (cfg) {
+</span>    return cfg.preconditions &amp;&amp; cfg.preconditions.fct;
+  },
+
+<span id='sol-common-jc-ActionHelper-method-requiresTypeSelection'>  requiresTypeSelection: function (cfg) {
+</span>    if (cfg.selectType &amp;&amp; cfg.selectType.fct) {
+      return true;
+    }
+    return false;
+  },
+
+<span id='sol-common-jc-ActionHelper-method-requiresTargetSelection'>  requiresTargetSelection: function (cfg) {
+</span>    return !!cfg.selectTree;
+  },
+
+<span id='sol-common-jc-ActionHelper-method-handleTypeSelection'>  handleTypeSelection: function (cfg, actionCfg, types) {
+</span>    var me = this,
+        typeServiceCfg, optionNames, optionDescriptions, icons, selected;
+
+    if (!types) {
+      typeServiceCfg = (cfg.selectType.cfgTemplate) ? me.getConfigObject(cfg.selectType.cfgTemplate, actionCfg) : {};
+      types = sol.common.IxUtils.execute(cfg.selectType.fct, typeServiceCfg);
+    }
+
+    if (!types || (types.length === 0)) {
+      workspace.setFeedbackMessage(cfg.locale.typesDlgNoTypes);
+      return null;
+    }
+
+    if (types.length &gt; 1) {
+      optionNames = types.map(function (type) {
+        return type.name;
+      });
+      optionDescriptions = types.map(function (type) {
+        return type.desc;
+      });
+      icons = [];
+      selected = workspace.showCommandLinkDialog(
+        cfg.locale.typesDlgTitle,
+        cfg.locale.typesDlgHeader,
+        cfg.locale.typesDlgText,
+        CONSTANTS.DIALOG_ICON.QUESTION,
+        optionNames,
+        optionDescriptions,
+        icons);
+    } else {
+      selected = 1;
+    }
+
+    return (selected &lt; 0) ? null : types[selected - 1];
+  },
+
+<span id='sol-common-jc-ActionHelper-method-handleTargetSelection'>  handleTargetSelection: function (cfg) {
+</span>    var me = this,
+        documentsSelectable = (cfg.selectTree.hasOwnProperty(&quot;document&quot;)) ? cfg.selectTree.document : true,
+        folderSelectable = (cfg.selectTree.hasOwnProperty(&quot;folder&quot;)) ? cfg.selectTree.folder : true,
+        showFavorites = (cfg.selectTree.hasOwnProperty(&quot;favorite&quot;)) ? cfg.selectTree.favorite : true,
+        dlgRootId, config, selectedId, selectedElement;
+
+    if (cfg.selectTree.root) {
+      dlgRootId = ixConnect.ix().checkoutSord(cfg.selectTree.root, SordC.mbOnlyId, LockC.NO).id;
+    } else if (cfg.selectTree.rootFromCfgFile &amp;&amp; cfg.selectTree.rootFromCfgProperty) {
+      config = sol.create(&quot;sol.common.Config&quot;, { load: cfg.selectTree.rootFromCfgFile });
+      dlgRootId = ixConnect.ix().checkoutSord(me.getConfigObject(cfg.selectTree.rootFromCfgProperty, config), SordC.mbOnlyId, LockC.NO).id;
+    }
+
+    if (!dlgRootId) {
+      return null;
+    }
+
+    me.logger.info(&quot;action requires target selection. Using root: {0}&quot;, dlgRootId);
+
+    selectedId = workspace.showTreeSelectDialog(
+      cfg.locale.treeDlgTitle,
+      cfg.locale.treeDlgHeader,
+      dlgRootId, documentsSelectable, folderSelectable, showFavorites);
+
+    if (selectedId &gt; 0) {
+      selectedElement = archive.getElement(selectedId);
+      return { name: selectedElement.name + &quot;&quot;, objId: selectedElement.id + &quot;&quot; };
+    }
+
+    return null;
+  },
+
+<span id='sol-common-jc-ActionHelper-method-handleExecuteAction'>  /**
+</span>   * Handles the final execution of the action.
+   * @private
+   * @param {Object} cfg Configuration
+   * @param {Object} actionCfg Action configuration
+   */
+  handleExecuteAction: function (cfg, actionCfg) {
+    var me = this,
+        cfgObject = (cfg.cfgTemplate) ? me.getConfigObject(cfg.cfgTemplate, actionCfg) : {};
+    try {
+      switch (cfg.type) {
+        case &quot;AS&quot;:
+          sol.common.jc.ActionHandler.executeAS(cfg.solution, cfg.fct, cfgObject);
+          break;
+        default:
+          sol.common.jc.ActionHandler.execute(cfg.fct, cfgObject);
+      }
+    } catch (ex) {
+      me.logger.error([&quot;Error executing action: &#39;{0}&#39;&quot;, cfg.fct], ex);
+      workspace.showAlertBox(&quot;Error executing action&quot;, ex);
+    }
+  }
+
+});
+
+<span id='sol-common-jc-ActionHandler'>/**
+</span> * This class provides utility functions to call IX or AS functions and handle the response in a standardized way.
+ *
+ * Following example shows executing an Index Server action.
+ *
+ *     sol.common.jc.ActionHandler.execute(&#39;RF_sol_pubsec_functions_CreateFile&#39;, {
+ *         objId: &#39;123&#39;
+ *       }, function ( result ) {
+ *         // handle resultObj returned by the action
+ *       });
+ *
+ * # Supported events
+ *
+ * - REFRESH
+ * - GOTO
+ * - DIALOG
+ * - ERROR
+ * - ACTION
+ * - FEEDBACK
+ *
+ * # Conditional events
+ * It is possible for actions to declare the events as conditional.
+ * Therefor they have to declare a `ON` attribute (see {@link sol.common.ActionBase}).
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.IxUtils
+ */
+sol.define(&quot;sol.common.jc.ActionHandler&quot;, {
+  singleton: true,
+
+<span id='sol-common-jc-ActionHandler-method-execute'>  /**
+</span>   * Executes a IX registered function and handles the response in a standardized way.
+   *
+   * Depricated feature:
+   * If special handling is needed a custom callback can be spezified as parameter.
+   * This callback get&#39;s the result Object of the registered function as only parameter.
+   *
+   * @param {String} registeredFunctionName
+   * @param {Object} params (optional) The configuration object which will be send to the registered function
+   * @param {Function} callback (optional) Should not be used, due to client interoperability
+   */
+  execute: function (registeredFunctionName, params, callback) {
+    var me = this,
+        resultObj;
+
+    workspace.setWaitCursor();
+    try {
+      resultObj = sol.common.IxUtils.execute(registeredFunctionName, params);
+
+      if (callback &amp;&amp; Object.prototype.toString.call(callback) === &quot;[object Function]&quot;) {
+        me.logger.warn(&quot;Use of &#39;callback&#39; parameter is depricated and therefore not recommended.&quot;);
+        callback.call(me, resultObj);
+        workspace.setNormalCursor();
+        return;
+      }
+
+      if (resultObj) {
+        me.handleEvents(resultObj.events);
+      }
+
+    } catch (ex) {
+      sol.common.jc.ClipboardUtils.setText(ex);
+      me.logger.error([&quot;Error calling RF &#39;{0}&#39;&quot;, registeredFunctionName], ex);
+      throw ex;
+    } finally {
+      workspace.setNormalCursor();
+    }
+  },
+
+<span id='sol-common-jc-ActionHandler-method-executeAS'>  /**
+</span>   * Executes an ELOas ruleset and handles the response in a standardized way.
+   *
+   * If spezial handling is needed a custom callback can be spezified as parameter.
+   * This callback get&#39;s the result Object of the registered function as only parameter.
+   *
+   * @param {String} solutionName Name used to determine the ELOas configuration (see {@link sol.common.Config#loadEloAsConfig loadEloAsConfig})
+   * @param {String} ruleName Rule name
+   * @param {Object} param2Obj (optional) The configuration object which will be send to the ELOas rule as PARAM2 (JSON String)
+   * @param {Function} callback (optional) Should not be used anymore, due to client interoperability
+   * @param {Boolean} async (optional) Not supported anymore, due to client interoperability
+   */
+  executeAS: function (solutionName, ruleName, param2Obj, callback, async) {
+    var me = this,
+        resultObj = {},
+        language, result;
+
+    workspace.setWaitCursor();
+    try {
+      language = ixConnect.loginResult.clientInfo.language + &quot;&quot;;
+
+      result = sol.common.IxUtils.execute(&quot;RF_sol_common_service_ExecuteAsAction&quot;, {
+        solution: solutionName,
+        action: ruleName,
+        config: param2Obj,
+        connParams: {
+          language: language
+        }
+      });
+
+      if (async) {
+        workspace.setNormalCursor();
+        return;
+      }
+
+      resultObj = {};
+      if (result) {
+        resultObj = JSON.parse(result.content);
+      }
+
+      if (callback &amp;&amp; Object.prototype.toString.call(callback) === &quot;[object Function]&quot;) {
+        me.logger.warn(&quot;Use of &#39;callback&#39; parameter is depricated and therefore not recommended.&quot;);
+        callback.call(me, resultObj);
+        workspace.setNormalCursor();
+        return;
+      }
+
+      if (resultObj.events &amp;&amp; (resultObj.events.length &gt; 0)) {
+        resultObj.events.forEach(function (event) {
+          event.solutionName = solutionName;
+          event.async = async;
+        });
+      }
+
+      if (resultObj) {
+        me.handleEvents(resultObj.events);
+      }
+    } catch (ex) {
+      sol.common.jc.ClipboardUtils.setText(ex);
+      me.logger.error([&quot;Error calling ELOas direct rule &#39;{0}&#39;&quot;, ruleName], ex);
+      throw ex;
+    } finally {
+      workspace.setNormalCursor();
+    }
+  },
+
+<span id='sol-common-jc-ActionHandler-method-handleEvents'>  /**
+</span>   * @private
+   * @param {Array} events
+   */
+  handleEvents: function (events) {
+    var eventTypes = sol.common.IxUtils.CONST.EVENT_TYPES,
+        eventChain;
+
+    if (events) {
+      eventChain = sol.create(&quot;sol.common.jc.ActionHandler.EventChain&quot;);
+      events.forEach(function (event) {
+        switch (event.ID) {
+          case eventTypes.REFRESH:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Refresh&quot;);
+            break;
+          case eventTypes.GOTO:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Goto&quot;);
+            break;
+          case eventTypes.DIALOG:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Dialog&quot;);
+            break;
+          case eventTypes.ERROR:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Error&quot;);
+            break;
+          case eventTypes.ACTION:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Action&quot;);
+            break;
+          case eventTypes.FEEDBACK:
+            event.$handler = sol.create(&quot;sol.common.jc.ActionHandler.Feedback&quot;);
+            break;
+          default:
+            break;
+        }
+        eventChain.add(event);
+      });
+
+      eventChain.chain();
+    }
+  }
+
+});
+
+<span id='sol-common-jc-ActionHandler-EventChain'>/**
+</span> * This class handles the asynchrous event handling for the JavaClient `sol.common.jc.ActionHandler`
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.EventChain&quot;, {
+
+<span id='sol-common-jc-ActionHandler-EventChain-property-events'>  /**
+</span>   * @private
+   * @property {Object[]} events The remaining event chain.
+   */
+
+<span id='sol-common-jc-ActionHandler-EventChain-property-context'>  /**
+</span>   * @private
+   * @property {Object} context The execution context.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.events = [];
+    me.context = { dirtySord: true, dirtyWfStatus: true };
+  },
+
+<span id='sol-common-jc-ActionHandler-EventChain-method-add'>  /**
+</span>   * Adds an event to the event chain.
+   * @param {Object} event
+   */
+  add: function (event) {
+    var me = this;
+    if (event) {
+      me.events.push(event);
+    }
+  },
+
+<span id='sol-common-jc-ActionHandler-EventChain-method-getCurrent'>  /**
+</span>   * Retrieves the current active event.
+   * @return {Object}
+   */
+  getCurrent: function () {
+    var me = this;
+    return me.current;
+  },
+
+<span id='sol-common-jc-ActionHandler-EventChain-method-getContext'>  /**
+</span>   * Retrieves the context.
+   * @return {Object}
+   */
+  getContext: function () {
+    var me = this;
+    return me.context;
+  },
+
+<span id='sol-common-jc-ActionHandler-EventChain-method-chain'>  /**
+</span>   * Handles the event chaining.
+   * If the next event is executable, this will call it&#39;s handler (and the handler needs to take care of the further chaining), if not the chain will be continued.
+   */
+  chain: function () {
+    var me = this;
+
+    me.logger.enter(&quot;chaining&quot;);
+    me.current = me.events.shift();
+
+    if (!me.current) {
+      me.logger.exit(&quot;chaining&quot;);
+      return; // event chain finished
+    }
+
+    if (me.checkExecution(me.current)) {
+      me.current.$handler.execute(me);
+    } else {
+      me.chain();
+    }
+  },
+
+<span id='sol-common-jc-ActionHandler-EventChain-method-checkExecution'>  /**
+</span>   * @private
+   * Checks, if an event defines a valid handler, and if the event has an `ON` property it will be evaluated.
+   * @return {Boolean}
+   */
+  checkExecution: function () {
+    var me = this,
+        event = me.current,
+        canExecute = true,
+        ignore = false,
+        checkValue;
+
+    me.logger.enter(&quot;checkExecution&quot;, event);
+
+    if (!event) {
+      me.logger.warn(&quot;No event to check&quot;);
+      canExecute = false;
+    }
+
+    if (canExecute &amp;&amp; (!event.$handler || !sol.common.ObjectUtils.isFunction(event.$handler.execute))) {
+      me.logger.warn([&quot;No handler for event of type &#39;{0}&#39; -&gt; skip&quot;, event.ID]);
+      canExecute = false;
+    }
+
+    if (canExecute &amp;&amp; event.ON) {
+      if (me.context.dirtySord &amp;&amp; event.ON.objId) {
+        me.context.sord = ixConnect.ix().checkoutSord(event.ON.objId, SordC.mbAllIndex, LockC.NO);
+        me.context.dirtySord = false;
+      }
+
+      if (me.context.dirtyWfStatus &amp;&amp; event.ON.flowId) {
+        me.context.wfStatus = sol.common.IxUtils.execute(&quot;RF_sol_common_service_GetWorkflowMetadata&quot;, { flowId: event.ON.flowId }).status;
+        me.context.dirtyWfStatus = false;
+      }
+
+      switch (event.ON.type) {
+        case &quot;WF_STATUS&quot;:
+          checkValue = me.context.wfStatus;
+          break;
+        case &quot;GRP&quot;:
+          checkValue = sol.common.SordUtils.getValue(me.context.sord, event.ON);
+          break;
+        case &quot;SORD&quot;:
+          checkValue = sol.common.SordUtils.getValue(me.context.sord, event.ON);
+          break;
+        case &quot;MAP&quot;:
+          checkValue = sol.common.SordUtils.getValue(me.context.sord, event.ON);
+          break;
+        default:
+          me.logger.warn([&quot;event defines non existing ON.type={0}, ON condition will be ignored&quot;, event.ON.type]);
+          ignore = true;
+      }
+
+      if (!ignore) {
+        canExecute = checkValue == event.ON.value;
+      }
+    }
+
+    me.logger.exit(&quot;checkExecution&quot;, { canExecute: canExecute });
+
+    return canExecute;
+  }
+
+});
+
+<span id='sol-common-jc-ActionHandler-Refresh'>/**
+</span> * This class handles the refresh event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Refresh&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Refresh-method-execute'>  execute: function (eventChain) {
+</span>    var event, eventConfig, element;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.REFRESH) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.REFRESH&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.REFRESH + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    if (event.obj) {
+      eventConfig = event.obj;
+      element = archive.getElement(eventConfig.objId);
+      if (element instanceof Packages.de.elo.client.scripting.items.ArchiveElement) {
+        element.refresh();
+      }
+    }
+    eventChain.chain();
+  }
+});
+
+<span id='sol-common-jc-ActionHandler-Goto'>/**
+</span> * This class handles the goto event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Goto&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Goto-method-execute'>  execute: function (eventChain) {
+</span>    var event, eventConfig, firstTaskView, taskView, element;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.GOTO) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.GOTO&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.GOTO + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    if (event.obj) {
+      eventConfig = event.obj;
+
+      if (eventConfig.flowId) {
+        firstTaskView = tasksViews.tasksViews.get(0);
+        firstTaskView.show();
+        firstTaskView.refresh();
+        taskView = tasksViews.getTasksViewForWorkflow(eventConfig.flowId);
+        if (taskView) {
+          taskView.show();
+          taskView.clearSelection();
+          taskView.selectWorkflow(eventConfig.flowId);
+        }
+      } else if (eventConfig.objId) {
+        workspace.gotoId(eventConfig.objId);
+        if (eventConfig.checkout) {
+          element = archive.getElement(eventConfig.objId);
+          if (element instanceof Packages.de.elo.client.scripting.items.ArchiveDocument) {
+            //element.checkOut();
+            workspace.startFunction(&quot;CheckOut&quot;);
+          }
+        }
+      }
+
+      workspace.updateSordLists();
+      workspace.activeView.refresh();
+    }
+    eventChain.chain();
+  }
+});
+
+<span id='sol-common-jc-ActionHandler-Dialog'>/**
+</span> * This class handles the dialog event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Dialog&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Dialog-method-execute'>  execute: function (eventChain) {
+</span>    var me = this,
+        event, context, eventConfig, dlg;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.DIALOG) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.DIALOG&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.DIALOG + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    context = eventChain.getContext();
+    context.dirtySord = true;
+    context.dirtyWfStatus = true;
+
+    if (event.obj) {
+      eventConfig = event.obj;
+
+      dlg = workspace.createAppDialog(eventConfig.title || &quot;&quot;);
+      dlg.hideStatusBar = true;
+      if (eventConfig.dialogId) {
+        dlg.dialogId = eventConfig.dialogId;
+      }
+
+      if (eventConfig.url) {
+        dlg.loadUrl(eventConfig.url);
+      } else if (eventConfig.flowId &amp;&amp; eventConfig.nodeId) {
+        dlg.loadWFForm(eventConfig.flowId, eventConfig.nodeId);
+      }
+
+      if (sol.common.RepoUtils.checkVersion(workspace.clientVersion, &quot;10.00.012&quot;)) {
+        dlg.show(null, function (dialog, closeSource) {
+          if (closeSource == &quot;ABORT&quot;) {
+            sol.common.IxUtils.execute(&quot;RF_sol_common_service_ActionCancelForm&quot;, { flowId: eventConfig.flowId, nodeId: eventConfig.nodeId });
+          }
+          eventChain.chain();
+        }, me);
+      } else {
+        dlg.show();
+        eventChain.chain();
+      }
+    }
+  }
+});
+
+<span id='sol-common-jc-ActionHandler-Error'>/**
+</span> * This class handles the error event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Error&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Error-method-execute'>  execute: function (eventChain) {
+</span>    var event, eventConfig;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.ERROR) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.ERROR&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.ERROR + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    if (event.obj) {
+      eventConfig = event.obj;
+      workspace.showAlertBox(utils.getText(&quot;sol.common&quot;, &quot;sol.common.client.ActionHandler.errordlg.title&quot;), eventConfig.msg);
+    }
+    eventChain.chain();
+  }
+});
+
+<span id='sol-common-jc-ActionHandler-Action'>/**
+</span> * This class handles the action event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Action&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Action-method-execute'>  execute: function (eventChain) {
+</span>    var event, context;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.ACTION) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.ACTION&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.ACTION + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    context = eventChain.getContext();
+    context.dirtySord = true;
+    context.dirtyWfStatus = true;
+
+    if (event.COMPONENT === sol.common.IxUtils.CONST.COMPONENTS.IX) {
+      sol.common.jc.ActionHandler.execute(event.obj.registeredFunction, event.obj.params);
+    } else if (event.COMPONENT === sol.common.IxUtils.CONST.COMPONENTS.AS) {
+      sol.common.jc.ActionHandler.executeAS(event.solutionName, event.obj.directRule, event.obj.params, null, event.async);
+    }
+    eventChain.chain();
+  }
+});
+
+<span id='sol-common-jc-ActionHandler-Feedback'>/**
+</span> * This class handles the feedback event.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @elojc
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.jc.ActionHandler.EventChain
+ */
+sol.define(&quot;sol.common.jc.ActionHandler.Feedback&quot;, {
+
+<span id='sol-common-jc-ActionHandler-Feedback-method-execute'>  execute: function (eventChain) {
+</span>    var event, eventConfig;
+
+    event = eventChain.getCurrent();
+
+    if (event.ID !== sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK) {
+      throw &quot;&#39;sol.common.jc.ActionHandler.FEEDBACK&#39; can only handle &#39;&quot; + sol.common.IxUtils.CONST.EVENT_TYPES.FEEDBACK + &quot;&#39; events, but event-ID was &#39;&quot; + event.ID + &quot;&#39;&quot;;
+    }
+
+    if (event.obj) {
+      eventConfig = event.obj;
+      if (eventConfig.permanent === true) {
+        workspace.showInfoBox(utils.getText(&quot;sol.common&quot;, &quot;sol.common.client.ActionHandler.infodlg.title&quot;), eventConfig.msg);
+      } else {
+        workspace.setFeedbackMessage(eventConfig.msg);
+      }
+    }
+    eventChain.chain();
+  }
+});
+</pre>
+</body>
+</html>

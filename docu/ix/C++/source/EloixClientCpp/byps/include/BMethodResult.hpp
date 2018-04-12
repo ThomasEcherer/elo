@@ -1,0 +1,11 @@
+/* USE THIS FILE ACCORDING TO THE COPYRIGHT RULES IN LICENSE.TXT WHICH IS PART OF THE SOURCE CODE PACKAGE */
+#ifndef BMETHODRESULT_HPP_
+#define BMETHODRESULT_HPP_
+
+#include "BMethodResult.h"
+
+namespace byps {
+
+}
+
+#endif

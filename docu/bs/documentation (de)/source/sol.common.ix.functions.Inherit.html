@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Inherit&quot; });
+
+<span id='sol-common-ix-functions-Inherit'>/**
+</span> * This module handles the initial inheritance of index fields from the parent.
+ *
+ * The configuration, which fields should be inherited is done via {@link #fields}.
+ *
+ * If inherited fields already have a value, they will not be overridden by default.
+ * This behaviour can be altered via an `override` flag in each field configuration.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field and would inherit the name of the parent,
+ * the field &#39;MY_INHERITED&#39; and the map field &#39;MY_INHERITED_MAP&#39; (existing values will not be overridden).
+ * Additionally the field MY_INHERITED_2 will be &lt;i&gt;inherited&lt;/i&gt; from the field &#39;MY_OTHER&#39; from the parent
+ *
+ *     {
+ *       &quot;fields&quot;: [
+ *         { &quot;type&quot;: &quot;SORD&quot;, &quot;key&quot;: &quot;name&quot; },
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;MY_INHERITED&quot; },
+ *         { &quot;type&quot;: &quot;MAP&quot;, &quot;key&quot;: &quot;MY_INHERITED_MAP&quot; },
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;MY_INHERITED_2&quot;, source: { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;MY_OTHER&quot; } }
+ *       ]
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ * The following example would inherit the field &#39;MY_INHERITED&#39; from the parent and override an exiting value.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_Inherit&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       fields: [
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;MY_INHERITED&quot;, &quot;override&quot;: true }
+ *       ]
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.003
+ *
+ * @eloix
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.ConfigMixin
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.Inherit&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Inherit-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;fields&quot;],
+</span>
+<span id='sol-common-ix-functions-Inherit-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID
+   */
+
+<span id='sol-common-ix-functions-Inherit-cfg-fields'>  /**
+</span>   * @cfg {Object[]} fields (required)
+   * Object containing the configuration for the inherited fields:
+   *
+   *     [
+   *       { type: &quot;SORD&quot;, key: &quot;name&quot; },
+   *       { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, &quot;override&quot;: true }
+   *     ]
+   *
+   * Currently only &quot;SORD&quot; and &quot;GRP&quot; are supported as `type`.
+   */
+
+<span id='sol-common-ix-functions-Inherit-property-sord'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.Sord} sord
+   */
+
+<span id='sol-common-ix-functions-Inherit-property-parentSord'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.Sord} parentSord
+   */
+
+<span id='sol-common-ix-functions-Inherit-property-updates'>  /**
+</span>   * @private
+   * @property {Object[]} updates
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.logger.debug(&quot;initialize&quot;);
+
+    me.sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.FORCE);
+    me.parentSord = ixConnectAdmin.ix().checkoutSord(me.sord.parentId, SordC.mbAllIndex, LockC.NO);
+    me.updates = [];
+  },
+
+<span id='sol-common-ix-functions-Inherit-method-process'>  /**
+</span>   * This module handles inheritance of index fields from the parent.
+   */
+  process: function () {
+    var me = this,
+        mapitems;
+
+    me.fields.forEach(me.inheritField, me);
+    me.logger.info(&quot;initial inheritance values initialized&quot;);
+
+    if (me.updates.length &gt; 0) {
+      mapitems = sol.common.SordUtils.updateSord(me.sord, me.updates);
+      ixConnectAdmin.ix().checkinSord(me.sord, SordC.mbAllIndex, LockC.YES);
+      if (mapitems &amp;&amp; (mapitems.length &gt; 0)) {
+        ixConnectAdmin.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.objId, me.objId, mapitems, LockC.NO);
+      }
+    } else {
+      ixConnectAdmin.ix().checkinSord(me.sord, SordC.mbOnlyUnlock, LockC.YES);
+    }
+
+    me.logger.info(&quot;initial inheritance successfull&quot;);
+  },
+
+<span id='sol-common-ix-functions-Inherit-method-inheritField'>  /**
+</span>   * @private
+   * @param {Object} cfg Configuration
+   */
+  inheritField: function (cfg) {
+    var me = this,
+        parentValue, targetValue, override;
+    try {
+      parentValue = sol.common.SordUtils.getValue(me.parentSord, (cfg.source) ? cfg.source : cfg);
+      targetValue = sol.common.SordUtils.getValue(me.sord, cfg);
+      override = (cfg.override === true) ? true : false;
+      if (me.checkUpdate(parentValue, targetValue, override)) {
+        cfg.value = parentValue;
+        me.updates.push(cfg);
+      }
+    } catch (ex) {
+      me.logger.error(&quot;error inheriting&quot;, ex);
+    }
+  },
+
+<span id='sol-common-ix-functions-Inherit-method-checkUpdate'>  /**
+</span>   * @private
+   * @param {String} parentValue Parent value
+   * @param {String} targetValue Target value
+   * @param {Boolean} override Override value
+   * @return {String}
+   */
+  checkUpdate: function (parentValue, targetValue, override) {
+    if (parentValue) {
+      parentValue += &quot;&quot;;
+    }
+    if (targetValue) {
+      targetValue += &quot;&quot;;
+    }
+    return (!targetValue || override) &amp;&amp; (parentValue !== targetValue);
+  }
+
+});
+
+<span id='sol-common-ix-functions-Inherit-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(ci, userId, wfDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onEnterNode_Inherit&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+
+  params.objId = wfDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Inherit&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Inherit&quot;);
+}
+
+<span id='sol-common-ix-functions-Inherit-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onExitNode_Inherit&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.objId = wfDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.Inherit&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_Inherit&quot;);
+}
+
+<span id='sol-common-ix-functions-Inherit-static-method-RF_sol_function_Inherit'>/**
+</span> * @member sol.common.ix.functions.Inherit
+ * @method RF_sol_function_Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Inherit(ec, configAny) {
+  var params, module;
+  logger.enter(&quot;RF_sol_function_Inherit&quot;, configAny);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny, &quot;objId&quot;, &quot;fields&quot;);
+
+  sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+
+  module = sol.create(&quot;sol.common.ix.functions.Inherit&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_Inherit&quot;);
+}
+</pre>
+</body>
+</html>

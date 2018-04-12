@@ -1,0 +1,243 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// This class shows how to checkin a new keyword list.
+	/// The follwoing keyword tree is beeing inserted:
+	/// 
+	/// C#-Example-Keywords
+	///      |
+	///      +--------- Simple Folder
+	///      |               +------------- Simple Text 1
+	///      |               +------------- Simple Text 2
+	///      |               
+	///      +--------- Special Folder  (add)
+	///      |               +------------- User name = \"{username}\"
+	///      |               +------------- Date = {date}
+	///      |
+  ///      +--------- Counter = {counterName} = {counter-value}
+	/// 
+	/// </summary>
+	public class CheckinKeywords
+	{
+    // URL to IndexServer
+    public String url;
+
+    // [X] Account to authenticate 
+    public String userName = "Administrator"; 
+    public String userPwd = "";					
+
+    public String keywordListId = "C#-Example-Keywords"; // try "ELOOUTL1" and verify keyword list in ELO-CLIENT, storage mask "EMail"
+    
+    // Specify a counter name to create a keyword that contains a counter value.
+    // Be aware that counters cannot be deleted.
+    public String counterName = "C#excnt";
+
+    // Delete keywords at the end of example
+    public bool deleteOnExit = true;
+
+    public void run()
+    {
+      // IndexServer stub
+      IXClient ix = null;
+      try 
+      {
+        // Create IndexServer object
+        Logger.instance().log("create IX...");
+        ix = new IXClient(url);
+        Logger.instance().log("create IX OK");
+
+        // Prepare ClientInfo object with language and country
+        IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+        ci.language = "de";
+        ci.country = "DE";
+
+        // LOGIN
+        Logger.instance().log("login...");
+        IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+        ci = loginResult.clientInfo;
+        Logger.instance().log("login OK");
+
+        // get constants
+        IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+
+        // Lock keyword database against concurrent modification
+        ix.checkoutKeywords(ci, null, CONST.KEYWORD.mbEdit, -1, CONST.LOCK.YES);
+
+        // create counter, if it does not exist
+        if (counterName.Length > 0) 
+        {
+          IndexServer.CounterInfo[] counters = ix.checkoutCounters(ci, null, false, CONST.LOCK.NO);
+          bool found = false;
+          for (int i = 0; i < counters.Length && !found; i++) 
+          {
+            found = counters[i].name.Equals(counterName);
+          }
+          if (!found)
+          {
+            IndexServer.CounterInfo counterInfo = new IndexServer.CounterInfo();
+            counterInfo.name = counterName;
+            counterInfo.value = 123;
+            ix.checkinCounters(ci, new IndexServer.CounterInfo[] {counterInfo}, CONST.LOCK.NO);
+          } 
+        }
+
+        // Build keyword tree
+
+        // root keyword: "C#-Example-Keywords"
+        IndexServer.Keyword kwRoot = new IndexServer.Keyword();
+        kwRoot.id = keywordListId; 
+          // Hint 1 : Maximum length of Keyword.id = CONST.KEYWORD.lnRootId
+          // Hint 2 : The ID of a root keyword must not contain "."
+        kwRoot.text = "C#-Example-Keywords";
+        kwRoot.children = new IndexServer.Keyword[(counterName.Length > 0) ? 3 : 2];
+
+        // Simple Folder
+        IndexServer.Keyword kwSimpleFolder = kwRoot.children[0] = new IndexServer.Keyword();
+        kwSimpleFolder.text = "Simple Folder";
+        kwSimpleFolder.children = new IndexServer.Keyword[2];
+
+        // Simple Text 1
+        kwSimpleFolder.children[0] = new IndexServer.Keyword();
+        kwSimpleFolder.children[0].enabled = true;
+        kwSimpleFolder.children[0].text = "Simple Text 1";
+          
+        // Simple Text 2
+        kwSimpleFolder.children[1] = new IndexServer.Keyword();
+        kwSimpleFolder.children[1].enabled = true;
+        kwSimpleFolder.children[1].text = "Simple Text 2";
+
+        // Special Folder
+        IndexServer.Keyword kwSpecialFolder = kwRoot.children[1] = new IndexServer.Keyword();
+        kwSpecialFolder.text = "Special Folder ";
+        kwSpecialFolder.add = true;
+        kwSpecialFolder.children = new IndexServer.Keyword[2];
+
+        // User name
+        kwSpecialFolder.children[0] = new IndexServer.Keyword();
+        kwSpecialFolder.children[0].enabled = true;
+        kwSpecialFolder.children[0].text = "User name = \"" + CONST.KEYWORD.PLACEHOLDER_USER_NAME + "\"";
+
+        // Date
+        kwSpecialFolder.children[1] = new IndexServer.Keyword();
+        kwSpecialFolder.children[1].enabled = true;
+        kwSpecialFolder.children[1].text = "date = " + CONST.KEYWORD.PLACEHOLDER_DATE;
+
+        // Counter
+        if (counterName.Length > 0) 
+        {
+          IndexServer.Keyword kwCounter = kwRoot.children[2] = new IndexServer.Keyword();
+          kwCounter.text = counterName + " = " + 
+            CONST.KEYWORD.PLACEHOLDER_COUNTER_BEGIN + counterName + CONST.KEYWORD.PLACEHOLDER_COUNTER_END;
+          kwCounter.enabled = true;
+        }
+
+        // Checkin new keyword list
+        ix.checkinKeywords(ci, new IndexServer.Keyword[] {kwRoot}, CONST.LOCK.NO);
+
+        // Checkout for editing, placeholders are not substitued.
+        // This call could be used to fill dialog to edit keywords.
+        IndexServer.Keyword kwRootEdit = ix.checkoutKeywords(ci, new String[] {kwRoot.id}, CONST.KEYWORD.mbEdit, -1, CONST.LOCK.NO)[0];
+        Logger.instance().log("keyword tree for editing:");
+        dumpKeyword(kwRootEdit, "  ");
+
+        // Checkout to select a keyword, placeholders except counter are substitued
+        // This call could be used to fill dialog to show keywords.
+        IndexServer.Keyword kwRootView = ix.checkoutKeywords(ci, new String[] {kwRoot.id}, CONST.KEYWORD.mbView, -1, CONST.LOCK.NO)[0];
+        Logger.instance().log("keyword tree to select:");
+        dumpKeyword(kwRootView, "  ");
+
+        // If the user selects a keyword for an indexing value, 
+        // call cookKeyword with the keyword ID if the keyword is "raw".
+        // This function substitues all placeholders and concatinates the upper
+        // nodes that have specified the "add" option.
+        selectKeyword(ix, ci, kwRootView.children[1].children[0]);
+
+        // select counter keyword 5 times (counter is beeing incremented)
+        for (int i = 0; i < 5; i++) 
+        {
+          selectKeyword(ix, ci, kwRootView.children[2]);
+        }
+
+        if (deleteOnExit) 
+        {
+          // delete keywords and unlock
+          ix.deleteKeywords(ci, new String[] {kwRoot.id}, CONST.LOCK.YES);
+        } 
+        else 
+        {
+          // unlock
+          ix.checkinKeywords(ci, null, CONST.LOCK.YES);
+        }
+
+      } 
+      catch (Exception e) 
+      {
+        throw e;
+      } 
+      finally 
+      {
+        // Always release IXClient object to make sure 
+        // that all all open sessions are closed on exit
+        if (ix != null) 
+        {
+          Logger.instance().log("IX done...");
+          ix.done();
+          Logger.instance().log("IX done OK");
+        }
+      }
+    }
+
+    /// <summary>
+    /// This function calls cookKeyword to evaluate the resulting keyword text with substituted
+    /// placeholders and concatinated upper nodes.
+    /// </summary>
+    /// <param name="ix"></param>
+    /// <param name="ci"></param>
+    /// <param name="kw"></param>
+    /// <returns></returns>
+    private String selectKeyword(IXClient ix, IndexServer.ClientInfo ci, IndexServer.Keyword kw)
+    {
+      String keywordText = "";
+
+      // cookKeyword throws an exception, if the keyword is not enabled
+      if (kw.enabled)
+      {
+        // cookKeyword need only be called for raw keywords
+        if (kw.raw)
+        {
+          keywordText = ix.cookKeyword(ci, kw.id);
+        } 
+        else
+        {
+          keywordText = kw.text;
+        }
+        Logger.instance().log("cooked keyword: id=" + kw.id + ", raw-text=" + kw.text + ", cooked-text=" + keywordText);
+      } 
+      else 
+      {
+        Logger.instance().log("cannot select disabled keyword: id=" + kw.id);
+      }
+      return keywordText;
+    }
+
+    private void dumpKeyword(IndexServer.Keyword kw, String indent) 
+    {
+      Logger.instance().log(indent + "kw.id=" + kw.id);
+      Logger.instance().log(indent + " text=" + kw.text);
+      Logger.instance().log(indent + " add=" + kw.add);
+      Logger.instance().log(indent + " enabled=" + kw.enabled);
+      Logger.instance().log(indent + " raw=" + kw.raw);
+      Logger.instance().log(indent + " hasChildren=" + (kw.children != null) + ", #children=" + ((kw.children != null) ? kw.children.Length : 0));
+      if (kw.children != null) 
+      {
+        for (int i = 0; i < kw.children.Length; i++) 
+        {
+          dumpKeyword(kw.children[i], indent + "  ");
+        }
+      }
+    }
+	}
+
+}

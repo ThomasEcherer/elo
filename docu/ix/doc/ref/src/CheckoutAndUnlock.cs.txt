@@ -1,0 +1,146 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	///
+	/// 1. Create a Sord object under the current account
+	/// 2. Create a new user "Fritz"
+	/// 3. Login as "Fritz" 
+	/// 4. Fritz locks Sord
+	/// 5. Try to lock with current account
+	/// 6. Try to get lock forced with current account
+	/// 7. Unlock
+	/// 8. Fritz deletes Sord
+	///
+	/// </summary>
+	public class CheckoutAndUnlock
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// 1. Create Sord 
+				IndexServer.Sord sord = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+				sord.name = "C# example CheckoutAndUnlock";
+				sord.id = ix.checkinSord(ci, sord, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("sord.id=" + sord.id);
+
+				// 2. Create a new test user
+				IndexServer.UserInfo uiFritz = ix.createUser(ci, "0");
+				uiFritz.name = "Fritz"; // [X]
+				uiFritz.pwd = "Fritz password"; 
+				int[] uids = ix.checkinUsers(ci, new IndexServer.UserInfo[] {uiFritz}, CONST.CHECKIN_USERS.PASSWORD, CONST.LOCK.NO);
+				Logger.instance().log("created account for " + uiFritz.name + ", uid=" + uids[0]);
+
+				// 3. Login
+				IndexServer.ClientInfo ciFritz = new IndexServer.ClientInfo();
+				ciFritz.language = "de";
+				ciFritz.country = "DE";
+				IndexServer.LoginResult lrFritz = ix.login2(ci, uiFritz.name, uiFritz.pwd, "mycomp", null);
+				ciFritz = lrFritz.clientInfo;
+				Logger.instance().log(uiFritz.name + " logged in successfully");
+                				
+				// 4. Firtz locks Sord
+				sord = ix.checkoutSord(ciFritz, sord.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.YES).sord;
+				Logger.instance().log("Fritz checked out with lock, lockId=" + sord.lockId + " == Fritz's user ID");
+				
+				// 5. Try to lock with current account
+				try 
+				{
+					sord = ix.checkoutSord(ci, sord.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.YES).sord;
+					throw new System.InvalidOperationException("ERROR: current user can lock Sord");
+				} 
+				catch (Exception e) 
+				{
+					Logger.instance().log("OK, current user cannot lock Sord: " + formatException(e));
+				}
+
+				// 6. Try to get lock forced with current account
+				try 
+				{
+					sord = ix.checkoutSord(ci, sord.guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.FORCE).sord;
+					Logger.instance().log("OK, current user is administrator and can lock Sord");
+				} 
+				catch (Exception e) 
+				{
+					Logger.instance().log("OK, current user is not an administrator and cannot lock Sord: " + formatException(e));
+				}
+
+				// 7. Unlock
+				ix.checkinSord(ci, sord, CONST.SORD.mbOnlyUnlock, CONST.LOCK.YES);
+				Logger.instance().log("Sord unlocked");
+
+				// 8. Fritz deletes Sord
+        IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+        delOpts.deleteFinally = true;
+        ix.deleteSord(ci, null, sord.guid, CONST.LOCK.NO, null);
+        ix.deleteSord(ci, null, sord.guid, CONST.LOCK.NO, delOpts);
+				Logger.instance().log("Sord deleted");
+
+				// clean up
+				ix.logout2(ciFritz);
+				ix.deleteUsers(ci, new String[] {uiFritz.name}, CONST.LOCK.NO);
+			}
+			catch (Exception e) 
+			{
+				throw e;
+			}
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private String formatException(Exception e) 
+		{
+			String raw = e.ToString();
+			int p = raw.IndexOf("[ELOIX");
+			if (p < 0) return raw;
+			int start = raw.IndexOf("]", p);
+			if (start < 0) return raw;
+			start++;
+			int end = raw.IndexOf(")\r\n", start);
+			if (end < 0) end = raw.Length;
+			String msg = raw.Substring(start, end - start);
+			return msg;
+		}
+	}
+}

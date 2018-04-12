@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common-forms-Utils'>/**
+</span> * Helper functions for ELOwf forms
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @requires sol.common.ObjectUtils
+ */
+
+sol.define(&quot;sol.common.forms.Utils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-forms-Utils-property-unitSuffix'>  unitSuffix: &quot;_UNIT&quot;,
+</span>
+<span id='sol-common-forms-Utils-property-wfMapSavedFlag'>  wfMapSavedFlag: &quot;WF_MAP_FORM_SAVED&quot;,
+</span>
+<span id='sol-common-forms-Utils-method-hideTabBarIfOnlyOneTab'>  /**
+</span>   * Hides the tab bar if only one tab was added to the form.
+   */
+  hideTabBarIfOnlyOneTab: function () {
+    var me = this, i, tabs, firstTabContainer = document.querySelector(&quot;.tabs&quot;);
+    if (firstTabContainer) {
+      tabs = firstTabContainer.querySelectorAll(&quot;.tabs &gt; ul &gt; li&quot;);
+      if (tabs.length &lt;= 1) {
+        document.getElementById(&quot;elotable&quot;).className += &quot; hideTabBar&quot;;
+      } else {
+        for (i in tabs) {
+          tabs[i].onclick = me.scrollToTop;
+        }
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-resetFormLayout'>  /**
+</span>   * Reset form layout if page content changes.
+   */
+  resetFormLayout: function () {
+    var d = document.getElementById(&quot;elo_wf_form&quot;);
+    if (d) {
+      d.classList.add(&quot;hidden&quot;);
+      setTimeout(function () {
+        document.getElementById(&quot;elo_wf_form&quot;).classList.remove(&quot;hidden&quot;);
+      }, 10);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-scrollToTop'>  /**
+</span>   * Scroll to top of the page.
+   */
+  scrollToTop: function () {
+    document.body.scrollTop = 0;
+    sol.common.forms.Utils.resetFormLayout();
+  },
+
+<span id='sol-common-forms-Utils-method-setMainHeader'>  /**
+</span>   * Set main header if class is set.
+   */
+  setMainHeader: function () {
+    var headTables, i, headTable, headerHeight, tabContainer;
+    if (document.querySelector(&quot;.mainheader&quot;)) {
+      headTables = document.querySelectorAll(&quot;#elotable .edittable&quot;);
+      if (headTables.length &gt;= 1) {
+        for (i in headTables) {
+          if (headTables[i].querySelector(&quot;.mainheader&quot;)) {
+            headTable = headTables[i];
+            headTable.className += &quot; mainheadertable&quot;;
+            headerHeight = headTable.offsetHeight;
+            tabContainer = headTable.nextElementSibling;
+            if (tabContainer) {
+              tabContainer.style.marginTop = headerHeight - 3 + &quot;px&quot;;
+            }
+            if (document.querySelector(&quot;#topnotification&quot;)) {
+              headTable.className += &quot; notificationheader&quot;;
+            }
+            break;
+          }
+        }
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-setResponsive'>  /**
+</span>   * Set responsive flag if class is set.
+   */
+  setResponsive: function () {
+    var me = this, i, viewport, formElements, formElement;
+
+    if (document.querySelector(&quot;.responsive&quot;)) {
+
+      // Set mobile viewport meta info
+      viewport = document.querySelector(&quot;meta[name=viewport]&quot;);
+      if (viewport) {
+        viewport.setAttribute(&quot;content&quot;, &quot;width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0&quot;);
+      } else {
+        viewport = document.createElement(&quot;meta&quot;);
+        viewport.name = &quot;viewport&quot;;
+        viewport.content = &quot;width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0&quot;;
+        document.getElementsByTagName(&quot;head&quot;)[0].appendChild(viewport);
+      }
+
+      // Add class .elo-responsive to all relevant edittables
+      formElements = document.querySelectorAll(&quot;#elotable .edittable&quot;);
+      if (formElements.length &gt;= 1) {
+        for (i in formElements) {
+          formElement = formElements[i];
+          if (formElement.tagName &amp;&amp; formElement.querySelector(&quot;.responsive&quot;)) {
+            formElement.className += &quot; elo-responsive&quot;;
+          }
+        }
+      }
+
+      // Add class .formlistheader to all relevant tr elements
+      formElements = document.querySelectorAll(&quot;#elotable tr td.formlistheader:first-child&quot;);
+      if (formElements.length &gt;= 1) {
+        for (i in formElements) {
+          formElement = formElements[i];
+          if (formElement.tagName) {
+            formElement.parentNode.className += &quot; formlistheader&quot;;
+          }
+        }
+      }
+
+      // Resize fix for Java Client
+      window.onresize = me.resetFormLayout;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-registerTableNavigation'>  /**
+</span>   * Register table navigation
+   */
+  registerTableNavigation: function () {
+    var me = this;
+    document.addEventListener(&quot;keydown&quot;, me.navigateTable.bind(me), false);
+  },
+
+<span id='sol-common-forms-Utils-property-keyCodeArrowLeft'>  keyCodeArrowLeft: 37,
+</span><span id='sol-common-forms-Utils-property-keyCodeArrowUp'>  keyCodeArrowUp: 38,
+</span><span id='sol-common-forms-Utils-property-keyCodeArrowRight'>  keyCodeArrowRight: 39,
+</span><span id='sol-common-forms-Utils-property-keyCodeArrowDown'>  keyCodeArrowDown: 40,
+</span>
+<span id='sol-common-forms-Utils-method-navigateTable'>  navigateTable: function (event) {
+</span>    var me = this,
+        isArrowKey, field, fieldName, baseFieldName, fieldNameIndex, nextField,
+        dynKwlCmp = document.getElementById(&quot;keywordlist&quot;);
+
+    isArrowKey = me.isArrowKey(event.keyCode);
+    if (!isArrowKey
+          || (dynKwlCmp &amp;&amp; dynKwlCmp.offsetLeft &gt;= 0)) {
+      // disable if dynKwl is opened
+      return;
+    }
+
+    field = event.target;
+    fieldName = field.name;
+    fieldNameIndex = me.getFieldNameIndex(fieldName);
+    if (fieldNameIndex == &quot;&quot;) {
+      return;
+    }
+
+    switch (event.keyCode) {
+      case me.keyCodeArrowLeft:
+        if ((typeof field.selectionStart != &quot;number&quot;) || (field.selectionStart == 0)) {
+          nextField = me.getNextWriteableHorizontalField(field, -1);
+        }
+        break;
+
+      case me.keyCodeArrowUp:
+        baseFieldName = me.getFieldNamePrefix(fieldName);
+        nextField = me.getNextWriteableVerticalField(baseFieldName, fieldNameIndex, -1);
+        break;
+
+      case me.keyCodeArrowRight:
+        if ((typeof field.selectionStart != &quot;number&quot;) || (field.selectionStart == field.value.length)) {
+          nextField = me.getNextWriteableHorizontalField(field, 1);
+        }
+        break;
+
+      case me.keyCodeArrowDown:
+        baseFieldName = me.getFieldNamePrefix(fieldName);
+        nextField = me.getNextWriteableVerticalField(baseFieldName, fieldNameIndex, 1);
+        break;
+
+      default:
+        break;
+    }
+
+    if (nextField) {
+      nextField.focus();
+      if (typeof nextField.selectionStart == &quot;number&quot;) {
+        nextField.selectionStart = nextField.value.length;
+      }
+      event.preventDefault();
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getNextWriteableHorizontalField'>  /**
+</span>   * @private
+   * Returns the next writeable horizontal field
+   * @param {HTMLElement} field Field
+   * @param {HTMLElement} columnCount Column count
+   * @return {HTMLElement} Next horizontal input field
+   */
+  getNextWriteableHorizontalField: function (field, columnCount) {
+    var me = this;
+
+    do {
+      field = me.getNextHorizontalField(field, columnCount);
+      if (!field) {
+        return;
+      }
+    } while (field.readOnly);
+
+    return field;
+  },
+
+<span id='sol-common-forms-Utils-method-getNextHorizontalField'>  /**
+</span>   * @private
+   * Returns the next horizontal field
+   * @param {HTMLElement} field Field
+   * @param {HTMLElement} columnCount Column count
+   * @return {HTMLElement} Next horizontal input field
+   */
+  getNextHorizontalField: function (field, columnCount) {
+    var me = this,
+        fieldName, nextField, nodeList, i, nextNodeIndex;
+
+    fieldName = field.name;
+    nodeList = me.getInputsInRow(field);
+    for (i = 0; i &lt; nodeList.length; i++) {
+      field = nodeList[i];
+      if (field.name == fieldName) {
+        nextNodeIndex = i + columnCount;
+        if ((nextNodeIndex &gt; -1) &amp;&amp; (nextNodeIndex &lt; nodeList.length)) {
+          nextField = nodeList[nextNodeIndex];
+          return nextField;
+        }
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getNextWriteableVerticalField'>  /**
+</span>   * @private
+   * Return the next writeable vertical input field
+   * @param {String} baseFieldName Base field name
+   * @param {String} fieldNameIndex Field name index
+   * @param {String} rowCount Row count
+   * @return {HTMLElement} Next vertical input field
+   */
+  getNextWriteableVerticalField: function (baseFieldName, fieldNameIndex, rowCount) {
+    var me = this,
+        field;
+
+    do {
+      field = me.getNextVerticalField(baseFieldName, fieldNameIndex, rowCount);
+      if (!field) {
+        return;
+      }
+      if (rowCount &lt; 0) {
+        rowCount--;
+      } else {
+        rowCount++;
+      }
+    } while (field.readOnly);
+
+    return field;
+  },
+
+<span id='sol-common-forms-Utils-method-getNextVerticalField'>  /**
+</span>   * @private
+   * Return the next vertical input field
+   * @param {String} baseFieldName Base field name
+   * @param {String} fieldNameIndex Field name index
+   * @param {String} rowCount Row count
+   * @return {HTMLElement} Next vertical input field
+   */
+  getNextVerticalField: function (baseFieldName, fieldNameIndex, rowCount) {
+    var nextIndex, nextFieldName, nextField;
+    nextIndex = fieldNameIndex + rowCount;
+    if (nextIndex &lt; 0) {
+      return;
+    }
+
+    nextFieldName = baseFieldName + nextIndex;
+    nextField = $var(nextFieldName);
+
+    return nextField;
+  },
+
+<span id='sol-common-forms-Utils-method-isArrowKey'>  /**
+</span>   * Checks whether the pressed key is an arrow key
+   * @param {Number} keyCode;
+   * @return {Boolean}
+   */
+  isArrowKey: function (keyCode) {
+    var me = this,
+        arrowKeyCodes, isArrowKey;
+
+    arrowKeyCodes = [me.keyCodeArrowLeft, me.keyCodeArrowUp, me.keyCodeArrowRight, me.keyCodeArrowDown];
+    isArrowKey = (arrowKeyCodes.indexOf(keyCode) &gt; -1);
+    return isArrowKey;
+  },
+
+<span id='sol-common-forms-Utils-method-getParentTable'>  /**
+</span>   * Returns the parent table
+   * @param {HTMLElement} element Element
+   * @return {HTMLElement} Table
+   */
+  getParentTable: function (element) {
+    element = element.parentNode;
+
+    while (element) {
+      if (element.id == &quot;elotable&quot;) {
+        return element;
+      }
+      element = element.parentNode;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-setActionMode'>  /**
+</span>   * Set CSS Classes .
+   */
+  setActionMode: function () {
+    var mode = &quot;&quot;,
+        i, query, vars, pair, wfform;
+
+    query = window.location.search.substring(1);
+    vars = query.split(&quot;&amp;&quot;);
+    if (vars) {
+      for (i = 0; i &lt; vars.length; i++) {
+        if (vars[i]) {
+          pair = vars[i].split(&quot;=&quot;);
+          if (pair[0] == &quot;mode&quot;) {
+            mode = pair[1];
+            break;
+          }
+        }
+      }
+    }
+
+    if (mode == &quot;launchpad&quot;) {
+      wfform = document.getElementById(&quot;elo_wf_form&quot;);
+      if (wfform) {
+        wfform.className += &quot; actionMode hideMainHeader&quot;;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-initializeForm'>  /**
+</span>   * Initializing actions after loading the form.
+   */
+  initializeForm: function () {
+    var me = this,
+        $saveClicked;
+    me.hideTabBarIfOnlyOneTab();
+    me.setActionMode();
+    me.setMainHeader();
+    me.setResponsive();
+    me.registerTableNavigation();
+
+    $saveClicked = saveClicked;
+    saveClicked = function () {
+      $update(me.wfMapSavedFlag, &quot;1&quot;, true);
+      return $saveClicked();
+    };
+  },
+
+<span id='sol-common-forms-Utils-method-initializeIxSession'>  /**
+</span>	 * Initializes an index server connection and sets both elo.IX and elo.CONST.
+	 *
+	 * By default the relative url is used. If this url is not accesible for some reason the internal absolute url is tried instead.
+	 *
+	 * @param {Function} successCallback
+   * @param {Function} failureCallback
+   * @param {boolean} absoluteUrl defines wheather to use an absolute url or not. Defaults to false.
+	 */
+  initializeIxSession: function (successCallback, failureCallback, absoluteUrl) {
+    var me = this,
+        ixUrl, ixLib, ixUtils, ixUtilsUrl, ixServiceUrl,
+        onload = function () {
+          elo = elo || {};
+          try {
+            ixServiceUrl = ixUrl + &quot;/ix&quot;;
+            console.info(&quot;establishing IX connection: &quot; + ixServiceUrl);
+            elo.connFact = new de.elo.ix.client.IXConnFactory(ixServiceUrl, &quot;ELO WF&quot;, &quot;Business Solution&quot;);
+            elo.connFact.sessOpts = elo.connFact.sessOpts || {};
+            elo.connFact.sessOpts[&quot;ix.translateTerms&quot;] = &quot;true&quot;;
+            elo.connFact.sessOpts[&quot;ix.startDocMaskWorkflows&quot;] = &quot;true&quot;;
+            elo.connFact.connProps = elo.connFact.connProps || {};
+            elo.connFact.connProps[elo.connFact.NB_OF_REVERSE_CNNS] = 0;
+
+            elo.IX = elo.connFact.createFromTicket(ELO_PARAMS.ELO_TICKET);
+            elo.IX.getLoginResult().clientInfo.language = me.getFormLanguage();
+            elo.CONST = elo.IX.getCONST();
+
+            elo.data = elo.data || {};
+            elo.data.user = {};
+            elo.data.user.id = elo.IX.getUserId();
+            elo.data.user.name = elo.IX.getUserName();
+          } catch (ex) {
+            me.initializedIxSession = false;
+            alert(&quot;error initializing ix connection: &quot; + (ex &amp;&amp; ex.msg ? ex.msg : ex));
+            return;
+          }
+
+          if (successCallback) {
+            successCallback();
+          }
+        };
+
+    // define IX Url
+    ixUrl = ELO_PARAMS.ELOIX_PATH.substring(0, ELO_PARAMS.ELOIX_PATH.lastIndexOf(&quot;/&quot;));
+    if (!absoluteUrl) {
+      ixUrl = ixUrl.substring(ixUrl.indexOf(&quot;/ix&quot;));
+    }
+
+    if (me.initializedIxSession &amp;&amp; elo &amp;&amp; elo.IX) {
+      if (successCallback) {
+        successCallback();
+      }
+      return;
+    } else if (me.initializedIxSession &amp;&amp; de &amp;&amp; de.elo &amp;&amp; de.elo.ix &amp;&amp; de.elo.ix.client) {
+      onload();
+    } else if (me.initializedIxSession) {
+      window.setTimeout(function () {
+        me.initializeIxSession(successCallback);
+      }, 50);
+      return;
+    }
+
+    me.initializedIxSession = true;
+
+
+    ixLib = document.createElement(&quot;script&quot;);
+    ixLib.type = &quot;text/javascript&quot;;
+    ixUtilsUrl = ixUrl + &quot;/EloixClient-min.js&quot;;
+
+    console.info(&quot;loading ix utils: &quot; + ixUtilsUrl);
+    ixLib.src = ixUtilsUrl;
+    ixLib.onerror = function (event) {
+      var src, message;
+      src = (event &amp;&amp; event.srcElement &amp;&amp; event.srcElement.src) ? event.srcElement.src : &quot;&quot;;
+      message = &quot;Error while loading IX library: &quot; + src;
+      if (!absoluteUrl) {
+        console.info(&quot;Initializing session with absolute url failed. Using relative url instad.&quot;);
+        me.initializedIxSession = false;
+        me.initializeIxSession(successCallback, failureCallback, true);
+      } else if (failureCallback) {
+        failureCallback(message);
+      } else {
+        eloAlert(message, &quot;Error&quot;);
+      }
+    };
+    ixLib.onload = onload;
+
+    if (!document.getElementById(&quot;sol_common_IxUtils&quot;)) {
+      ixUtils = document.createElement(&quot;script&quot;);
+      ixUtils.id = &quot;sol_common_IxUtils&quot;;
+      ixUtils.type = &quot;text/javascript&quot;;
+      ixUtils.src = &quot;lib_sol.common.IxUtils&quot;;
+      document.body.appendChild(ixUtils);
+    }
+    document.body.appendChild(ixLib);
+  },
+
+<span id='sol-common-forms-Utils-method-registerUpdate'>  /**
+</span>   * Registers an element for update.
+   *
+   * To do so, it calls the rule defined by `ruleName` with the wf objects objId (as `param1`).
+   *
+   * @param {String} ruleName
+   */
+  registerUpdate: function (ruleName) {
+    var me = this,
+        req, url;
+
+    req = new XMLHttpRequest();
+    url = me.getAsBaseUrl() + &quot;?cmd=get&amp;name=&quot; + ruleName + &quot;&amp;param1=&quot; + ELO_PARAMS.ELO_OBJID + &quot;&amp;ticket=&quot; + ELO_PARAMS.ELO_TICKET;
+    req.open(&quot;GET&quot;, url, true);
+    req.send(null);
+  },
+
+<span id='sol-common-forms-Utils-method-getAsBaseUrl'>  /**
+</span>   * Returns the ELOas base URL
+   * @return {String} ELOas base URL
+   */
+  getAsBaseUrl: function () {
+    var me = this,
+        asUrl, formLocation, asLocation, asProxyUrl;
+
+    asUrl = ELO_PARAMS.ELOAS_PATH;
+    formLocation = window.location;
+
+    if (!formLocation.port) {
+      asLocation = me.getLocation(asUrl);
+      if (asLocation.port) {
+        asProxyUrl = formLocation.protocol + &quot;//&quot; + formLocation.host + asLocation.path;
+        return asProxyUrl;
+      }
+    }
+
+    return asUrl;
+  },
+
+<span id='sol-common-forms-Utils-method-getLocation'>  /**
+</span>   * Gets the location info from a given URL
+   * @param {String} url URL
+   * @return {Object} urlParts
+   * @return {String} location.url Complete URL
+   * @return {String} location.protocol Protocol
+   * @return {String} location.hostName Host name
+   * @return {String} location.port Port
+   * @return {String} location.path Path
+   */
+  getLocation: function (url) {
+    var location,
+        parts, hostParts;
+
+    location = { url: url };
+
+    if (url) {
+      parts = url.split(&quot;/&quot;);
+      if ((parts.length &gt; 2) &amp;&amp; (parts[0].toLowerCase().indexOf(&quot;http&quot;) == 0) &amp;&amp; !parts[1]) {
+        location.protocol = parts[0];
+        hostParts = parts[2].split(&quot;:&quot;);
+        location.hostName = hostParts[0];
+        if (hostParts.length &gt; 1) {
+          location.port = hostParts[1];
+        }
+        if (parts.length &gt; 3) {
+          parts.shift();
+          parts.shift();
+          parts.shift();
+          location.path = &quot;/&quot; + parts.join(&quot;/&quot;);
+        }
+      }
+    }
+
+    return location;
+  },
+
+<span id='sol-common-forms-Utils-method-getFormLanguage'>  /**
+</span>   * Returns the language of the form
+   * @returns {String} Language
+   */
+  getFormLanguage: function () {
+    return document.querySelector(&quot;input[name=lang]&quot;).getAttribute(&quot;value&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-checkMandatoryFields'>  /**
+</span>   * Check wether mandatory fields exist
+   * @param {Array} fieldNames
+   */
+  checkMandatoryFields: function (fieldNames) {
+    var me = this,
+        missingFields = [],
+        i, fieldName, content;
+
+    if (!fieldNames || (fieldNames.length == 0)) {
+      return;
+    }
+
+    for (i = 0; i &lt; fieldNames.length; i++) {
+      fieldName = fieldNames[i];
+      if (!me.fieldExists(fieldName)) {
+        missingFields.push(fieldName);
+      }
+    }
+
+    if (missingFields.length &gt; 0) {
+      content = &quot;Missing fields:\r\n&quot; + missingFields.join(&quot;\r\n&quot;);
+      eloAlert(content, &quot;Missing fields&quot;);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-fieldExists'>  /**
+</span>   * Checks wether a field exists
+   * @param {String} fieldName
+   * @return {Boolean}
+   */
+  fieldExists: function (fieldName) {
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    return !!$var(fieldName);
+  },
+
+<span id='sol-common-forms-Utils-method-disableCancelButtonValidation'>  /**
+</span>   * Disables the validation if cancel button is pressed
+   *
+   * ### Example:
+   *     function nextClicked(id) {
+   *       sol.common.forms.Utils.disableCancelButtonValidation(id, [&quot;sol.common.wf.node.cancel&quot;]);
+   *       return true;
+   *     }
+   *
+   * @param {String} successorNodeId Node ID of the successor node
+   * @param {Array} cancelButtonTranslationKeys Cancel button translation key
+   * @return {Boolean}
+   */
+  disableCancelButtonValidation: function (successorNodeId, cancelButtonTranslationKeys) {
+    var me = this,
+        i, nextButtonIndex, pressedNextButtonTranslationKey, cancelButtonTranslationKey;
+
+    if (!successorNodeId) {
+      console.warn(&quot;Successor node ID is empty&quot;);
+    }
+
+    if (!cancelButtonTranslationKeys) {
+      console.warn(&quot;Cancel button translation keys are empty&quot;);
+      return;
+    }
+
+    if (!sol.common.ObjectUtils.isArray(cancelButtonTranslationKeys)) {
+      console.warn(&quot;Cancel button translation keys must be an array&quot;);
+      return;
+    }
+
+    nextButtonIndex = me.getNextButtonIndex(successorNodeId);
+    if (!nextButtonIndex) {
+      console.warn(&quot;Next button not found&quot;);
+      return;
+    }
+
+    pressedNextButtonTranslationKey = ELO_PARAMS[&quot;KEY_NEXT_&quot; + nextButtonIndex];
+
+    for (i = 0; i &lt; cancelButtonTranslationKeys.length; i++) {
+      cancelButtonTranslationKey = cancelButtonTranslationKeys[i];
+      if (pressedNextButtonTranslationKey == cancelButtonTranslationKey) {
+        me.removeTables();
+        me.removeHiddenCheckboxes();
+        me.setSuccessor(successorNodeId);
+        return true;
+      }
+    }
+    return false;
+  },
+
+<span id='sol-common-forms-Utils-method-removeTables'>  /**
+</span>   * Remove all tables within the form to avoid validation
+   */
+  removeTables: function () {
+    var tables, table, i;
+    tables = document.querySelectorAll(&quot;#elotable table&quot;);
+    for (i = 0; i &lt; tables.length; i++) {
+      table = tables[i];
+      table.parentNode.removeChild(table);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-removeHiddenCheckboxes'>  /**
+</span>   * Remove all checkboxes within the form to avoid validation
+   */
+  removeHiddenCheckboxes: function () {
+    var checkboxes, checkbox, i;
+    checkboxes = document.querySelectorAll(&quot;input[name^=&#39;HIDDEN_&#39;][value=&#39;CHECKBOX&#39;]&quot;);
+    for (i = 0; i &lt; checkboxes.length; i++) {
+      checkbox = checkboxes[i];
+      checkbox.parentNode.removeChild(checkbox);
+    }
+  },
+
+
+<span id='sol-common-forms-Utils-method-setSuccessor'>  /**
+</span>   * Set successor node
+   * @param {String} successorNodeId Successor node id
+   */
+  setSuccessor: function (successorNodeId) {
+    var nextNodeElem;
+    nextNodeElem = document.querySelector(&quot;input[name=&#39;NEXTNODE&#39;]&quot;);
+    if (nextNodeElem) {
+      nextNodeElem.setAttribute(&quot;value&quot;, successorNodeId);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getNextButtonIndex'>  /**
+</span>   * Returns the index of the next button
+   * @param {String} successorNodeId Node ID of the successor node
+   * @return {Number} Index of the next button
+   */
+  getNextButtonIndex: function (successorNodeId) {
+    var nextProp, nextPropParts, i, nodeId,
+        maxButtonId = 100;
+    for (i = 1; i &lt; maxButtonId; i++) {
+      nextProp = ELO_PARAMS[&quot;NEXT_&quot; + i];
+      if (!nextProp) {
+        break;
+      }
+      nextPropParts = nextProp.split(&quot;\t&quot;);
+      if (nextPropParts &amp;&amp; (nextPropParts.length &gt; 0)) {
+        nodeId = nextPropParts[0].trim();
+        if (nodeId == successorNodeId) {
+          return i;
+        }
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getUserImageUrl'>  /**
+</span>   * generates a user image url relative to the current form.
+   * @param {String} username ELO Username
+   * @param {String} userid ELO User id
+   * @return {String}
+   */
+  getUserImageUrl: function (username, userid) {
+    return &quot;../social/api/feed/img/users/&quot; + userid + &quot;/&quot; + username + &quot;/&quot; + new Date().getTime();
+  },
+
+<span id='sol-common-forms-Utils-method-applyUserImages'>  /**
+</span>   * Renders images for a given user set. Internally calls applyUserImage on each entry of the map.
+   * @param {String} userNameMap Name of the map field that contains the username
+   * @param {String} userIdMap Name of the field that contains the user id
+   */
+  applyUserImages: function (userNameMap, userIdMap) {
+    var i = 1;
+
+    while ($var(userNameMap + i)) {
+      this.applyUserImage(userNameMap + i, userIdMap + i);
+      i += 1;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-applyUserImage'>  /**
+</span>   * Renders a user image
+   * @param {String} userNameMap Name of the map field that contains the username
+   * @param {String} userIdMap Name of the field that contains the user id
+   */
+  applyUserImage: function (userNameMap, userIdMap) {
+    var img, cont;
+
+    if ($val(userNameMap) &amp;&amp; $val(userIdMap)) {
+      img = img = sol.common.forms.Utils.getUserImageUrl($val(userNameMap), $val(userIdMap));
+    } else {
+      img = &quot;&quot;;
+    }
+
+    cont = document.querySelector(&#39;[name=&quot;&#39; + userNameMap + &#39;&quot;]&#39;);
+    if (cont) {
+      cont = cont.parentElement;
+      cont.style.backgroundImage = img ? &quot;url(&#39;&quot; + img + &quot;&#39;)&quot; : &quot;&quot;;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getTable'>  /**
+</span>   * Returns the surrounding table
+   * @param {HTMLElement} element HTML element
+   * @return {HTMLElement}
+   */
+  getTable: function (element) {
+    var me = this;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    return me.getParentByTagName(element, &quot;TABLE&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-getRow'>  /**
+</span>   * Returns the surrounding row
+   * @param {HTMLElement} element HTML element
+   * @return {HTMLElement}
+   */
+  getRow: function (element) {
+    var me = this;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    return me.getParentByTagName(element, &quot;TR&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-getCell'>  /**
+</span>   * Returns the surrounding cell
+   * @param {HTMLElement} element HTML element
+   * @return {HTMLElement}
+   */
+  getCell: function (element) {
+    var me = this;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    return me.getParentByTagName(element, &quot;TD&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-getTemplate'>  /**
+</span>   * Returns the template
+   * @param {HTMLElement} element HTML element
+   * @return {HTMLElement}
+   */
+  getTemplate: function (element) {
+    var me = this;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    return me.getParentByTagName(element, &quot;tbody&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-getParentByTagName'>  /**
+</span>   * Returns a parent element by a given tag name
+   * e.g. to find the surrounding table of an element
+   * @param {HTMLElement} element HTML element.
+   * @param {String} tagName Tag name of the wanted element
+   * @return {HTMLElement}
+   */
+  getParentByTagName: function (element, tagName) {
+    if (!element) {
+      throw &quot;Start element is empty&quot;;
+    }
+    if (!tagName) {
+      throw &quot;Tag name is empty&quot;;
+    }
+    do {
+      element = element.parentElement;
+      if (!element) {
+        return;
+      }
+      if (element.nodeName.toLowerCase() == tagName.toLowerCase()) {
+        return element;
+      }
+    } while (element);
+  },
+
+<span id='sol-common-forms-Utils-method-getJsAddLineButton'>  /**
+</span>   * Returns the &quot;JS add line&quot; button
+   * @param {String|HTMLElement} field Field
+   * @return {HTMLElement}
+   */
+  getJsAddLineButton: function (field) {
+    var me = this,
+        element, editTable, jsAddLineButton;
+    if (!field) {
+      throw &quot;Field is empty&quot;;
+    }
+
+    element = (typeof field == &quot;string&quot;) ? $var(field) : field;
+
+    if (!element) {
+      return;
+    }
+    editTable = me.getTable(element);
+    if (!editTable) {
+      return;
+    }
+    jsAddLineButton = editTable.querySelector(&quot;input[name=&#39;JS_ADDLINE&#39;]&quot;);
+    if (!jsAddLineButton) {
+      throw &quot;&#39;JS add line button&#39; not found&quot;;
+    }
+    return jsAddLineButton;
+  },
+
+<span id='sol-common-forms-Utils-method-addJsAddLineButtonListener'>  /**
+</span>   * Adds a listener to an JsAddLineButton
+   * @param {String} fieldName Field name within the JS add line table
+   * @param {Function} func Function
+   */
+  addJsAddLineButtonListener: function (fieldName, func) {
+    var me = this,
+        jsAddLineButton;
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    if (!func) {
+      throw &quot;Function is empty&quot;;
+    }
+    jsAddLineButton = me.getJsAddLineButton(fieldName);
+    if (jsAddLineButton) {
+      jsAddLineButton.addEventListener(&quot;click&quot;, func);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-registerResetNewLineFunction'>  /**
+</span>   * Registers an click handler to clear a new line
+   * @param {String} columnName Column name
+   * @param {String} notEmpty Previous line must not be empty
+   */
+  registerResetNewLineFunction: function (columnName, notEmpty) {
+    var me = this;
+
+    if (!columnName) {
+      throw &quot;The column name is empty&quot;;
+    }
+    if (!me.columnExists(columnName)) {
+      return;
+    }
+
+    me.addJsAddLineButtonListener(columnName + &quot;1&quot;, function () {
+      me.resetNewLine(columnName, notEmpty);
+    });
+  },
+
+<span id='sol-common-forms-Utils-method-resetNewLine'>  /**
+</span>   * Resets all input fields of a new line
+   * @param {String} columnName Column name
+   * @param {String} notEmpty Previous line must not be empty
+   */
+  resetNewLine: function (columnName, notEmpty) {
+    var me = this,
+        jsAddLineButton, lastInput, index;
+
+    if (!columnName) {
+      throw &quot;The column name is empty&quot;;
+    }
+    if (!me.columnExists(columnName)) {
+      return;
+    }
+
+    lastInput = me.getLastInput(columnName);
+    if (notEmpty) {
+      index = me.getFieldNameIndex(lastInput.name);
+      if (!$val(columnName + (index - 1))) {
+        jsAddLineButton = me.getJsAddLineButton(lastInput.name);
+        $removeLine(jsAddLineButton, index);
+        return;
+      }
+    }
+    me.enableRow(lastInput, true);
+  },
+
+<span id='sol-common-forms-Utils-method-addListener'>  /**
+</span>   * Adds a callback function to the event listener of an input field.
+   * @param {string} event Name of the event.
+   * @param {string} fieldKey Field key of the input field.
+   * @param {object} ctx Exteution context.
+   * @param {function} func Callback function.
+   */
+  addListener: function (event, fieldKey, ctx, func) {
+    var field = $var(ctx.field(fieldKey)),
+        handlerFct;
+
+    if (!field) {
+      return;
+    }
+
+    handlerFct = function () {
+      func.apply(ctx, arguments);
+    };
+
+    if (field.addEventListener) { // Modern
+      field.addEventListener(event, handlerFct, false);
+    } else if (field.attachEvent) { // Internet Explorer
+      field.attachEvent(&quot;on&quot; + event, handlerFct);
+    }
+  },
+
+
+<span id='sol-common-forms-Utils-method-getFieldNameIndex'>  /**
+</span>   * Returns the field index
+   * @param {String} fieldName Field name
+   * @returns {String}
+   */
+  getFieldNameIndex: function (fieldName) {
+    if (!fieldName) {
+      return &quot;&quot;;
+    }
+    var pos = fieldName.search(/\d+$/);
+    if (pos &gt; 0) {
+      return parseInt(fieldName.substring(pos), 10);
+    }
+    return &quot;&quot;;
+  },
+
+<span id='sol-common-forms-Utils-method-getRowIndex'>  /**
+</span>   * Returns the index number of the row
+   * @param {HTMLElement} field Field
+   * @return {String} Row index
+   */
+  getRowIndex: function (field) {
+    var me = this,
+        row, inputs, i, input, fieldName, index;
+
+    if (!field) {
+      throw &quot;Field is empty&quot;;
+    }
+
+    row = me.getRow(field);
+    if (!row) {
+      throw &quot;Row not found&quot;;
+    }
+
+    inputs = row.querySelectorAll(&quot;input&quot;);
+
+    for (i = 0; i &lt; inputs.length; i++) {
+      input = inputs[i];
+      fieldName = input.name;
+      index = me.getFieldNameIndex(fieldName);
+      if (index) {
+        return index;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getFieldNamePrefix'>  /**
+</span>   * Returns the field name without trailing numbers
+   * @param {Object|String} source Source element or field name
+   * @param {Object} params Parameters
+   * @param {String} [params.replaceNumberBy=&quot;&quot;] Replace the number by this string
+   * @returns {String}
+   */
+  getFieldNamePrefix: function (source, params) {
+    var me = this,
+        fieldName;
+
+    if (me.checkSource(source)) {
+      fieldName = source.name;
+    } else {
+      fieldName = source;
+    }
+
+    params = params || {};
+    params.replaceNumberBy = params.replaceNumberBy || &quot;&quot;;
+
+    if (!fieldName) {
+      return &quot;&quot;;
+    }
+    fieldName = fieldName.replace(/\d*$/, params.replaceNumberBy);
+
+    return fieldName;
+  },
+
+<span id='sol-common-forms-Utils-method-columnExists'>  /**
+</span>   * Checks whether a column exists
+   * @param {String} columnName Column name
+   * @return {Boolean}
+   */
+  columnExists: function (columnName) {
+    if (!columnName) {
+      throw &quot;The column name is empty&quot;;
+    }
+
+    return !!$var(columnName + &quot;1&quot;);
+  },
+
+<span id='sol-common-forms-Utils-method-getLastInput'>  /**
+</span>   * Return the last input field in the table
+   * @param {String} columnName
+   * @return {HTMLElement}
+   */
+  getLastInput: function (columnName) {
+    var currentInput, lastInput,
+        i = 1;
+
+    if (!columnName) {
+      throw &quot;The column name is empty&quot;;
+    }
+
+    while (true) {
+      currentInput = $var(columnName + i++);
+      if (currentInput) {
+        lastInput = currentInput;
+      } else {
+        return lastInput;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-disableRowsByIndicatorField'>  /**
+</span>   * Sets rows read-only
+   * @param {String} indicatorColumnName Read-only indicator field
+   * @param {Function} func Function that must return a boolean to determinate whether the row should be disabled
+   */
+  disableRowsByIndicatorField: function (indicatorColumnName, func) {
+    var me = this;
+
+    if (!indicatorColumnName) {
+      throw &quot;The indicator column name is empty&quot;;
+    }
+    if (!$var(indicatorColumnName + &quot;1&quot;)) {
+      return;
+    }
+
+    me.forEachRow(indicatorColumnName, function (rowIndex) {
+      var indicatorElement, disable;
+      disable = func.call(me, rowIndex);
+      indicatorElement = $var(indicatorColumnName + rowIndex);
+      me.enableRow(indicatorElement, !disable);
+    });
+  },
+
+
+<span id='sol-common-forms-Utils-method-enableRow'>  /**
+</span>   * Enables/disables a row
+   * @param {type} indicatorElement
+   * @param {type} enable
+   */
+  enableRow: function (indicatorElement, enable) {
+    var me = this,
+        nodeList, j, row, removeLineButton;
+    nodeList = me.getElementsInRow(indicatorElement);
+    for (j = 0; j &lt; nodeList.length; j++) {
+      nodeList[j].disabled = !enable;
+    }
+    if (!enable) {
+      row = me.getRow(indicatorElement);
+      removeLineButton = row.querySelector(&quot;.jsRemoveLine&quot;);
+      if (removeLineButton) {
+        removeLineButton.parentNode.removeChild(removeLineButton);
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getElementsInRow'>  /**
+</span>   * Returns the input fields and buttons in the row
+   * @param {HTMLElement} element
+   * @return {NodeList}
+   */
+  getElementsInRow: function (element) {
+    var me = this,
+        row, nodeList;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    row = me.getRow(element);
+    if (!row) {
+      throw &quot;Row not found&quot;;
+    }
+    nodeList = row.querySelectorAll(&quot;input,button&quot;);
+    return nodeList;
+  },
+
+<span id='sol-common-forms-Utils-method-getInputsInRow'>  /**
+</span>   * Returns the input fields in the row
+   * @param {HTMLElement} element
+   * @return {NodeList}
+   */
+  getInputsInRow: function (element) {
+    var me = this,
+        row, nodeList;
+    if (!element) {
+      throw &quot;Element is empty&quot;;
+    }
+    row = me.getRow(element);
+    if (!row) {
+      throw &quot;Row not found&quot;;
+    }
+    nodeList = row.querySelectorAll(&quot;input&quot;);
+    return nodeList;
+  },
+
+<span id='sol-common-forms-Utils-method-forEachRow'>  /**
+</span>   * Iterates over a table.
+   * @param {String} endOfTableIndicatorColumnName Name of a column to check if the line exists.
+   * @param {Function} func Callback function for the iteration.
+   * @param {Object} ctx Execution context.
+   */
+  forEachRow: function (endOfTableIndicatorColumnName, func, ctx) {
+    var i = 1;
+
+    if (!endOfTableIndicatorColumnName) {
+      throw &quot;The end of table indicator column name is empty.&quot;;
+    }
+    if (!func) {
+      throw &quot;The function parameter is emtpy.&quot;;
+    }
+
+    while ($var(endOfTableIndicatorColumnName + i)) {
+      func.call(ctx, i++);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-callInputChangedForDynKwlChanges'>  /**
+</span>   * Calls the function `inputChanged` for fields changed by a dynamic keyword list
+   * @param {Object} dynListItem Dynamic keyword list item
+   */
+  callInputChangedForDynKwlChanges: function (dynListItem) {
+    var fieldName, fieldNameParts, prefix, field;
+    for (fieldName in dynListItem) {
+      fieldNameParts = fieldName.split(&quot;_&quot;);
+      if (fieldNameParts &amp;&amp; (fieldNameParts.length &gt; 0)) {
+        prefix = fieldNameParts[0];
+        if (!prefix || (prefix.substr(0, 1) == &quot;$&quot;)) {
+          continue;
+        }
+        if ((prefix != &quot;IX&quot;) &amp;&amp; (prefix != &quot;WF&quot;)) {
+          fieldName = &quot;IX_GRP_&quot; + fieldName;
+        }
+      }
+      field = $var(fieldName);
+      if (field) {
+        inputChanged($var(fieldName));
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-disableForwardButtons'>  /**
+</span>   * Enables or disables forward buttons
+   * @param {Boolean} [disable=true] Disable button
+   */
+  disableForwardButtons: function (disable) {
+    var me = this,
+        forwardButtons, i, forwardButton;
+    forwardButtons = me.getForwardButtons();
+    for (i = 0; i &lt; forwardButtons.length; i++) {
+      forwardButton = forwardButtons[i];
+      forwardButton.disabled = (disable == false) ? false : true;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getForwardButtons'>  /**
+</span>   * Returns forward buttons
+   * @returns {NodeList}
+   */
+  getForwardButtons: function () {
+    var forwardButtons;
+    forwardButtons = document.querySelectorAll(&quot;button[name=&#39;NEXTNODE&#39;]&quot;);
+    return forwardButtons;
+  },
+
+<span id='sol-common-forms-Utils-method-getForwardButton'>  /**
+</span>   * Returns a next button
+   * @param {Object} params Parameters
+   * @param {String} params.nextNodeTranslationKey Translation key of the next node
+   * @return {HTMLElement} Forward button
+   */
+  getForwardButton: function (params) {
+    var me = this,
+        buttonIndex, forwardButtons, i, translationKey, forwardButton;
+
+    params = params || {};
+
+    if (params.nextNodeTranslationKey) {
+      for (i = 1; i &lt; 1000; i++) {
+        translationKey = ELO_PARAMS[&quot;KEY_NEXT_&quot; + i];
+        if (!translationKey) {
+          return;
+        }
+        if (translationKey == params.nextNodeTranslationKey) {
+          buttonIndex = i - 1;
+          break;
+        }
+      }
+    }
+
+    if (buttonIndex != undefined) {
+      forwardButtons = me.getForwardButtons();
+      if (forwardButtons &amp;&amp; (buttonIndex &lt; forwardButtons.length)) {
+        forwardButton = forwardButtons[buttonIndex];
+      }
+    }
+
+    return forwardButton;
+  },
+
+<span id='sol-common-forms-Utils-method-addBodyClass'>  /**
+</span>   * Adds a class to the ´body´ tag
+   * @param {String} className
+   */
+  addBodyClass: function (className) {
+    document.body.className += &quot; &quot; + className;
+  },
+
+<span id='sol-common-forms-Utils-method-removeBodyClass'>  /**
+</span>   * Removes a class from the ´body´ tag
+   * @param {String} className
+   */
+  removeBodyClass: function (className) {
+    document.body.classList.remove(className);
+  },
+
+<span id='sol-common-forms-Utils-method-getIsoDate'>  /**
+</span>   * Returns an ISO formatted date
+   * @param {String} fieldName Field name
+   * @param {Object} params Parameters
+   * @param {Boolean} params.startOfDay Start of day
+   * @returns {String}
+   */
+  getIsoDate: function (fieldName, params) {
+    var field, isoDate;
+
+    params = params || {};
+
+    if (!$val(fieldName)) {
+      return &quot;&quot;;
+    }
+    field = $var(fieldName);
+    if (!field) {
+      return;
+    }
+    isoDate = field.getAttribute(&quot;isodate&quot;) || &quot;&quot;;
+    if (params.startOfDay || (isoDate.length &gt; 8)) {
+      isoDate = isoDate.substr(0, 8) + &quot;000000&quot;;
+    }
+
+    return isoDate;
+  },
+
+<span id='sol-common-forms-Utils-method-setIsoDate'>  /**
+</span>   * Sets an ISO date
+   * @param {String} fieldName Field name
+   * @param {String} isoDate in ISO format
+   * @param {Object} params Parameters
+   * @param {Boolean} params.callInputChanged If true the function ´inputChanged´ will be called
+   */
+  setIsoDate: function (fieldName, isoDate, params) {
+    var localizedDate, field;
+    params = params || {};
+    params.callInputChanged = (typeof params.callInputChanged == &quot;undefined&quot;) ? true : params.callInputChanged;
+    field = $var(fieldName);
+    if (!field) {
+      return;
+    }
+    localizedDate = elo.wf.date.format(isoDate);
+    field.setAttribute(&quot;autovalidval&quot;, localizedDate);
+    $update(fieldName, localizedDate);
+    if (params.callInputChanged) {
+      inputChanged($var(fieldName));
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-copyIsoDate'>  /**
+</span>   * Copies an ISO date
+   * @param {String} srcFieldName Source field name
+   * @param {String} dstFieldName Destination field name
+   * @param {Object} params Parameters
+   * @param {Boolean} params.callInputChanged If true the function ´inputChanged´ will be called
+   */
+  copyIsoDate: function (srcFieldName, dstFieldName, params) {
+    var me = this,
+        value, isoDate;
+    if (!$var(srcFieldName) || !$var(dstFieldName)) {
+      return;
+    }
+    value = $val(srcFieldName);
+    if (!value) {
+      $update(dstFieldName, &quot;&quot;);
+      return;
+    }
+    isoDate = me.getIsoDate(srcFieldName);
+    me.setIsoDate(dstFieldName, isoDate, params);
+  },
+
+<span id='sol-common-forms-Utils-method-setDefaultValue'>  /**
+</span>   * Sets a default value if it&#39;s empty
+   * @param {String} fieldName Field name
+   * @param {String} defaultValue Default value
+   */
+  setDefaultValue: function (fieldName, defaultValue) {
+    var value;
+    value = $val(fieldName);
+    if (!value) {
+      $update(fieldName, defaultValue);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-isFieldChangedOrFormLoaded'>  /**
+</span>   * Checks if the specific field has been changed or the form is loaded
+   * @param {Object} source Changed HTML element.
+   * @param {Array} fieldNames Array of field names.
+   * @return {undefined}
+   */
+  isFieldChangedOrFormLoaded: function (source, fieldNames) {
+    var me = this;
+    if (!me.checkSource(source)) {
+      return true;
+    }
+    return me.isFieldChanged(source, fieldNames);
+  },
+
+<span id='sol-common-forms-Utils-method-isFieldChanged'>  /**
+</span>   * Checks if the specific field has been changed
+   * @param {Object} source Changed HTML element.
+   * @param {Array} fieldNames Array of field names.
+   * @return {undefined}
+   */
+  isFieldChanged: function (source, fieldNames) {
+    var me = this;
+    if (!source) {
+      return false;
+    }
+    return fieldNames.some(function (fieldName) {
+      var fieldBaseName = me.getBaseFieldName(source.name);
+      return ((fieldBaseName == fieldName) || (fieldBaseName + me.unitSuffix == fieldName));
+    });
+  },
+
+<span id='sol-common-forms-Utils-method-checkSource'>  /**
+</span>   * Checks if the changed input field es set
+   * @param {Object} source Changed input field
+   * @return {Boolean}
+   */
+  checkSource: function (source) {
+    return (source &amp;&amp; source.name);
+  },
+
+<span id='sol-common-forms-Utils-method-getBaseFieldName'>  /**
+</span>   * Returns the field name without unit suffix and trailing numbers
+   * @param {Object|String} source Source element or field name
+   * @returns {String}
+   */
+  getBaseFieldName: function (source) {
+    var me = this,
+        fieldName, unitSuffixRegExp;
+
+    if (me.checkSource(source)) {
+      fieldName = source.name;
+    } else {
+      fieldName = source;
+    }
+
+    if (!fieldName) {
+      return &quot;&quot;;
+    }
+    fieldName = fieldName.replace(/\d*$/g, &quot;&quot;);
+    unitSuffixRegExp = new RegExp(me.unitSuffix + &quot;$&quot;);
+    fieldName = fieldName.replace(unitSuffixRegExp, &quot;&quot;);
+    return fieldName;
+  },
+
+<span id='sol-common-forms-Utils-method-sumItems'>  /**
+</span>   * Sums all values of a given column
+   * @param {string} columnName Name of the column
+   * @return {Number}
+   */
+  sumItems: function (columnName) {
+    var me = this,
+        sum;
+    sum = new Decimal(0);
+    me.forEachRow(columnName, function (i) {
+      var decimal;
+      decimal = me.toDecimal(columnName + i);
+      sum = sum.plus(decimal);
+    });
+    return sum;
+  },
+
+<span id='sol-common-forms-Utils-method-toDecimal'>  /**
+</span>   * Returns a Decimal data type
+   * @param {String} fieldName fieldName Field name
+   * @return {Decimal} Decimal
+   */
+  toDecimal: function (fieldName) {
+    var field, decimal, params, value;
+
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+
+    params = {};
+
+    field = $var(fieldName);
+    if (!field) {
+      throw &quot;Field &#39;&quot; + fieldName + &quot;&#39; not found.&quot;;
+    }
+
+    if (field.hasAttribute(&quot;decimal&quot;)) {
+      value = field.getAttribute(&quot;decimal&quot;);
+    } else {
+      value = field.value;
+      params.thousandsSeparator = ELO.Configuration.Amount.ThousandSep;
+      params.decimalSeparator = ELO.Configuration.Amount.DecimalSep;
+    }
+
+    value = (!!value) ? value : &quot;0&quot;;
+    decimal = sol.common.DecimalUtils.toDecimal(value, params);
+    return decimal;
+  },
+
+<span id='sol-common-forms-Utils-method-updateDecimal'>  /**
+</span>   * Write a Decimal into an input field
+   * @param {String} fieldName Field name
+   * @param {Decimal} decimal Decimal
+   */
+  updateDecimal: function (fieldName, decimal) {
+    var me = this,
+        field, decimalPlaces;
+    if (!decimal) {
+      throw &quot;Decimal is emtpy&quot;;
+    }
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+
+    field = $var(fieldName);
+    if (!field) {
+      throw &quot;Field &#39;&quot; + fieldName + &quot;&#39; not found.&quot;;
+    }
+
+    decimalPlaces = me.getDisplayDecimalPlaces(field);
+    me.writeDecimalField(field, decimal, decimalPlaces);
+  },
+
+<span id='sol-common-forms-Utils-method-normalizeDecimal'>  /**
+</span>   * Normalize decimals
+   * @param {HTMLElement} field Field
+   */
+  normalizeDecimal: function (field) {
+    var me = this,
+        decimalPlaces, decimal;
+    if (!field) {
+      return;
+    }
+
+    decimalPlaces = me.getDisplayDecimalPlaces(field);
+    if (!decimalPlaces) {
+      return;
+    }
+    field.removeAttribute(&quot;decimal&quot;);
+
+    if (field.value == &quot;&quot;) {
+      return;
+    }
+
+    decimal = me.toDecimal(field.name);
+
+    me.writeDecimalField(field, decimal, decimalPlaces);
+  },
+
+<span id='sol-common-forms-Utils-method-writeDecimalField'>  /**
+</span>   * Writes a Decimal
+   * @private
+   * @param {HTMLElement} field Field name
+   * @param {Decimal} decimal Decimal
+   * @param {Number} decimalPlaces Decimal places
+   */
+  writeDecimalField: function (field, decimal, decimalPlaces) {
+    var value;
+    field.setAttribute(&quot;decimal&quot;, decimal.toString());
+    value = decimal.toFixed(decimalPlaces).toString();
+    value = value.replace(&quot;.&quot;, ELO.Configuration.Amount.DecimalSep);
+    $update(field.name, value);
+  },
+
+<span id='sol-common-forms-Utils-method-getDisplayDecimalPlaces'>  /**
+</span>   * Return display decimal decimalPlaces
+   * @param {HTMLElement} field Field
+   * @return {String}
+   */
+  getDisplayDecimalPlaces: function (field) {
+    var eloverifyString, match, result;
+    if (!field) {
+      throw &quot;Field is emtpy&quot;;
+    }
+    eloverifyString = field.getAttribute(&quot;eloverify&quot;);
+    if (eloverifyString) {
+      match = eloverifyString.match(/nk:(\d+)/);
+      if (match &amp;&amp; (match.length == 2)) {
+        result = parseInt(match[1], 10);
+        return result;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-showColumns'>  /**
+</span>   * Shows or hides columns
+   * @param {Array} columnNames Column names
+   * @param {Boolean} show Show columns
+   */
+  showColumns: function (columnNames, show) {
+    var me = this,
+        i, columnName;
+    for (i = 0; i &lt; columnNames.length; i++) {
+      columnName = columnNames[i];
+      me.showColumn(columnName, show);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-showColumn'>  /**
+</span>   * Show or hides a column
+   * @param {String} columnName Column name
+   * @param {Boolean} show Show column
+   * @param {Object} params Parameters
+   * @param {Boolean} [param.clear=false] Clear fields
+   */
+  showColumn: function (columnName, show, params) {
+    var me = this,
+        field, columnIndex, addButton, tr, td, input;
+
+    if (!columnName) {
+      throw &quot;Column name is empty&quot;;
+    }
+
+    params = params || {};
+    params.clear = (typeof params.clear == &quot;undefined&quot;) ? false : true;
+
+    field = $var(columnName + &quot;1&quot;);
+
+    if (!field) {
+      return;
+    }
+
+    field = $var(columnName + &quot;1&quot;);
+    columnIndex = me.getColumnIndex(field);
+
+    if (columnIndex &gt; -1) {
+      tr = me.getParentByTagName(field, &quot;tr&quot;);
+      tr = tr.previousElementSibling;
+
+      while (tr) {
+        addButton = tr.querySelector(&quot;input[type=&#39;button&#39;][name=&#39;JS_ADDLINE&#39;]&quot;);
+        if (addButton) {
+          return;
+        }
+        td = tr.querySelector(&quot;*:nth-child(&quot; + (columnIndex + 1) + &quot;)&quot;);
+        if (show) {
+          td.style.display = &quot;&quot;;
+        } else {
+          if (params.clear) {
+            input = td.querySelector(&quot;input[type=&#39;text&#39;]&quot;);
+            if (input) {
+              $update(input.name, &quot;&quot;);
+            }
+          }
+          td.style.display = &quot;none&quot;;
+        }
+        tr = tr.nextElementSibling;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getColumnIndex'>  /**
+</span>   * Returns the column index
+   * @param {HTMLElement} field Field
+   * @return {Number} Column index
+   */
+  getColumnIndex: function (field) {
+    var me = this,
+        index = 0,
+        td;
+
+    if (field) {
+      td = me.getParentByTagName(field, &quot;TD&quot;);
+
+      while (true) {
+        td = td.previousSibling;
+        if (td) {
+          index++;
+        } else {
+          return index;
+        }
+      }
+    }
+
+    return -1;
+  },
+
+<span id='sol-common-forms-Utils-method-disableDependentFields'>  /**
+</span>   * Disables dependent fields
+   * @param {Object} disableDependentFieldsConfig Configuration to disable dependent fields
+   * @param {Object} changedInput Changed input field
+   */
+  disableDependentFields: function (disableDependentFieldsConfig, changedInput) {
+    var me = this,
+        i = 0,
+        fieldsExist, disableFieldNames, srcFieldName, key, fieldName, field, index, disable;
+
+    if (!disableDependentFieldsConfig) {
+      return;
+    }
+
+    if (changedInput) {
+      srcFieldName = me.getFieldNamePrefix(changedInput, { replaceNumberBy: &quot;{i}&quot; });
+      disableFieldNames = disableDependentFieldsConfig[srcFieldName];
+      if (!disableFieldNames) {
+        return;
+      }
+      disable = !!$val(changedInput.name);
+      index = me.getFieldNameIndex(changedInput.name);
+      me.disableFields(disableFieldNames, index, disable);
+    } else {
+      do {
+        i++;
+        fieldsExist = false;
+        for (key in disableDependentFieldsConfig) {
+          fieldName = key.replace(&quot;{i}&quot;, i);
+          field = $var(fieldName);
+          if (field) {
+            fieldsExist = true;
+            if ($val(fieldName)) {
+              disableFieldNames = disableDependentFieldsConfig[key];
+              me.disableFields(disableFieldNames, i, true);
+              break;
+            }
+          }
+        }
+      } while (fieldsExist);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-disableFields'>  /**
+</span>   * Disable fields
+   * @param {Array} fieldNames Field names
+   * @param {Number} index Index
+   * @param {Boolean} disable
+   */
+  disableFields: function (fieldNames, index, disable) {
+    var me = this,
+        i, fieldName;
+
+    for (i = 0; i &lt; fieldNames.length; i++) {
+      fieldName = fieldNames[i];
+      fieldName = fieldName.replace(&quot;{i}&quot;, index);
+      me.disableField(fieldName, disable);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-disableField'>  /**
+</span>   * Disables a field
+   * @param {String} fieldName Field name
+   * @param {Boolean} disable If true then the field will be disabled
+   */
+  disableField: function (fieldName, disable) {
+    var field;
+
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    field = $var(fieldName);
+    if (!field) {
+      return;
+    }
+    if (disable) {
+      $update(fieldName, &quot;&quot;);
+      field.setAttribute(&quot;readonly&quot;, &quot;readonly&quot;);
+      field.style.backgroundImage = &quot;none&quot;;
+    } else {
+      field.removeAttribute(&quot;readonly&quot;);
+      field.style.backgroundImage = &quot;&quot;;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-ensureRowExists'>  /**
+</span>   * Ensures that a specific table row exists
+   * @param {String} fieldName Field name
+   */
+  ensureRowExists: function (fieldName) {
+    var me = this,
+        field, firstFieldName, firstField, addButton;
+
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    field = $var(fieldName);
+
+    if (!field) {
+      do {
+        firstFieldName = me.getFieldNamePrefix(fieldName) + &quot;1&quot;;
+        firstField = $var(firstFieldName);
+        if (!firstField) {
+          throw &quot;First field doesn&#39;t exist. fieldName=&quot; + firstFieldName;
+        }
+        addButton = addButton || me.getJsAddLineButton(firstFieldName);
+        if (!addButton) {
+          throw &quot;Addbutton not found. fieldName=&quot; + firstFieldName;
+        }
+        $addLine(addButton, 1);
+        field = $var(fieldName);
+      } while (!field);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-getAddLineButton'>  /**
+</span>   * Finds a JS_ADDLINE button by a given field name
+   * @param {String} fieldName Field name
+   * @return {HTMLElement}
+   */
+  getAddLineButton: function (fieldName) {
+    var me = this,
+        tr, field, button;
+
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    field = $var(fieldName);
+    if (!field) {
+      throw &quot;Can&#39;t find field &#39;&quot; + fieldName + &quot;&#39;&quot;;
+    }
+
+    tr = me.getParentByTagName(field, &quot;tr&quot;);
+    while (true) {
+      tr = tr.nextElementSibling;
+      if (!tr) {
+        return;
+      }
+      button = tr.querySelector(&quot;input[type=&#39;button&#39;][name=&#39;JS_ADDLINE&#39;]&quot;);
+      if (button) {
+        return button;
+      }
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-clearRemainingLines'>  /**
+</span>   * Clears remaining lines
+   * @param {String} fieldName Field name
+   */
+  clearRemainingLines: function (fieldName) {
+    var me = this,
+        field, tr, inputs, i, button, input;
+
+    if (!fieldName) {
+      throw &quot;Field name is empty&quot;;
+    }
+    field = $var(fieldName);
+    if (!field) {
+      return;
+    }
+    tr = me.getParentByTagName(field, &quot;tr&quot;);
+    while (true) {
+      if (!tr) {
+        return;
+      }
+      button = tr.querySelector(&quot;input[type=&#39;button&#39;][name=&#39;JS_ADDLINE&#39;]&quot;);
+      if (button) {
+        return;
+      }
+      inputs = tr.querySelectorAll(&quot;input[type=&#39;text&#39;]&quot;);
+      for (i = 0; i &lt; inputs.length; i++) {
+        input = inputs[i];
+        $update(input.name, &quot;&quot;);
+      }
+      tr = tr.nextElementSibling;
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-isColumnEmpty'>  /**
+</span>   * Returns true if the column is empty
+   * @param {String} columnName Column name
+   * @return {Boolean}
+   */
+  isColumnEmpty: function (columnName) {
+    var i = 1,
+        field;
+
+    do {
+      field = $var(columnName + i);
+      if (field &amp;&amp; $val(columnName + i)) {
+        return false;
+      }
+      i++;
+    } while (field);
+
+    return true;
+  },
+
+<span id='sol-common-forms-Utils-method-showRows'>  /**
+</span>   * Shows or hides a row
+   * @param {String} columnName Column name
+   * @param {Function} callback Callback
+   */
+  showRows: function (columnName, callback) {
+    var me = this,
+        i = 1,
+        field, result, tr;
+
+    if (!columnName) {
+      throw &quot;Column name is empty&quot;;
+    }
+
+    do {
+      field = $var(columnName + i);
+      if (field) {
+        result = (callback) ? callback(i) : true;
+        tr = me.getParentByTagName(field, &quot;tr&quot;);
+        if (tr) {
+          tr.setAttribute(&quot;style&quot;, result ? &quot;&quot; : &quot;display:none;&quot;);
+        }
+      }
+      i++;
+    } while (field);
+  },
+
+<span id='sol-common-forms-Utils-method-addClickListener'>  /**
+</span>   * Registers a click handler
+   * @param {Object} params Parameters
+   * @param {String} params.name Button name
+   * @param {String} params.prefix Button name prefix
+   * @param {Object} params.ctx Context
+   * @param {Function} params.func Function
+   */
+  addClickListener: function (params) {
+    var elements, i, element, handlerFunc;
+
+    params = params || {};
+    if (!params.name &amp;&amp; !params.prefix) {
+      throw &quot;Name or prefix must be set&quot;;
+    }
+
+    if (!params.ctx) {
+      throw &quot;Context must be set&quot;;
+    }
+
+    if (!params.func) {
+      throw &quot;Function must be set&quot;;
+    }
+
+    handlerFunc = function () {
+      params.func.apply(params.ctx, arguments);
+    };
+
+    if (params.prefix) {
+      elements = document.querySelectorAll(&quot;input[name^=&#39;&quot; + params.prefix + &quot;&#39;]&quot;);
+    } else {
+      elements = document.querySelectorAll(&quot;input[name=&#39;&quot; + params.name + &quot;&#39;]&quot;);
+    }
+
+    for (i = 0; i &lt; elements.length; i++) {
+      element = elements[i];
+      element.addEventListener(&quot;click&quot;, handlerFunc, false);
+    }
+  },
+
+<span id='sol-common-forms-Utils-method-countLines'>  /**
+</span>   * Returns the number of lines
+   * @param {String} indicatorColumnName Indicator column name
+   * @return {Number} Number of lines
+   */
+  countLines: function (indicatorColumnName) {
+    var me = this,
+        max = 0;
+
+    me.forEachRow(indicatorColumnName, function (lineIndex) {
+      max = lineIndex;
+    });
+
+    return parseInt(max, 10);
+  },
+
+<span id='sol-common-forms-Utils-method-callRegisteredFunction'>  /**
+</span>   * Calls the registered function of the given name.
+   * As parameter a JSON object can be given.
+   *
+   * @param {String} fctName The name of the registered function to call.
+   * @param {Object} paramObj The input data for the function, sent as Serialized String value of the Any object.
+   *
+   * @param {Function} success Success callback function. The argument value
+   *  is the deserialized JSON object from the String value of the Any
+   *  object that was returned from the registered function.
+   * @param {Function} failure Failure callback function the error object will be given as parameter.
+   */
+  callRegisteredFunction: function (fctName, paramObj, success, failure) {
+    var me = this,
+        standardAppName, url, rfParams;
+
+    if (!fctName) {
+      throw &quot;Function name is missing&quot;;
+    }
+
+    standardAppName = &quot;sol.common.apps.BusinessSolution&quot;;
+    url = me.getAppApiUrl(standardAppName) + &quot;exec_registered_fct/&quot; + encodeURIComponent(fctName);
+
+    rfParams = { any: JSON.stringify(paramObj) };
+
+    me.sendPost(url, rfParams, function (resp) {
+      var respObj;
+      try {
+        respObj = JSON.parse(resp);
+      } catch (e) {
+        console.info(&quot;Could not parse JSON in responseText: &quot; + resp);
+        failure(e);
+      }
+      success(respObj);
+    },
+    failure, {
+      addTicket: true,
+      addCookieTicket: true
+    });
+  },
+
+<span id='sol-common-forms-Utils-method-sendPost'>  /**
+</span>   * Sends a post request
+   * @param {String} url URL
+   * @param {Object} dataObj Data object
+   * @param {Function} success Success callback function.
+   * @param {Function} failure Failure callback function the error object will be given as parameter.
+   * @param {Object} params Parameters
+   * @param {Object} params.reqParamsObj Request params object
+   * @param {Boolean} params.addTicket Add ticket
+   */
+  sendPost: function (url, dataObj, success, failure, params) {
+    var me = this,
+        xhr, data, reqParamsString;
+
+    dataObj = dataObj || {};
+    params = params || {};
+    params.reqParamsObj = params.reqParamsObj || {};
+    params.contentType = params.contentType || &quot;application/x-www-form-urlencoded&quot;;
+
+    if (params.addTicket) {
+      params.reqParamsObj.ticket = ELO_PARAMS.ELO_TICKET;
+    }
+
+    reqParamsString = me.encodeParams(params.reqParamsObj);
+    if (reqParamsString) {
+      url += &quot;?&quot; + reqParamsString;
+    }
+
+    xhr = new XMLHttpRequest();
+    xhr.open(&quot;POST&quot;, url, true);
+
+    if (params.contentType) {
+      xhr.setRequestHeader(&quot;Content-type&quot;, params.contentType);
+    }
+
+    data = me.encodeParams(dataObj);
+
+    xhr.onload = function () {
+      var resp;
+
+      resp = xhr.responseText;
+
+      if (xhr.status == 200) {
+        success(resp);
+      } else {
+        failure(resp);
+      }
+    };
+
+    xhr.send(data);
+  },
+
+<span id='sol-common-forms-Utils-method-encodeParams'>  /**
+</span>   * Encodes parameters
+   * @param {Object} params Parameters
+   * @param {String} separator Separator
+   * @return {String}
+   */
+  encodeParams: function (params, separator) {
+    var parts = [],
+        prop, paramsString;
+
+    params = params || {};
+
+    separator = separator || &quot;&amp;&quot;;
+
+    for (prop in params) {
+      if (params.hasOwnProperty(prop)) {
+        parts.push(encodeURIComponent(prop) + &quot;=&quot; + encodeURIComponent(params[prop]));
+      }
+    }
+
+    if (parts.length == 0) {
+      return &quot;&quot;;
+    }
+
+    paramsString = parts.join(separator);
+
+    return paramsString;
+  },
+
+<span id='sol-common-forms-Utils-method-getWfUrl'>  /**
+</span>   * Returns the ELOwf URL
+   * @return {String} ELOwf URL
+   */
+  getWfUrl: function () {
+    var currentUrl, wfUrl;
+
+    currentUrl = window.location.href;
+    wfUrl = currentUrl.substr(0, currentUrl.indexOf(&quot;/wf/&quot;));
+
+    return wfUrl;
+  },
+
+<span id='sol-common-forms-Utils-method-getAppUrl'>  /**
+</span>   * Returns the URL for a specific app
+   * @param {String} appName App name
+   * @return {String} ELOapp URL
+   */
+  getAppUrl: function (appName) {
+    var me = this,
+        wfUrl, appUrl;
+
+    wfUrl = me.getWfUrl();
+    appUrl = wfUrl + &quot;/apps/app/&quot; + appName + &quot;/&quot;;
+
+    return appUrl;
+  },
+
+<span id='sol-common-forms-Utils-method-getAppApiUrl'>  /**
+</span>   * Returns the URL for an app API
+   * @param {String} appName App name
+   * @return {String} ELOapp API URL
+   */
+  getAppApiUrl: function (appName) {
+    var me = this,
+        appUrl, appApiUrl;
+
+    if (!appName) {
+      throw &quot;AppName is missing&quot;;
+    }
+
+    appUrl = me.getAppUrl(appName);
+
+    appApiUrl = appUrl + &quot;api/&quot;;
+
+    return appApiUrl;
+  },
+
+<span id='sol-common-forms-Utils-method-showTemplateListWarning'>  /**
+</span>   * Insert list
+   * @param {String}labelName Label name
+   * @param {Array} entries Entries
+   * @param {String} entries[].text Text
+   * @param {Object} entries[].params Parameters
+   */
+  showTemplateListWarning: function (labelName, entries) {
+    var me = this,
+        label, listElements, listElement, list, i, entry, listEntry, listEntryLink, entryTextElement;
+
+    label = $var(labelName);
+
+    if (!label) {
+      return;
+    }
+
+    listElements = label.getElementsByTagName(&quot;ul&quot;);
+
+    for (i = 0; i &lt; listElements.length; i++) {
+      listElement = listElements[i];
+      label.removeChild(listElement);
+    }
+
+    if (!entries || (entries.length == 0)) {
+      me.hideTemplate(label);
+      return;
+    }
+
+    list = document.createElement(&quot;ul&quot;);
+    for (i = 0; i &lt; entries.length; i++) {
+      entry = entries[i];
+      listEntry = document.createElement(&quot;li&quot;);
+      listEntryLink = document.createElement(&quot;a&quot;);
+      if (entry.params) {
+        if (entry.params.guid) {
+          listEntryLink.onclick = function () { // eslint-disable-line no-loop-func
+            me.gotoSord(entry.params.guid);
+          };
+        }
+      }
+      entryTextElement = document.createTextNode(entry.text);
+      listEntryLink.appendChild(entryTextElement);
+      listEntry.appendChild(listEntryLink);
+      list.appendChild(listEntry);
+    }
+
+    label.appendChild(list);
+
+    me.showTemplate(label);
+  },
+
+<span id='sol-common-forms-Utils-method-gotoSord'>  /**
+</span>   * Goto a sord
+   * @param {String} guid GUID
+   */
+  gotoSord: function (guid) {
+    if (!guid) {
+      return;
+    }
+    var data = {};
+    console.info(&quot;sendGoto: &quot; + guid);
+    data[api.constants.communication.DATA_GUID] = guid;
+    api.communication.Parent.sendGoto(data);
+  },
+
+<span id='sol-common-forms-Utils-method-hideTemplate'>  /**
+</span>   * Hides a template
+   * @param {HTMLElement} field Field
+   */
+  hideTemplate: function (field) {
+    var me = this,
+        template;
+
+    if (!field) {
+      return;
+    }
+
+    template = me.getTemplate(field);
+
+    if (!template) {
+      return;
+    }
+
+    template.style.display = &quot;none&quot;;
+  },
+
+<span id='sol-common-forms-Utils-method-showTemplate'>  /**
+</span>   * Shows a template
+   * @param {HTMLElement} field Field
+   */
+  showTemplate: function (field) {
+    var me = this,
+        template;
+
+    if (!field) {
+      return;
+    }
+
+    template = me.getTemplate(field);
+
+    if (!template) {
+      return;
+    }
+
+    template.style.display = &quot;&quot;;
+  },
+
+<span id='sol-common-forms-Utils-method-checkVersion'>  /**
+</span>   * Checks the version of ELO components
+   * @param {String} currentVersionString
+   * @param {String} requiredVersionString
+   * @return {Boolean} Return true if the current version is equal or higher then the required version
+   */
+  checkVersion: function (currentVersionString, requiredVersionString) {
+    var result = true,
+        currentRegex, requiredRegex, currentVersionMatch, requiredVersionMatch, currentPart, requiredPart;
+
+    currentRegex = /([0-9]+(\\.[0-9]+)*)/g;
+    requiredRegex = /([0-9]+(\\.[0-9]+)*)/g;
+    currentVersionMatch = currentRegex.exec(currentVersionString);
+    requiredVersionMatch = requiredRegex.exec(requiredVersionString);
+
+    while (requiredVersionMatch !== null) {
+      currentPart = (currentVersionMatch) ? parseInt(currentVersionMatch[0], 10) : 0;
+      requiredPart = parseInt(requiredVersionMatch[0], 10);
+      if (requiredPart &gt; currentPart) {
+        result = false;
+        break;
+      } else if (requiredPart &lt; currentPart) {
+        result = true;
+        break;
+      }
+      currentVersionMatch = currentRegex.exec(currentVersionString);
+      requiredVersionMatch = requiredRegex.exec(requiredVersionString);
+    }
+
+    return result;
+  }
+});
+</pre>
+</body>
+</html>

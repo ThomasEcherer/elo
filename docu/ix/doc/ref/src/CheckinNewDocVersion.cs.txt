@@ -1,0 +1,173 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	///
+	/// 1. Create new document without an associated file
+	/// 2. Checkout document
+	/// 3. Checkin a file as a new Version 
+	///
+	/// </summary>
+	public class CheckinNewDocVersion
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// 1. Create document without an associated file
+				IndexServer.EditInfo ed = ix.createDoc(ci, "1", "0", null, CONST.EDIT_INFO.mbSord);
+				ed.sord.name = "C# example CheckinNewDocument";
+				ed.sord.id = ix.checkinSord(ci, ed.sord, CONST.SORD.mbAll, CONST.LOCK.NO);
+
+				// Create test file
+				// 2. Checkout document
+				ed = ix.checkoutDoc(ci, ed.sord.guid, null, CONST.EDIT_INFO.mbSordDocAtt, CONST.LOCK.YES);
+				Logger.instance().log("checkout sord succeeded, objId=" + ed.document.objId);
+
+				// Hint: Now the document is locked and will be unlocked by checkinDocEnd
+
+				// 3. Checkin a file as a new Version 
+				String text = "version 1";
+				String testFile = internalCreateTestFile(text, "txt");
+
+				// Supply the extension of the document
+				ed.document.docs = new IndexServer.DocVersion[1];
+				ed.document.docs[0] = new IndexServer.DocVersion();
+				ed.document.docs[0].ext = IXClient.getFileExt(testFile);
+        //ed.document.docs[0].pathId ... uses ed.sord.path by default
+        //ed.document.docs[0].encryptionSet ... uses ed.sord.details.encryptionSet by default
+
+				// CheckinDocBegin: let IndexServer generate an URL to upload the document
+				ed.document = ix.checkinDocBegin(ci, ed.document);
+
+				// Upload the document
+				String uploadResult = ix.upload(ed.document.docs[0].url, testFile);
+				ed.document.docs[0].uploadResult = uploadResult;
+
+				// Set version comment
+				ed.document.docs[0].version = "1.0";
+				ed.document.docs[0].comment = "IndexServer C# example";
+
+				// CheckinDocEnd: uploadResult contains the document information from ELODM.
+				// Pass this information to IndexServer.
+				ed.document = ix.checkinDocEnd(ci, null, null, ed.document, CONST.LOCK.YES);
+						
+				// Hint: It's not nessesary to pass a Sord object to IndexServer in checkinDocEnd,
+				//       if the indexing information was not changed. IndexServer gets the
+				//       object ID from ed.document.objId.
+
+				Logger.instance().log("inserted document version:");
+				Logger.instance().log("  objId=" + ed.document.objId);
+				Logger.instance().log("  docId=" + ed.document.docs[0].id);
+				Logger.instance().log("  doc-guid=" + ed.document.docs[0].guid);
+				Logger.instance().log("  URL=" + ed.document.docs[0].url);
+
+				// 2. Checkout and show document
+				ed = ix.checkoutDoc(ci, ed.sord.guid, ed.document.docs[0].guid, CONST.EDIT_INFO.mbAll, CONST.LOCK.YES);
+				String tempName2 = internalMakeTempFileName(ed.document.docs[0].ext);
+				ix.download(ed.document.docs[0].url, tempName2);
+
+        // Uncomment this to show document in notepad:
+        //System.Diagnostics.Process.Start("notepad.exe", tempName2);
+        //System.Threading.Thread.Sleep(3000);
+
+        System.IO.File.Delete(tempName2);
+							
+        // insert second version
+        //text = "version 2";
+        //testFile = internalCreateTestFile(text, "txt");
+        //ed.document.docs = new IndexServer.DocVersion[1];
+        //ed.document.docs[0] = new IndexServer.DocVersion();
+        //ed.document.docs[0].ext = IXClient.getFileExt(testFile);
+        //ed.document = ix.checkinDocBegin(ci, ed.document);
+        //uploadResult = ix.upload(ed.document.docs[0].url, testFile);
+        //ed.document.docs[0].uploadResult = uploadResult;
+        //ed.document.docs[0].version = "2.0";
+        //ed.document.docs[0].comment = "2.0 IndexServer C# example";
+        //ed.document = ix.checkinDocEnd(ci, null, null, ed.document, CONST.LOCK.YES);
+
+				bool cleanUp = true;
+				if (cleanUp)
+				{
+					// Delete Document
+          IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+          delOpts.deleteFinally = true;
+          ix.deleteSord(ci, null, ed.sord.guid, CONST.LOCK.NO, null);
+          ix.deleteSord(ci, null, ed.sord.guid, CONST.LOCK.NO, delOpts);
+				}
+			}
+			catch (Exception e) 
+			{
+				throw e;
+			}
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private String internalMakeTempFileName(String ext)
+		{
+			Random r = new Random((int)DateTime.Now.Ticks);
+			String tempDir = System.IO.Path.GetTempPath();
+			String tempName = "";
+			do
+			{
+				tempName = tempDir + "eloix" + r.Next() + "." + ext;
+			} while (System.IO.File.Exists(tempName));
+			return tempName;
+		}
+
+		private String internalCreateTestFile(String text, String ext)
+		{
+			String tempName = internalMakeTempFileName(ext);
+			System.IO.FileStream fstrm = new System.IO.FileStream(tempName, 
+				System.IO.FileMode.Create, System.IO.FileAccess.Write);
+			System.Text.ASCIIEncoding encoding = new System.Text.ASCIIEncoding();
+			int n = encoding.GetByteCount(text);
+			byte[] buf = new byte[n];
+			encoding.GetBytes(text, 0, text.Length, buf, 0);
+			fstrm.Write(buf, 0, buf.Length);
+			fstrm.Close();
+			return tempName;
+		}
+	}
+}

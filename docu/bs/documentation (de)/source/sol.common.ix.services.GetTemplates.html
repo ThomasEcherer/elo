@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.GetTemplates&quot; });
+
+<span id='sol-common-ix-services-GetTemplates'>/**
+</span> * Retrieves the templates from all custom folders and has to be used as dynamic register.
+ *
+ * The folder description has to be the following text:
+ *
+ *     !? RF_sol_common_service_GetTemplates
+ *
+ * This uses the same algorithm as {@link sol.common.ix.services.GetConfig GetConfig} to determine the folders from where the templates will be loaded.
+ *
+ * E.g. if this is used on the folder
+ *
+ *     &quot;ARCPATH:/Administration/Business Solutions/contract/Configuration/Contract types&quot;
+ *
+ * it will load the templates from
+ *
+ *     &quot;ARCPATH:/Administration/Business Solutions Custom/contract/Configuration/Contract types&quot;
+ *
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires  sol.common.IxUtils
+ * @requires  sol.common.ix.ServiceBase
+ * @requires  sol.common.ix.services.GetTemplates.Provider
+ */
+sol.define(&quot;sol.common.ix.services.GetTemplates&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-GetTemplates-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-GetTemplates-method-process'>  /**
+</span>   * Retrieves the objIds for templates from all custom folders.
+   * @return {Object[]}
+   */
+  process: function () {
+    var me = this,
+        result = null,
+        parentIdString, dbConnection;
+
+    parentIdString = sol.common.ix.services.GetTemplates.Provider.getRelatedFolderIds(me.sord.id);
+
+    if (parentIdString &amp;&amp; (parentIdString.length &gt; 0)) {
+      dbConnection = new Packages.de.elo.ix.jscript.DBConnection();
+      result = dbConnection.query(&quot;SELECT rel.objectid FROM relation rel JOIN objekte obj ON rel.objectid = obj.objid WHERE rel.parentid IN (&quot; + parentIdString + &quot;) AND rel.relstatus = 0 ORDER BY obj.objshort&quot;);
+    }
+
+    return result;
+  }
+
+});
+
+<span id='sol-common-ix-services-GetTemplates-Provider'>/**
+</span> * @protected
+ * Internal cache for the folder IDs used to determine related templates.
+ *
+ * Uses the merge hierarchy like the configuration does.
+ *
+ * This should be uses only by {@link sol.common.ix.services.GetTemplates GetTemplates}.
+ *
+ * @requires sol.common.IxUtils
+ */
+sol.define(&quot;sol.common.ix.services.GetTemplates.Provider&quot;, {
+  singleton: true,
+
+<span id='sol-common-ix-services-GetTemplates-Provider-property-cache'>  cache: [],
+</span>
+<span id='sol-common-ix-services-GetTemplates-Provider-method-getRelatedFolderIds'>  /**
+</span>   * Read the folder IDs of all folders belonging to a specified one.
+   * @param {String} originObjId
+   * @return {String} A comma separated list of all related objIds
+   */
+  getRelatedFolderIds: function (originObjId) {
+    var me = this,
+        msg;
+
+    if (!me.cache[originObjId]) {
+      me.cache[originObjId] = me.idsToString(me.retrieveFolderIds(originObjId));
+      msg = &quot;Init cache for &#39;{0}&#39; -&gt; {1}&quot;;
+    } else {
+      msg = &quot;Cache hit for &#39;{0}&#39; -&gt; {1}&quot;;
+    }
+
+    me.logger.debug([msg, originObjId, me.cache[originObjId]]);
+    return me.cache[originObjId];
+  },
+
+<span id='sol-common-ix-services-GetTemplates-Provider-method-retrieveFolderIds'>  /**
+</span>   * @private
+   * Retrieves the folder IDs.
+   * @param {String} originObjId
+   * @return {String[]} A comma list of all related objIds
+   */
+  retrieveFolderIds: function (originObjId) {
+    var parentIds = [],
+        mergehierarchy, defaultSord;
+
+    mergehierarchy = sol.common.IxUtils.execute(&quot;RF_sol_common_service_GetConfigHierarchy&quot;, { compose: originObjId });
+
+    if (mergehierarchy) {
+
+      if (mergehierarchy.defaultConfig) {
+        defaultSord = ixConnect.ix().checkoutSord(mergehierarchy.defaultConfig.guid, SordC.mbOnlyId, LockC.NO);
+        if (defaultSord) {
+          parentIds.push(defaultSord.id);
+        }
+      }
+
+      if (mergehierarchy.customConfigs &amp;&amp; (mergehierarchy.customConfigs.length &gt; 0)) {
+        mergehierarchy.customConfigs.forEach(function (customCfg) {
+          var customSord;
+          if (customCfg &amp;&amp; customCfg.guid) {
+            customSord = ixConnect.ix().checkoutSord(customCfg.guid, SordC.mbOnlyId, LockC.NO);
+            if (customSord) {
+              parentIds.push(customSord.id);
+            }
+          }
+        });
+      }
+    }
+    return parentIds;
+  },
+
+<span id='sol-common-ix-services-GetTemplates-Provider-method-idsToString'>  /**
+</span>   * @private
+   * Converts an Array of objIds to an String for the SQL query.
+   * @param {String[]} parentIds
+   * @return {String}
+   */
+  idsToString: function (parentIds) {
+    return parentIds.map(function (id) {
+      return &quot;&#39;&quot; + id + &quot;&#39;&quot;;
+    }).join(&quot;,&quot;);
+  }
+
+});
+
+<span id='sol-common-ix-services-GetTemplates-static-method-RF_sol_common_service_GetTemplates'>/**
+</span> * @member sol.common.ix.services.GetTemplates
+ * @method RF_sol_common_service_GetTemplates
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_GetTemplates(ec, args) {
+  var params, service, result;
+  logger.enter(&quot;RF_sol_common_service_GetTemplates&quot;, args);
+  params = {};
+  if (args.length &gt; 0) {
+    params.sord = args[0];
+  }
+  service = sol.create(&quot;sol.common.ix.services.GetTemplates&quot;, params);
+  result = service.process();
+  logger.exit(&quot;RF_sol_common_service_GetTemplates&quot;, result);
+  return result;
+}
+</pre>
+</body>
+</html>

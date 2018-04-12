@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+
+<span id='sol-connector_xml-Importer'>/**
+</span> * This is the XML importer object.
+ *
+ * The importer is used to process XML files and write extracted metadata into an existing Sord object.
+ * The metadata extraction is controlled by a configuration object.
+ *
+ * # Usage
+ *
+ *     var objId = &#39;(GUID)&#39; ,
+ *         xml = new java.io.File( &#39;myxmlfile.xml&#39; ),
+ *         importer;
+ *
+ *     importer = sol.create(&quot;sol.connector_xml.Importer&quot;, {
+ *       ignoreDtd: true,  //optional
+ *       xsd: [{ name: &quot;XSD Name&quot;, guid: &quot;(04089DB6-E667-EDDE-DB86-5FCB6E5F4DFB)&quot; }],  //optional
+ *       sord: {
+ *         mask: &quot;Eingangsrechnung&quot;
+ *       },
+ *       mapping: [
+ *         { name: &quot;date&quot;, key: &quot;INVOICE_DATE&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/date&quot;, converter: &quot;dateToIso&quot; },
+ *         { name: &quot;recipient number&quot;, key: &quot;RECIPIENT_NO&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/recipientcode&quot; },
+ *         { name: &quot;recipient name&quot;, key: &quot;RECIPIENT_NAME&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/recipientcode&quot;, converter: &quot;recipientName&quot; },
+ *         { name: &quot;status&quot;, key: &quot;INVOICE_STATUS&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/status&quot; },
+ *         { name: &quot;cash discount days&quot;, key: &quot;INVOICE_CASH_DISCOUNT_DAYS&quot;, type: &quot;MAP&quot;, xpath: &quot;/invoice/discount-days&quot; }
+ *       ],
+ *       tables: [
+ *         {
+ *           xpath: &quot;/invoice/items/item&quot;,
+ *           prefix: &quot;ITEM&quot;,
+ *           ignoreEmptyLines: true, //optional
+ *           mapping: [
+ *             { name: &quot;unit&quot;, key: &quot;UNIT&quot;, type: &quot;MAP&quot;, xpath: &quot;articleUnit&quot;, pattern: &quot;{FIELD}{i}&quot;, converter: &quot;inviQuantityCode&quot; },
+ *             { name: &quot;number&quot;, key: &quot;NUMBER&quot;, type: &quot;MAP&quot;, xpath: &quot;articleNumber&quot;, pattern: &quot;{FIELD}{i}&quot; },
+ *             { name: &quot;name&quot;, key: &quot;NAME&quot;, type: &quot;MAP&quot;, xpath: &quot;articleName&quot; }
+ *           ]
+ *         }
+ *       ],
+ *       converter: [
+ *         { name: &quot;dateToIso&quot;, type: &quot;DateConverter&quot;, fromPattern: &quot;yyyy-MM-dd&quot;, toPattern: &quot;yyyyMMdd&quot; },
+ *         { name: &quot;recipientName&quot;, type: &quot;DynamicKwlLookup&quot;, kwl: &quot;sol.invoice.ix.dynkwl.Company&quot;, focusfield: &quot;COMPANY_CODE&quot;, returnfield: &quot;COMPANY_NAME&quot;, defaultValue: &quot;nicht gepflegt&quot; },
+ *         { name: &quot;inviQuantityCode&quot;, type: &quot;DynamicKwlLookup&quot;, kwl: &quot;sol.invoice.ix.dynkwl.Units&quot;, focusfield: &quot;INVI_QUANTITY_UNIT_CODE&quot;, returnfield: &quot;INVI_QUANTITY_UNIT&quot;, dependentFields: [&quot;COMPANY_NAME&quot;], defaultValue: &quot;Code ungültig&quot; }
+ *       ]
+ *     });
+ *
+ *     if (importer.validate(xml)) {
+ *       importer.process(xml, objId);
+ *     }
+ *
+ * ## Configuration
+ * The configuration consists of several properties/sections, which will be described below.
+ *
+ * ### ignoreDtd
+ * If set to `true`, existing DTDs in the XML will be ignored
+ *
+ * ### xsd
+ * This contains an Array with GUIDs of XSD files in the archive. They&#39;re optional, but if none are defined the validation will always return true.
+ *
+ * ### sord (required)
+ * This Object needs to have the property &#39;mask&#39;.
+ * The &#39;mask&#39; String specifies which mask the processed archive document needs to have in order for a proper processing.
+ *
+ * ### mapping (required)
+ * This Object holds configurations for the processing of the metadata. The Array contains Objects containing a name, a key (either objkey name or mapkey) a xpath in the XML and an optional converter.
+ *
+ *     { name: &quot;invoice date&quot;, key: &quot;INVOICE_DATE&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/date&quot;, converter: &quot;dateToIso&quot; }
+ *
+ * - name: a descriptive name
+ * - key: either objkey name or mapkey
+ * - type: this could be &quot;GRP&quot; for an index field or &quot;MAP&quot; for a map field
+ * - xpath: XPath string to retrieve the value from the XML
+ * - converter: (optional) name of a converter; this converter needs to be defined in the &#39;converter&#39; section and will be applied to an extracted value, before it will be writen
+ *
+ * ### tables (optional)
+ * This contains an Array of table objects. Each table object has the following properties:
+ *
+ * - name: descriptive name of the table
+ * - xpath: this XPath string points to the XML nodes which represent the table lines
+ * - prefix: this string can be used in the patter (see further below)
+ * - ignoreEmptyLines: (optional) this boolean value defines, if an empty node should produce an empty line or should be ignored
+ * - mapping: (see mapping section above; differences will be explained below)
+ *
+ * #### table mapping
+ * The difference is, that type can only be &quot;MAP&quot;. Due to the repeatimg nature of a table it would make no sense, to save the data in an index field.
+ *
+ * Another addition is the optional pattern property. This pattern defines the structure of the map key and can contain placeholders:
+ *
+ * - {PREFIX}: this will be replaced with the table.prefix property
+ * - {FIELD}: ths will be replaced with the key of the mapping
+ * - {i}: this would be replaced with a running number
+ *
+ * ### converter (optional)
+ * This object contains the configurations for the converters (used inside the mapping sections)
+ *
+ *     [
+ *       { name: &quot;dateToIso&quot;, type: &quot;DateConverter&quot;, fromPattern: &quot;yyyy-MM-dd&quot;, toPattern: &quot;yyyyMMdd&quot; }
+ *     ]
+ *
+ * - name: name to reference this converter from the mappings (see {@link sol.connector_xml.Converter Converter})
+ * - type: this string will be used to determine the correct converter (see {@link sol.connector_xml.Converter Converter})
+ * - any other property depends on the used converter.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @requires sol.common.StringUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.connector_xml.Utils
+ *
+ */
+sol.define(&quot;sol.connector_xml.Importer&quot;, {
+
+<span id='sol-connector_xml-Importer-cfg-xsd'>  /**
+</span>   * @cfg xsd
+   * XSD files can be used in order to validate the passed format. Contains an Array with Objects caontaining the GUID of XSD files in ELO and a name for the file (just for viewing purpose).
+   *
+   * If one XSD has dependencies to other files please ensure that all files are properly referenced.
+   *
+   *     // example configuration
+   *     xsd: [{ name: &quot;XSD Name&quot;, guid: &quot;(04089DB6-E667-EDDE-DB86-5FCB6E5F4DFB)&quot; }],
+   *
+   * This configuration is optional, but if none are defined the validation will always return true.
+   */
+<span id='sol-connector_xml-Importer-cfg-sord'>  /**
+</span>   * @cfg sord (required)
+   * Defines Sord specific information.
+   *
+   *     // example configuration
+   *     sord: {
+   *       mask: &quot;Invoice&quot;
+   *     },
+   *
+   * @cfg sord.mask (required) Specifies which mask the processed archive document needs to have in order for a proper processing.
+   */
+<span id='sol-connector_xml-Importer-cfg-mapping'>  /**
+</span>   * @cfg mapping (required)
+   * Mapping of XML data to ELO fields.
+   *
+   *     // example configuration
+   *     mapping:[
+   *       { name: &quot;invoice date&quot;, key: &quot;INVOICE_DATE&quot;, type: &quot;GRP&quot;, xpath: &quot;/invoice/date&quot;, converter: &quot;dateToIso&quot; }
+   *     ],
+   *
+   * @cfg {String} mapping.type (required)
+   * Type of the elo field. Could me &quot;MAP&quot; or &quot;GRP&quot;.
+   *
+   * @cfg {String} mapping.xpath (required)
+   * XPath expression that identifies the required XML node.
+   *
+   * @cfg {String} mapping.converter
+   * Converter that is used to the imported value into a different format.
+   */
+<span id='sol-connector_xml-Importer-cfg-tables'>  /**
+</span>   * @cfg {Object[]} tables
+   * Configuration for multiple child nodes of the same type. Represented as a table.
+   *
+   *     // example configuration
+   *     tables: [{
+   *       xpath: &quot;/invoice/items/item&quot;,
+   *       prefix: &quot;ITEM&quot;,
+   *       ignoreEmptyLines: true, //optional
+   *       mapping: {
+   *         &quot;UNIT&quot; : { type: &quot;MAP&quot;, xpath: &quot;articleUnit&quot;, pattern: &quot;{FIELD}{i}&quot;, converter: &quot;inviQuantityCode&quot; },
+   *       }
+   *     }],
+   *
+   * @cfg {String} tables.xpath XPath evaluation to identefity the root element.
+   * @cfg {String} tables.prefix
+   * @cfg {String} tables.ignoreEmptyLines true if empty lines should be ignored.
+   * @cfg tables.mapping Mapping of XML data to ELO fields. Refer to &#39;mapping&#39; for more information.
+   */
+<span id='sol-connector_xml-Importer-cfg-converter'>  /**
+</span>   * @cfg converter
+   * Definition of custom converters that can be used by field mappings.
+   *
+   *     // example configuration
+   *     converter: {
+   *       dateToIso: { type: &quot;DateConverter&quot;, fromPattern: &quot;yyyy-MM-dd&quot;, toPattern: &quot;yyyyMMdd&quot; },
+   *       recipientName: { type: &quot;DynamicKwlLookup&quot;, kwl: &quot;sol.invoice.ix.dynkwl.Recipients&quot;, focusfield: &quot;RECIPIENT_NO&quot;, returnfield: &quot;RECIPIENT_NAME&quot;, defaultValue: &quot;nicht gepflegt&quot; },
+   *       inviQuantityCode: { type: &quot;DynamicKwlLookup&quot;, kwl: &quot;sol.invoice.ix.dynkwl.Units&quot;, focusfield: &quot;INVI_QUANTITY_UNIT_CODE&quot;, returnfield: &quot;INVI_QUANTITY_UNIT&quot;, dependentFields: [&quot;RECIPIENT_NAME&quot;], defaultValue: &quot;Code ungültig&quot; }
+   *     }
+   *
+   * @cfg String type (required)
+   * Each converter requires a type definition. For more information which converters can be used, refer to sol.connector_xml.Converter.
+   */
+
+<span id='sol-connector_xml-Importer-property-logger'>  /**
+</span>   * @private
+   * @property logger
+   */
+<span id='sol-connector_xml-Importer-property-config'>  /**
+</span>   * @private
+   * @property config
+   */
+<span id='sol-connector_xml-Importer-property-utils'>  /**
+</span>   * @private
+   * @property utils
+   */
+<span id='sol-connector_xml-Importer-property-sordZ'>  /**
+</span>   * @private
+   * @property sordZ
+   */
+<span id='sol-connector_xml-Importer-property-validator'>  /**
+</span>   * @private
+   * @property validator
+   */
+<span id='sol-connector_xml-Importer-property-documentBuilder'>  /**
+</span>   * @private
+   * @property documentBuilder
+   */
+
+  initialize: function (config) {
+    var me = this;
+    if (!config) {
+      throw &quot;cannot initialize new &quot; + me.$className + &quot; without configuration&quot;;
+    }
+
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: me.$className });
+
+    me.config = config;
+    me.utils = sol.connector_xml.Utils;
+    me.sordZ = SordC.mbAllIndex;
+
+    me.validator = me.config.xsd ? me.utils.createValidator(me.config.xsd) : null;
+    me.documentBuilder = me.utils.getDocumentBuilder();
+    if (me.config.ignoreDtd) {
+      me.documentBuilder.setEntityResolver(new EntityResolver({
+        resolveEntity: function (publicId, systemId) {
+          return new InputSource(new StringReader(&quot;&quot;));
+        }
+      }));
+    }
+  },
+
+<span id='sol-connector_xml-Importer-method-validate'>  /**
+</span>   * Validation against the schema which is defined in the config
+   * @param {java.io.File} xml The XML file that should be validated
+   * @return {Boolean}
+   */
+  validate: function (xml) {
+    if (this.validator) {
+      var xmlStreamSource = this.utils.getStreamSource(xml);
+      try {
+        this.validator.validate(xmlStreamSource);
+      } catch (ex) {
+        this.logger.warn(&quot;validation failed&quot;, ex);
+        return false;
+      }
+    }
+    return true;
+  },
+
+<span id='sol-connector_xml-Importer-method-process'>  /**
+</span>   * Starts the processing the XML file according to the configuration and writes the metadata into an {@link Sord} object
+   * @param {java.io.File} xml The XML file that should be processed
+   * @param {String} objId The ID of the {@link Sord} object
+   */
+  process: function (xml, objId) {
+    var me = this;
+    this.logger.enter(&quot;process&quot;, { objId: objId });
+
+    if (!objId &amp;&amp; !this.config.sord) {
+      throw &quot;either a objId or a config.sord needs to be specified&quot;;
+    }
+
+    me.logger.info([&quot;process XML: {0}; write changes to &#39;{1}&#39;&quot;, xml, objId]);
+
+    me.dirty = false;
+    me.sord = ixConnect.ix().checkoutSord(objId, me.sordZ, LockC.NO);
+    me.mapEntries = [];
+    me.fieldMap = {};
+
+    if (!sol.common.SordUtils.hasDocMask(me.sord, me.config.sord.mask)) {
+      me.sord = ixConnect.ix().changeSordMask(me.sord, me.config.sord.mask, EditInfoC.mbSord).sord;
+    }
+
+    me.doc = me.utils.getDocument(me.documentBuilder, xml);
+
+    me.processMapping();
+    me.processTables();
+
+    me.save();
+
+    me.doc = undefined;
+    me.fieldMap = undefined;
+    me.mapEntries = undefined;
+    me.sord = undefined;
+    me.dirty = undefined;
+
+    me.logger.exit(&quot;process&quot;);
+  },
+
+<span id='sol-connector_xml-Importer-method-save'>  /**
+</span>   * @private
+   * Saves the changes of the {@link Sord} and the map data.
+   */
+  save: function () {
+    if (this.dirty) {
+      this.logger.debug([&quot;checkin Sord, objId={0}&quot;, this.sord.id]);
+      ixConnect.ix().checkinSord(this.sord, this.sordZ, LockC.NO);
+    }
+
+    if (this.mapEntries &amp;&amp; (this.mapEntries.length &gt; 0)) {
+      this.logger.debug([&quot;checkin Maps, count={0}&quot;, this.mapEntries.length]);
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, this.sord.id, this.sord.id, this.mapEntries, LockC.NO);
+    }
+  },
+
+<span id='sol-connector_xml-Importer-method-processCreate'>  /**
+</span>   * @private
+   * [TODO] Starting a workflow
+   */
+  processCreate: function () {
+    //TODO in future implementation
+    throw &quot;not implemented: &#39;processCreate&#39;&quot;;
+  },
+
+<span id='sol-connector_xml-Importer-method-processMapping'>  /**
+</span>   * @private
+   * Processes the mapping section from the configuration
+   */
+  processMapping: function () {
+    var me = this,
+        converterConfig, value;
+
+    me.logger.enter(&quot;processMapping&quot;);
+
+    me.config.mapping.forEach(function (mapObj) {
+      converterConfig = me.utils.getConverterConfig(me.config, mapObj.converter);
+      value = me.utils.getValue(me.doc, mapObj, converterConfig, me.fieldMap);
+
+      me.logger.debug([&quot;evaluate mapping &#39;{0}&#39; with key={1} and type={2}&quot;, mapObj.name, mapObj.key, mapObj.type]);
+
+      me.fieldMap[mapObj.key] = value;
+
+      switch (mapObj.type) {
+        case &quot;GRP&quot;:
+          sol.common.SordUtils.setObjKeyValue(me.sord, mapObj.key, value);
+          me.dirty = true;
+          break;
+        case &quot;MAP&quot;:
+          me.mapEntries.push(me.utils.createMapEntry(mapObj.key, value));
+          break;
+        default:
+          throw &quot;Illegal Configuration: type=&quot; + mapObj.type + &quot; is not implemented for mappings&quot;;
+      }
+    });
+
+    me.logger.exit(&quot;processMapping&quot;);
+  },
+
+<span id='sol-connector_xml-Importer-method-processTables'>  /**
+</span>   * @private
+   * Processes the tables section from the configuration
+   */
+  processTables: function () {
+    this.logger.enter(&quot;processTables&quot;);
+    var me = this,
+        tables = me.config.tables;
+    if (tables) {
+      tables.forEach(function (table) {
+        me.processTable(table);
+      });
+    } else {
+      me.logger.debug(&quot;no tables to process&quot;);
+    }
+    this.logger.exit(&quot;processTables&quot;);
+  },
+
+<span id='sol-connector_xml-Importer-method-processTable'>  /**
+</span>   * @private
+   * Processes one table section
+   * @param {org.w3c.dom.Element} table
+   */
+  processTable: function (table) {
+    var me = this,
+        counter = 1,
+        nodes, i, j, node, empty, converterConfig, value, key, mapObj;
+
+    me.logger.debug([&quot;process table &#39;{0}&#39;&quot;, table.name]);
+
+    nodes = me.utils.getElements(me.doc, table.xpath);
+
+    for (i = 0; i &lt; nodes.length; i++) {
+      node = nodes.item(i);
+      empty = true;
+
+      for (j = 0; j &lt; table.mapping.length; j++) {
+        mapObj = table.mapping[j];
+
+        converterConfig = me.utils.getConverterConfig(me.config, mapObj.converter);
+        value = me.utils.getValue(node, mapObj, converterConfig, me.fieldMap);
+
+        if (!sol.common.StringUtils.isBlank(value)) {
+          empty = false;
+          switch (mapObj.type) {
+            case &quot;MAP&quot;:
+              key = me.utils.buildMapKey(mapObj.pattern, table.prefix, mapObj.key, counter);
+              me.mapEntries.push(me.utils.createMapEntry(key, value));
+              me.fieldMap[key] = value;
+              break;
+            case &quot;GRP&quot;:
+              sol.common.SordUtils.setObjKeyValue(me.sord, mapObj.key, value);
+              me.dirty = true;
+              break;
+            default:
+              throw &quot;Illegal Configuration: type=&quot; + mapObj.type + &quot; is not implemented for tables&quot;;
+          }
+        }
+      }
+
+      if (!empty || !table.ignoreEmptyLines) {
+        counter++;
+      } else {
+        me.logger.info(&quot;ignore empty line&quot;);
+      }
+    }
+  }
+});
+</pre>
+</body>
+</html>

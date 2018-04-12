@@ -1,0 +1,200 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Call Registered Function Example</title>
+<script type="text/javascript" src="EloixClient.js"></script>
+
+<!--
+This example shows how to call a registered function from the JSON API.
+ 
+The registered function to be called is named RF_getObjsLockedByUser.
+It reads the object IDs and short descriptions from the "objekte" table of the archive.
+
+When this example is executed the first time, a JavaScript document containing the
+function RF_getObjsLockedByUser is created in the archive. The source code of the function is
+defined here in variable sourceCodeRegFunction. The function installRegisteredFunction
+creates a new document at "Administration/IndexServer Scripting Base/_ALL" containing the 
+source code and reloads the Indexserver.
+
+Funtion getObjsLockedByUser invokes the registered function and passes the user ID specified
+in the input field.
+ -->
+
+<script type="text/javascript">
+
+//Simplify namespace access 
+//(all ELOix symbols are member of de.elo.ix.client)
+var IX = de.elo.ix.client;
+
+//Indexserver URL 
+var ixUrl = "/ix-elo90/ix";
+
+//Login credentials
+var userName = "Administrator";
+var userPwd = "elo";
+
+//Indexserver connection
+var _conn;
+
+/**
+* Returns the Indexserver connection.
+* Creates a new connection, when called the first time. 
+*/
+function getConn() {  
+	if (!_conn) {
+		var connFact = new IX.IXConnFactory(ixUrl, "Call Registered Function", "1.0");
+		_conn = connFact.create(userName, userPwd);
+	}
+	return _conn;
+};
+
+/**
+ * This function is called, when the user clicks the OK button. 
+ * It invokes the registered function to obtain a list of locked documents
+ * and lists their IDs and names in the result table.
+ */
+function onOK() {
+  	try {
+  		// login
+	 	var conn = getConn();
+	 	var CONST = conn.getCONST();
+	 	
+	 	// Install registered function, if it does not exist.
+	 	// The function is stored in the document CallRegisteredFunctionExample.js.
+	 	installRegisteredFunction(conn, "CallRegisteredFunctionExample", sourceCodeRegFunction);
+	 	
+	 	// Get the given user name or ID
+	 	var userId = document.getElementById("userId").value;
+	 	
+	 	// Read the user information to get the ID in case of a user name was entered in the HTML input. 
+	 	var userInfo = conn.ix().checkoutUsers([userId], CONST.CHECKOUT_USERS.BY_IDS, CONST.LOCK.NO)[0];
+	 	
+	 	// Execute the registered function.
+	 	var tab = getObjsLockedByUser(conn, userInfo.id);
+	 	
+	 	// Get the HTML element of the result table 
+	 	var resultList = document.getElementById("resultList");
+	 	
+	 	// Insert the documents into the result table 
+	 	resultList.innerHTML = "<tr><td>ID</td><td>Name</td></tr>";
+	 	if (tab.length) {
+		 	for (var rowIdx = 0; rowIdx < tab.length; rowIdx++) {
+		 		var row = tab[rowIdx];
+		 		var tr = document.createElement("tr");
+		 		for (var colIdx = 0; colIdx < row.length; colIdx++) {
+		 			var td = document.createElement("td");
+		 			td.innerText = row[colIdx];
+		 			tr.appendChild(td);
+		 		}
+		 		resultList.appendChild(tr);
+		 	}
+	 	}
+	 	else {
+	 	 	resultList.innerHTML = "<tr><td>No locked documents</td></tr>";
+	 	}
+	}
+	catch(e) {
+		alert(e);
+	}
+	finally {
+		conn.logout();
+		conn = null;
+	}
+};
+
+/**
+ * Source code of registered function
+ */
+var sourceCodeRegFunction = 
+"function RF_getObjsLockedByUser(ec, args) {\n" +
+"  var db = new Packages.de.elo.ix.jscript.DBConnection();\n" +
+"  var objId = args[0];\n" +
+"  var ret = db.query(\"select objid, objshort from objekte where objlock=\" + objId);\n" + 
+"  return ret;\n" +
+"}";
+
+/**
+ * Install an Indexserver script.
+ * Create a document at "/Administration/IndexServer Scripting Base/_ALL" with short description 
+ * given in scriptName and content given in sourceCode. 
+ * @param conn IXConnection object
+ * @scriptName Name of the document to be created
+ * @sourceCode Content of the document
+ * @overwrite false: The function returns immediately, if the document already exist. 
+ * true: The function creates a new version of the document. 
+ */
+function installRegisteredFunction(conn, scriptName, sourceCode, overwrite) {
+	var CONST = conn.getCONST();
+	var scriptFolderId = "ARCPATH[" + CONST.SORD.GUID_IX_SCRIPTING_BASE + "]:/_ALL";
+
+	// checkout script document or create new
+	var sord = null;
+	try {
+		conn.ix().checkoutDoc(scriptFolderId + "/" + scriptName, "", CONST.EDIT_INFO.mbOnlyId, CONST.LOCK.NO);
+		if (!overwrite) return;
+	}
+	catch (ex) {
+		if (conn.ix().parseException(ex.toString()).exceptionType != CONST.IXEXCEPTION.NOT_FOUND) throw ex;
+		var ed = conn.ix().createDoc(scriptFolderId, "", "", CONST.EDIT_INFO.mbSordDocAtt);
+		sord = ed.sord;
+		sord.name = scriptName;
+	}
+	
+	// prepare upload, call checkinDocBegin to obtain an upload URL
+	var doc = new IX.Document();
+	doc.docs = [ new IX.DocVersion() ];
+	doc.docs[0].pathId = sord.path;
+	doc.docs[0].ext = ".js";
+	
+	doc = conn.ix().checkinDocBegin(doc);
+	
+	// upload script code via XMLHttpRequest object 
+	var req = new XMLHttpRequest();
+	req.open("POST", doc.docs[0].url, false); // false means synchonously
+	req.send(sourceCode);
+	if (req.status != 200) {
+		var ex = de.elo.ix.client.JSException.createHttpError(req.status);
+		throw ex;
+	}
+	
+	// finish checkin
+	doc.docs[0].uploadResult = req.responseText;
+	conn.ix().checkinDocEnd(sord, CONST.SORD.mbAll, doc, CONST.LOCK.YES);
+	
+	// reload Indexserver (scripts are only compiled during start-up) 
+	conn.ix().reload();
+}
+
+/**
+ * Read the IDs and names of the folders and documents currently locked by the given user. 
+ * @param conn IXConnection object
+ * @param userId Numerical user ID
+ * @return A 2dim array as [[objId1, objshort1], [objId2, objshort2], ...]
+ */
+function getObjsLockedByUser(conn, userId) {
+	
+	// wrap userId with an Any object 
+	var args = [userId];
+	var argsAny = IX.AnyToObject.fromObject(args);
+	
+	// call registered function 
+	var retAny = conn.ix().executeRegisteredFunction("RF_getObjsLockedByUser", argsAny);
+	   
+	// un-wrap result table, receive an 2dim array [[objId1, objshort1], [objId2, objshort2], ...] 
+	var ret = IX.AnyToObject.toObjectTable(retAny);
+	return ret;
+}
+
+
+</script>
+</head>
+<body>
+<label>User name or ID:</label><input id="userId" type="text" value="<user id or name>"></input>
+<input type="button" value="OK" onclick="onOK()"></input>
+<br/>
+Locked Documents:
+<br/>
+<table id="resultList" border="2"></table>
+</body>
+</html>

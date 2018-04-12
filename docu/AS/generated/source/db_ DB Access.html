@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start of namespace db
+
+<span id='db'>/**
+</span> * @class db
+ * @singleton
+ */
+var db = new Object();
+db = {
+
+<span id='db-method-init'>  /**
+</span>   * Führt die Datenbankinitialisierung durch.
+   * 
+   * @param {Number} connectId ID der Index Server Verbindung
+   */
+  init: function (connectId) {
+    if (EM_connections[connectId].initdone == true) {
+      return;
+    }
+
+    log.debug(&quot;Now init JDBC driver&quot;);
+    var driverName = EM_connections[connectId].driver;
+    var dbUrl = EM_connections[connectId].url;
+    var dbUser = EM_connections[connectId].user;
+    var dbPassword = EM_connections[connectId].password;
+    if (emConnect.decryptAs) {
+      dbPassword = emConnect.decryptAs(dbPassword);
+    }
+    try {
+      if (!EM_connections[connectId].classloaded) {
+        Class.forName(driverName).newInstance();
+
+        log.debug(&quot;Register driver JDBC&quot;);
+        DriverManager.registerDriver(new JdbcOdbcDriver());
+        EM_connections[connectId].classloaded = true;
+      }
+
+      log.debug(&quot;Get Connection&quot;);
+      EM_connections[connectId].dbcn = DriverManager.getConnection(dbUrl, dbUser, dbPassword);
+
+      log.debug(&quot;Init done.&quot;);
+    } catch (e) {
+      log.debug(&quot;ODBC Exception: &quot; + e);
+    }
+
+    EM_connections[connectId].initdone = true;
+  },
+
+<span id='db-method-exitRuleset'> /**
+</span>  * Schließt die aktuelle Datenbankverbindung.
+  */
+  exitRuleset: function () {
+    log.debug(&quot;dbExit&quot;);
+
+    for (i = 0; i &lt; EM_connections.length; i++) {
+      if (EM_connections[i].initdone) {
+        if (EM_connections[i].dbcn) {
+          try {
+            EM_connections[i].dbcn.close();
+            EM_connections[i].initdone = false;
+            log.debug(&quot;Connection closed: &quot; + i);
+          } catch (e) {
+            log.info(&quot;Error closing database &quot; + i + &quot;: &quot; + e);
+          }
+        }
+      }
+    }
+  },
+
+<span id='db-method-doUpdate'>  /**
+</span>   * Führt den angegebenen Update-Befehl in der aktuellen Datenbank aus.
+   * 
+   * @param {IXConnection} connection Index Server Verbindung
+   * @param {String} sqlCommand SQL-Befehl
+   */
+  doUpdate: function (connection, sqlCommand) {
+    db.init(connection);
+
+    log.debug(&quot;createStatement for update: &quot; + sqlCommand);
+    var p = EM_connections[connection].dbcn.createStatement();
+
+    log.debug(&quot;executeUpdate&quot;);
+    var rss = p.executeUpdate(sqlCommand);
+
+    p.close();
+  },
+
+<span id='db-method-getLine'>  /**
+</span>   * Liefert das Ergebnis der angegebenen Datenbankabfrage zurück.
+   * 
+   * @param {IXConnection} connection Index Server Verbindung
+   * @param {String} qry Datenbankabfrage
+   * @return {Object} Ergebnis der Datenbankabfrage
+   */
+  getLine: function (connection, qry) {
+    function dbResult(qry) {
+      db.init(connection);
+
+      log.debug(&quot;createStatement&quot;);
+      var p = EM_connections[connection].dbcn.createStatement();
+
+      log.debug(&quot;executeQuery&quot;);
+      var rss = p.executeQuery(qry);
+
+      log.debug(&quot;read result&quot;);
+      if (rss.next()) {
+        var metaData = rss.getMetaData();
+        var cnt = metaData.getColumnCount();
+        for (var i = 1; i &lt;= cnt; i++) {
+          var name = String(metaData.getColumnLabel(i));
+          var value = String(rss.getString(i));
+
+          this[name] = value;
+          if (i == 1) {
+            this.first = value;
+          }
+        }
+      }
+
+      rss.close();
+      p.close();
+    }
+
+    var res = new dbResult(qry);
+
+    log.debug(&quot;getLine done.&quot;);
+    return res;
+  },
+
+<span id='db-method-getColumn'>  /**
+</span>   * Liefert die erste Spalte vom Datenbankergebnis zurück.
+   * 
+   * @param {IXConnection} connection Index Server Verbindung
+   * @param {String} qry Datenbankabfrage
+   * @return {Object} erste Spalte vom Datenbankergebnis
+   */
+  getColumn: function (connection, qry) {
+    var res = db.getLine(connection, qry);
+    return res.first;
+  },
+
+<span id='db-method-getColumnWithDefault'> /**
+</span>  * Liefert die erste Spalte vom Datenbankergebnis zurück. Wenn es 
+  * kein Ergebnis gibt wird der Default-Wert der Spalte zurückgeliefert.
+  * 
+  * @param {IXConnection} connection Index Server Verbindung
+  * @param {String} qry Datenbankabfrage
+  * @param {String} defaultValue Default-Wert
+  * @return {Object} erste Spalte vom Ergebnis oder Default-Wert
+  */
+  getColumnWithDefault: function (connection, qry, defaultValue) {
+    var res = db.getLine(connection, qry);
+    return (res.first) ? res.first : defaultValue;
+  },
+
+<span id='db-method-getMultiLine'> /**
+</span>  * Liefert eine Liste mit den Datenbankergebnissen zurück.
+  * 
+  * @param {IXConnection} connection Index Server Verbindung
+  * @param {String} qry Datenbankabfrage
+  * @param {Number} maxRows Maximale Anzahl an Zeilen
+  * @return {Array} Ergebnisliste
+  */
+  getMultiLine: function (connection, qry, maxRows) {
+    function makeRow(metaData, rss) {
+      var cnt = metaData.getColumnCount();
+      for (var col = 1; col &lt;= cnt; col++) {
+        var name = String(metaData.getColumnLabel(col));
+        var value = String(rss.getString(col));
+        this[name] = value;
+      }
+    }
+
+    db.init(connection);
+
+    log.debug(&quot;createStatement&quot;);
+    var p = EM_connections[connection].dbcn.createStatement();
+
+    log.debug(&quot;executeQuery&quot;);
+    var rss = p.executeQuery(qry);
+
+    log.debug(&quot;read result&quot;);
+    var result = new Array();
+    if (rss.next()) {
+      var metaData = rss.getMetaData();
+      for (var i = 0; i &lt; maxRows; i++) {
+        result[i] = new makeRow(metaData, rss);
+        if (!rss.next()) {
+          break;
+        }
+      }
+    }
+
+    rss.close();
+    p.close();
+
+    return result;
+  }
+
+};
+// end of namespace db
+
+<span id='db-method-dbExitRuleset'>/**
+</span> * Schließt die aktuelle Datenbankverbindung.
+ */
+function dbExitRuleset() {
+  return db.exitRuleset();
+}</pre>
+</body>
+</html>

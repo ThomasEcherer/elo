@@ -1,0 +1,218 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFCollectNode;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example demontsrates how to find nodes from a particular workflow with 
+ * collectWorkFlowNodes().
+ * Three users with different access rights are used to demonstrate that only users with
+ * workflow admin rights or users who own nodes in the workflow can retrieve nodes using this method.
+ * (Main administrator also has sufficient rights to retrieve nodes).
+ * The helper class is used to create the template with three nodes and the users.
+ * 
+ */
+
+public class FindWorkFlowNodes {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template and find nodes
+            createFindFromTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFindFromTemplate() throws RemoteException{
+        
+        // Create required users with appropriate rights
+        WFHelper.createNewUser(ix, "WF-User1", "elo", true); // workflow admin rights
+        WFHelper.createNewUser(ix, "WF-User2", "elo", false);// no workflow admin rights
+        WFHelper.createNewUser(ix, "WF-User3", "elo", false);// no workflow admin rights
+        
+        // Create workflow template
+        String templateName = "Demo Template" + (new Date());
+        String[] newUsers = new String[] {"WF-User1", "WF-User2"};
+        WFDiagram wfd = WFHelper.createSeqTemplateForUsers(ix, templateName, newUsers);
+        templateName = wfd.getName();
+        
+        // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("WF-Sord " + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+       
+        // Start workflow
+        String flowName = "WF-" + (new Date());
+        int flowId = ix.ix().startWorkFlow(templateName, flowName, ed.getSord().getGuid());                 
+
+        System.out.println("Started WF: sordName=" + ed.getSord().getName() + 
+                ", flowId=" + flowId + 
+                ", flowName=" + flowName);
+        
+        
+        // Login as WF-User1 to find nodes
+        // members lr overloaded
+        int ix = 0; // makes sure that I do not use the connection of the class variable ix.
+        IXConnection connUser = connFact.create("WF-User1", "elo", "IX-Workshop", null);
+        
+        // Search for all workflow nodes using workflow name 
+        WFCollectNode[] nodes = connUser.ix().collectWorkFlowNodes(
+                                                           flowName,        // Name of workflow
+                                                           null,            // WF type - null = active
+                                                           null,            // Node name
+                                                           0,               // Node type - 0 = all nodes
+                                                           Integer.toString(objId), // objId for object
+                                                           null,            // Enter date
+                                                           null,            // Exit date
+                                                           null,            // User ids
+                                                           false,            // Only active nodes
+                                                           false);          // Only start nodes
+
+        // List all found nodes
+        System.out.println("Logged in with user WF-User1 - workflow admin rights");
+        for (int i = 0; i < nodes.length; i++){
+            
+            System.out.println("    Node found:  nodeName= " + nodes[i].getNodeName() +
+                               ", userName= " + nodes[i].getUserName() +
+                               ", active = " + nodes[i].isActive());
+        }
+
+  
+        // logout WF-User1
+        connUser.ix().logout();
+
+        // Login as WF-User2 to forward node
+        connUser = connFact.create("WF-User2", "elo", "IX-Workshop", null);
+        
+        // Search for active workflow node(s) with workflow name 
+        nodes = connUser.ix().collectWorkFlowNodes(
+                                                           flowName,        // Name of workflow
+                                                           null,            // WF type - null = active
+                                                           null,            // Node name
+                                                           0,               // Node type - 0 = all nodes
+                                                           Integer.toString(objId), // objId for object
+                                                           null,            // Enter date
+                                                           null,            // Exit date
+                                                           null,            // User ids
+                                                           false,            // Only active nodes
+                                                           false);          // Only start nodes
+
+        // List all found nodes
+        // Should find all nodes as WF-User2 owns a node in the workflow
+        System.out.println("Logged in with user WF-User2 - no admin or workflow admin rights");
+        System.out.println("                             - owner of 1 node in workflow");
+        for (int i = 0; i < nodes.length; i++){
+            
+            System.out.println("    Node found:  nodeName= " + nodes[i].getNodeName() +
+                               ", userName= " + nodes[i].getUserName() +
+                               ", active = " + nodes[i].isActive());
+        }
+        
+        // logout WF-User2
+        connUser.ix().logout();
+        
+        // login with user WF-User3
+        connUser = connFact.create("WF-User3", "elo", "IX-Workshop", null);
+        
+        // Search for active workflow node(s) with user name(s)
+        String[] userNames = new String[] {"WF-User2"};
+        nodes = connUser.ix().collectWorkFlowNodes(
+                                           flowName,        // Name of workflow
+                                           null,            // WF type - null = active
+                                           null,            // Node name
+                                           0,               // Node type - 0 = all nodes
+                                           Integer.toString(objId), // objId for object
+                                           null,            // Enter date
+                                           null,            // Exit date
+                                           null,            // User ids or names
+                                           false,            // Only active nodes
+                                           false);          // Only start nodes
+
+        // List all found nodes none should be found in this case
+        System.out.println("Logged in with user WF-User3 - no rights or nodes in workflow");
+        for (int i = 0; i < nodes.length; i++){
+            
+            System.out.println("    Node found:  nodeName= " + nodes[i].getNodeName() +
+                               ", userName= " + nodes[i].getUserName() +
+                               ", active = " + nodes[i].isActive());
+        }
+        if (nodes.length == 0){
+            System.out.println("    No nodes found!");
+        }
+        
+        // logout WF-User3
+        connUser.ix().logout();
+
+        // Login as WF-User1 to terminate node
+        connUser = connFact.create("WF-User1", "elo", "IX-Workshop", null);
+        // Delete Sord
+        connUser.ix().deleteSord(null, Integer.toString(objId), LOCK.getNO(), null);
+        // Terminate WF
+        connUser.ix().terminateWorkFlow(flowName, LOCK.getYES());
+        
+        // logout WF-User1
+        connUser.ix().logout();
+    }
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

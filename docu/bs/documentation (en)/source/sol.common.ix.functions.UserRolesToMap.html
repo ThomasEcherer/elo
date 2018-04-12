@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.Map.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.Roles.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.ix.DynAdHocFlowUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.UserRolesToMap&quot; }); // eslint-disable-line one-var
+
+<span id='sol-common-ix-functions-UserRolesToMap'>/**
+</span> * Analyze the user roles config and writes the user list to a map field
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @requires  sol.common.Config
+ * @requires  sol.common.Roles
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.UserRolesToMap&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * Object ID
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-wfDiagram'>  /**
+</span>   * @cfg {de.elo.ix.client.WFDiagram} wfDiagram
+   * Workflow diagram
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-userRolesConfigObjId'>  /**
+</span>   * @cfg {String} userRolesConfigObjId
+   * Repository path of the user roles configuration
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-role'>  /**
+</span>   * @cfg {String|Object} role
+   * Role name. If this is defined as an object, a `type` and a `key` has to be defined to load the role from the sords metadata (see {@link sol.common.SordUtils#getValue}).
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-defaultRole'>  /**
+</span>   * @cfg {String} defaultRole (optional)
+   * If `role` is defined as an object with a `type` and a `key` property, but there is no role definition for the read value, this will be used.
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-userNamekey'>  /**
+</span>   * @cfg {String} userNamekey (optional)
+   * Workflow map key name of the user name
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-userNamekey'>  /**
+</span>   * @cfg {String} userNamekey (optional)
+   * Workflow map key name of the user ID
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-mandatoryKey'>  /**
+</span>   * @cfg {String} mandatoryKey (optional)
+   * Workflow map key name of the &quot;mandatory&quot; flag
+   */
+
+<span id='sol-common-ix-functions-UserRolesToMap-cfg-mandatory'>  /**
+</span>   * @cfg {Boolean} [mandatory=true] (optional)
+   * Users should be mandatory
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.params = config;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-UserRolesToMap-method-process'>  process: function () {
+</span>    var me = this,
+        conn, userEntries;
+
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+
+    if (me.objId &amp;&amp; !me.wfDiagram) {
+      me.wfDiagram = sol.common.WfUtils.getLastActiveWorkflow(me.objId);
+    }
+
+    if (!me.wfDiagram) {
+      throw &quot;The workflow diagram is empty&quot;;
+    }
+
+    if (!me.userRolesConfigObjId) {
+      throw &quot;The object ID for the user roles configuration is empty&quot;;
+    }
+
+    if (!me.role) {
+      throw &quot;The role name is empty&quot;;
+    }
+
+    me.rolesConfig = sol.create(&quot;sol.common.Config&quot;, { compose: me.userRolesConfigObjId }).config;
+
+    if (!me.rolesConfig.roles) {
+      throw &quot;In the workflow user roles configuration are no roles defined&quot;;
+    }
+
+    me.objId = me.wfDiagram.objId;
+    me.sord = conn.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+
+    if (me.role.type &amp;&amp; me.role.key &amp;&amp; !sol.common.Roles.retrieveRole(me.role, me.rolesConfig.roles, me.sord) &amp;&amp; me.defaultRole) { // &#39;defaultRole&#39; just used if role should be read from sord
+      me.role = me.defaultRole;
+    }
+
+    if (!sol.common.Roles.retrieveRole(me.role, me.rolesConfig.roles, me.sord)) {
+      throw &quot;Role &#39;&quot; + me.role + &quot;&#39; is not defined in the configuration&quot;;
+    }
+
+    userEntries = sol.common.Roles.getUsers2(me.role, me.sord, me.rolesConfig.roles);
+
+    sol.common.ix.DynAdHocFlowUtils.clearCurrentUser(me.wfDiagram.id, me.objId, me.params);
+    sol.common.ix.DynAdHocFlowUtils.createDynAdHocFlow(me.wfDiagram.id, me.objId, userEntries, me.params);
+  }
+
+});
+
+<span id='sol-common-ix-functions-UserRolesToMap-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.UserRolesToMap
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onEnterNode_UserRolesToMap&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.wfDiagram = wfDiagram;
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  module = sol.create(&quot;sol.common.ix.functions.UserRolesToMap&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_UserRolesToMap&quot;);
+}
+
+
+<span id='sol-common-ix-functions-UserRolesToMap-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.UserRolesToMap
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+  logger.enter(&quot;onExitNode_UserRolesToMap&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.wfDiagram = wfDiagram;
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  module = sol.create(&quot;sol.common.ix.functions.UserRolesToMap&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_UserRolesToMap&quot;);
+}
+
+
+<span id='sol-common-ix-functions-UserRolesToMap-static-method-RF_sol_commmon_function_UserRoleToMap'>/**
+</span> * @member sol.common.ix.functions.UserRolesToMap
+ * @method RF_sol_commmon_function_UserRoleToMap
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_common_function_UserRoleToMap(iXSEContext, args) {
+  var params, module;
+  logger.enter(&quot;RF_sol_common_function_UserRoleToMap&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;, &quot;userRolesConfigObjId&quot;, &quot;role&quot;);
+
+  sol.common.ix.RfUtils.checkMainAdminRights(iXSEContext.user, params);
+
+  module = sol.create(&quot;sol.common.ix.functions.UserRolesToMap&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_common_function_UserRoleToMap&quot;);
+}
+
+</pre>
+</body>
+</html>

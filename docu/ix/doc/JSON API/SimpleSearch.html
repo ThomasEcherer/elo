@@ -1,0 +1,307 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Simple Fulltext Search</title>
+
+<style type="text/css">
+</style>
+
+
+<!-- ------------------------------------------------------------------------
+This example shows how to search for Sord object synchronously and asynchronously.
+-->
+
+<!-- Include Indexserver JavaScript Library -->
+<script type="text/javascript" src="EloixClient.js"></script>
+
+<!-- Example code -->
+<script type="text/javascript">
+
+// Simplify namespace access 
+// (all ELOix symbols are member of de.elo.ix.client)
+var IX = de.elo.ix.client;
+
+// Indexserver URL 
+var ixUrl = "/ix-elo80/ix";
+
+// Login credentials
+var userName = "Administrator";
+var userPwd = "elo";
+
+// Indexserver connection
+var _conn;
+
+function reloginSuccess(loginResult) {
+	alert(loginResult.clientInfo.ticket);
+}
+function reloginException(msg) {
+	alert(msg);
+}
+
+/**
+ * Returns the Indexserver connection.
+ * Creates a new connection, when called the first time. 
+ */
+function getConn() {  
+	  if (!_conn) {
+				var connFact = new IX.IXConnFactory(ixUrl, "SimpleSearch", "1.0");
+
+				var reloginCallback = new IX.AsyncCallback(reloginSuccess, reloginException);
+				_conn = connFact.create(userName, userPwd, null, null, reloginCallback);
+        //conn = connFact.createSSO();
+	  }
+	  return _conn;
+};
+
+/**
+ * This function perfoms a fulltext search.
+ * The search term is read from the HTML element with id="searchTerm".
+ * The result list is printed into the HTML table with id="searchResults".
+ */
+function Example_doSearch() {
+
+	  // Clear result table 
+	  Example_clearResults();
+	  
+	  try {
+
+		  // Get Indexserver connection
+		  var conn = getConn();
+			  
+		  // Read API constants
+      var CONST = conn.getCONST();
+
+		  // Read Sord type definitions. 
+		  // sordTypes[.].icon.data contains the icon for a document or folder type. 
+      var sordTypes = conn.ix().checkoutSordTypes(null, CONST.SORD_TYPE.mbAllJPG, CONST.LOCK.NO);
+
+      // Setup fulltext search infomation 
+		  var findInfo = new IX.FindInfo();
+		  findInfo.findByFulltext = new IX.FindByFulltext();
+		  findInfo.findByFulltext.term = document.getElementById("searchTerm").value;
+
+		  // Current position in result list  
+		  var idx = 0;
+
+		  // Maximum numbers of results to be returned in one API call
+		  var max = 10;
+
+		  // Members to be returned
+		  var sordZ = new IX.SordZ(CONST.SORD.mbMin, CONST.SORD.mbDocVersion);
+
+		  // Search
+		  var findResult = conn.ix().findFirstSords(findInfo, max, sordZ);
+
+		  // Loop over results
+		  while (true) {
+
+			  // Print results into result table
+			  for (var i = 0; i < findResult.sords.length; i++) {
+				  Example_printSord(findResult.sords[i], sordTypes);
+			  }
+
+			  // Break loop, if there are no more results
+			  if (!findResult.moreResults) break;
+
+			  // Move to next position in result list
+			  idx += findResult.sords.length;
+
+			  // Read next results starting from idx.
+			  findResult = conn.ix().findNextSords(findResult.searchId, idx, max, sordZ);
+		  }
+
+		  // Close result list
+		  conn.ix().findClose(findResult.searchId);
+	  }
+	  catch (ex) {
+
+		  // Show message box with error.
+		  alert(ex);
+	  }
+	  finally {
+		  // Skip logout in this example.
+		  // Otherwise the document URLs are no more valid.
+	  }
+};
+
+/**
+ * This function deletes the contents of the result table.
+ */
+function Example_clearResults() {
+	var node = document.getElementById("searchResults");
+	while (node.hasChildNodes()) {
+		  node.removeChild(node.lastChild);
+	}
+}
+
+/**
+ * This function appends the given sord to the result table.
+ * @param sord Sord object
+ * @param sordTypes Array of SordType objects
+ */
+function Example_printSord(sord, sordTypes) {
+
+	  // Create a row in the result table
+    var tr = document.createElement("TR");
+    document.getElementById("searchResults").appendChild(tr);
+
+    // Create the first column
+    var td = document.createElement("TD");
+    tr.appendChild(td);
+
+    // The column content
+    var item = "";
+
+    // Find the icon related to the given sord 
+    for (var i = 0; i < sordTypes.length; i++) {
+        var sordType = sordTypes[i];
+        if (sordType.id == sord.type) {
+            
+            // Create an HTML img element 
+            // and assign the Base64 encoded JPEG icon data to its src element.
+        	  item += "<img src=\"data:image/jpeg;base64," + sordType.icon.data + "\"/>";
+            break;
+        }
+    } 
+
+    // Create an anchor for the document.
+    // If the anchor is clicked, it shows the document in the iframe next to the table.
+    // The browser cannot display all documents this way. If it cannot do so, it prompts for downloading the file. 
+    item += "<a href=\"javascript:Example_showDocument('" + sord.docVersion.url + "')\">" + sord.name + "</a>";
+
+    // Set column content
+    td.innerHTML = item;
+
+    // Second column with document size or text "Folder" 
+    td = document.createElement("TD");
+    tr.appendChild(td);
+    td.innerHTML = sord.docVersion ? sord.docVersion.size : "Folder";
+};
+
+/**
+ * This function displays the given URL in the iframe next to the result table.
+ */
+function Example_showDocument(url) {
+	document.getElementById("searchPreview").src=url;
+};
+
+/**
+ * This function perfoms a fulltext search asynchronously.
+ * The search term is read from the HTML element with id="searchTerm".
+ * The result list is printed into the HTML table with id="searchResults".
+ */
+function Example_doSearchAsync() {
+    
+    Example_clearResults();
+    
+    try {
+
+        // Get Indexserver connection
+        var conn = getConn();
+
+        // Get Indexserver API constants
+				var CONST = conn.getCONST();
+
+				// Setup FindInfo
+				var findInfo = new IX.FindInfo();
+				findInfo.findByFulltext = new IX.FindByFulltext();
+				findInfo.findByFulltext.term = document.getElementById("searchTerm").value;
+
+				// Setup Callback object
+				var cb = new IX.AsyncCallback(Example_receivedResult, Example_receivedException);
+				cb.conn = conn;
+				cb.idx = 0;
+				cb.max = 10;
+				cb.sordZ = new IX.SordZ(CONST.SORD.mbMin, CONST.SORD.mbDocVersion); 
+				cb.sordTypes = conn.ix().checkoutSordTypes(null, CONST.SORD_TYPE.mbAllJPG, CONST.LOCK.NO);
+
+				// Start serach.
+				// If results are available, function Example_receivedResults is called. 
+				conn.ix().findFirstSords(findInfo, cb.max, cb.sordZ, cb);
+    }
+    catch (ex) {
+      alert(ex);
+    }
+    finally {
+    }
+};
+
+/**
+ * This function is called with the results returned by findFirstSords or findNextSords.
+ * @param findResult de.elo.ix.client.FindResult Object
+ */
+function Example_receivedResult(findResult) {
+
+	  // "this" refers to the AsyncCallback Object passed to findFirstSords.
+
+	  // Write results into HTML table
+    for (var i = 0; i < findResult.sords.length; i++) {
+      Example_printSord(findResult.sords[i], this.sordTypes);
+    }
+
+	  // If there are more results...
+    if (findResult.moreResults) {
+
+        // Invoke findNextSords asynchonously. 
+        this.idx += findResult.sords.length;
+        findResult = this.conn.ix().findNextSords(findResult.searchId, this.idx, this.max, this.sordZ, this);
+    }
+    else {
+
+        // No more results: close the find handle.
+        this.conn.ix().findClose(findResult.searchId);
+    }
+}
+
+/**
+ * This function is called, if findFirstSords or findNextSords returned an exception.
+ */
+function Example_receivedException(ex) {
+
+     // Show message box with error.
+     alert(ex);
+}
+
+</script>
+</head>
+
+<body>
+<table>
+	<tr>
+
+		<!-- Search form -->
+		<td valign="top">
+		<div id="searchForm">
+		  Search Term:<input id="searchTerm"	type="text" value="ELO Update"/> 
+			<input id="bnSearch" type="button" value="Search"	onclick="Example_doSearchAsync()" />
+		</div>
+
+		<!-- Result table -->
+		<div style="overflow: scroll; width: 700px; height: 700px;">
+		<table border="1">
+			<thead>
+				<tr>
+					<th>Short description</th>
+					<th>File Size</th>
+				</tr>
+			</thead>
+
+			<!-- This element will be filled with search results -->
+			<tbody id="searchResults">
+			</tbody>
+		</table>
+		</div>
+		</td>
+		
+		<!-- Preview frame shows the selected document -->
+		<td valign="top"><iframe id="searchPreview" src="about:blank"
+			width="500" height="700" frameborder="1"></iframe></td>
+	</tr>
+</table>
+</body>
+</html>
+
+<!-- 
+
+ -->

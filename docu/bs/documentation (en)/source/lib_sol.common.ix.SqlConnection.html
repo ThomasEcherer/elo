@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-ix-SqlConnection'>/**
+</span> * SQL utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ *
+ * @requires sol.common.ExceptionUtils
+ *
+ */
+sol.define(&quot;sol.common.ix.SqlConnection&quot;, {
+
+<span id='sol-common-ix-SqlConnection-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-SqlConnection-property-dbConfigs'>  dbConfigs: {
+</span>    postgresql: {
+      filePrefix: &quot;pg&quot;,
+      delimiterRegex: /;\s*$/m
+    },
+    &quot;microsoft sql server&quot;: {
+      filePrefix: &quot;mssql&quot;,
+      delimiterRegex: /^\s*go\s*$/mi
+    },
+    oracle: {
+      filePrefix: &quot;ora&quot;,
+      delimiter: &quot;;&quot;
+    },
+    db2: {
+      filePrefix: &quot;db2&quot;,
+      delimiter: &quot;;&quot;
+    }
+  },
+
+<span id='sol-common-ix-SqlConnection-method-open'>  /**
+</span>   * Opens a database connection
+   * @param {String} resourceName Resource name
+   * @param {Object} dbConfig Database configuration
+   */
+  open: function (resourceName, dbConfig) {
+    var me = this,
+        db;
+
+    resourceName += &quot;&quot;;
+    db = new Packages.de.elo.ix.jscript.DBConnection();
+    me.sqlConnection = db.open();
+    me.dbProductName = db.databaseProductName.toLowerCase() + &quot;&quot;;
+
+    me.dbConfig = dbConfig || me.dbConfigs[me.dbProductName];
+
+    if (!me.dbConfig) {
+      throw &quot;Unknown database product name: &quot; + me.dbProductName;
+    }
+
+    me.logger.debug([&quot;Open db connection: dbTypeString={0}, dbConfig={1}&quot;, me.dbTypeString, JSON.stringify(me.dbConfig)]);
+  },
+
+<span id='sol-common-ix-SqlConnection-method-getDbTypeFilePrefix'>  /**
+</span>   * Returns the database type file prefix
+   * @return {String} Database type file prefix
+   */
+  getDbTypeFilePrefix: function () {
+    var me = this,
+        dbTypePrefix;
+
+    dbTypePrefix = me.dbConfig.filePrefix;
+
+    return dbTypePrefix;
+  },
+
+<span id='sol-common-ix-SqlConnection-method-executeSqlScript'>  /**
+</span>   * Execute SQL script
+   * @param {String} scriptContent Script content
+   * @param {Object} params Parameters
+   * @return {Object} Result
+   */
+  executeSqlScript: function (scriptContent, params) {
+    var me = this,
+        statements, i, statement, jdbcStatement, counter, resultCountersJavaArr, result,
+        exceptionMessage;
+
+    result = {
+      resultCounters: []
+    };
+
+    scriptContent += &quot;&quot;;
+
+    if (!scriptContent) {
+      throw &quot;SQL script content is empty&quot;;
+    }
+
+    if (!me.sqlConnection) {
+      throw &quot;No open SQL connection&quot;;
+    }
+
+    jdbcStatement = me.sqlConnection.createStatement();
+    me.sqlConnection.autoCommit = false;
+
+    statements = me.parseStatements(scriptContent);
+
+    result.statements = statements;
+
+    for (i = 0; i &lt; statements.length; i++) {
+      statement = statements[i];
+      me.logger.debug(&quot;Add SQL statement: {0}&quot;, statement);
+      try {
+        jdbcStatement.addBatch(statement);
+      } catch (ex) {
+        exceptionMessage = &quot;Exception while adding a sql statement: statement=&quot; + statement + &quot;, exception=&quot; + sol.common.ExceptionUtils.parseException(ex);
+        throw exceptionMessage;
+      }
+    }
+
+    resultCountersJavaArr = jdbcStatement.executeBatch();
+
+    for (i = 0; i &lt; resultCountersJavaArr.length; i++) {
+      counter = resultCountersJavaArr[i] + &quot;&quot;;
+      result.resultCounters.push(counter);
+    }
+
+    me.sqlConnection.commit();
+    me.sqlConnection.autoCommit = true;
+
+    me.logger.debug([&quot;SQL batch result: {0}&quot;, result]);
+
+    jdbcStatement.close();
+
+    return result;
+  },
+
+<span id='sol-common-ix-SqlConnection-method-close'>  /**
+</span>   * Close
+   */
+  close: function () {
+    var me = this;
+
+    me.sqlConnection.close();
+  },
+
+<span id='sol-common-ix-SqlConnection-method-parseStatements'>  /**
+</span>   * @private
+   * @param {String} scriptContent
+   * @return {String} Statements
+   */
+  parseStatements: function (scriptContent) {
+    var me = this,
+        statements = [],
+        lines = [],
+        linesWithoutComments = [],
+        i, line, scriptContentWithoutComments, statementsWithoutDelimiter, statement,
+        regexDelimiter;
+
+    scriptContent += &quot;&quot;;
+    lines = scriptContent.split(/\r?\n/);
+
+    for (i = 0; i &lt; lines.length; i++) {
+      line = lines[i];
+      line = line.replace(/--.*/, &quot;&quot;);
+      line = line.trim();
+      if (line) {
+        linesWithoutComments.push(line);
+      }
+    }
+
+    scriptContentWithoutComments = linesWithoutComments.join(&quot;\r\n&quot;);
+
+    statementsWithoutDelimiter = scriptContentWithoutComments.split(me.dbConfig.delimiterRegex);
+
+    for (i = 0; i &lt; statementsWithoutDelimiter.length; i++) {
+      statement = statementsWithoutDelimiter[i];
+      statement = sol.common.StringUtils.replaceAll(statement, &quot;\s*\r?\n&quot;, &quot; &quot;);
+      statement = statement.trim();
+      if (statement) {
+        statements.push(statement);
+      }
+    }
+
+    return statements;
+  }
+});
+</pre>
+</body>
+</html>

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(Packages.de.elo.ix.jscript);
+importPackage(Packages.de.elo.ix.scripting);
+
+//@include lib_Class.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.UserProfile.js
+//@include lib_sol.common.Locale.js
+//@include lib_sol.common.ix.DynKwlUtils.js
+
+<span id='sol-common-ix-DynKwlDatabaseIterator'>/**
+</span> * @class sol.common.ix.DynKwlDatabaseIterator
+ *
+ * Database Iterator used by dynamic keyword lists.
+ * This class provides an abstract layer that simplifies the usage of database connections.
+ *
+ * Dynamic keyword lists simplify the use of gathering data from external services.
+ * This implementation helps in querying database tables. Each query is returned as a table
+ * which contains a title and a specific table configuration.
+ *
+ * Queries are defined by sql statements that can contain placeholders ?.
+ * Each placeholder must be defined in the sqlParams array. If no name is given, the given filter value will be used.
+ * In case the field is empty, a message can be set, which is displayed by the client.
+ * Thanks to a mode type filters can be applied in different ways.
+ *
+ *     {mode: &#39;STARTS_WITH&#39;},
+ *     {name: &#39;COMPANY_CODE&#39;, message: &#39;please select a company.&#39;},
+ *
+ * Following modes are supported. Please mind that the modes ENDS_WITH and CONTAINS might lead to expansive queries.
+ *
+ *  - &lt;b&gt;STARTS_WITH&lt;/b&gt;: String starts with the given value. e.g. COMPA%.
+ *  - &lt;b&gt;ENDS_WITH&lt;/b&gt;: String ends with the given value. e.g. %COMPA.
+ *  - &lt;b&gt;CONTAINS&lt;/b&gt;: String contains the given value. e.g. %COMPA%.
+ *  - &lt;b&gt;No type name given&lt;/b&gt;: String equals the given value. e.g. &quot;COMPA&quot;.
+ *
+ *
+ * # Localization
+ *
+ * SQL Queries can be localized by passing the locale key as a parameter. Therefore the valueType &#39;LANGUAGE&#39; can be used.
+ *
+ *     sqlQuery: &quot;select code, description from sol_invoice_trade_charge where language = ? order by description&quot;,
+ *     sqlParams: [{ valueType: &#39;LANGUAGE&#39; }],
+ *
+ *
+ * # Examples
+ *
+ * Example implementation as instance
+ *
+ *     sol.create(&#39;sol.common.ix.DynKwlDatabaseIterator&#39;, {
+ *       tableTitle: &#39;Company&#39;,
+ *       sqlQuery: &quot;select CODE, NAME, STREET, ZIPCODE, CITY, COUNTRY_CODE from sol_invoice_company where CODE like ? OR NAME like ?&quot;,
+ *       sqlParams: [
+ *         {mode: &#39;STARTS_WITH&#39;},
+ *         {mode: &#39;CONTAINS&#39;}
+ *       ],
+ *       tableKeyNames: [&quot;COMPANY_CODE&quot;, &quot;COMPANY_NAME&quot;, null, null, null, null],
+ *       tableHeaders: [&quot;No.&quot;, &quot;Name&quot;, &quot;Street&quot;, &quot;Zip&quot;, &quot;City&quot;, &quot;Country&quot;]
+ *     });
+ *
+ *
+ * Example implementation as a custom class.
+ *
+ *     sol.define(&#39;sol.invoice.ix.dynkwl.Company&#39;, {
+ *       extend: &#39;sol.common.ix.DynKwlDatabaseIterator&#39;,
+ *       tableTitle: &#39;Company&#39;,
+ *       sqlQuery: &quot;select CODE, NAME, STREET, ZIPCODE, CITY, COUNTRY_CODE from sol_invoice_company where CODE like ? OR NAME like ?&quot;,
+ *       sqlParams: [
+ *         {mode: &#39;STARTS_WITH&#39;},
+ *         {mode: &#39;CONTAINS&#39;}
+ *       ],
+ *       tableKeyNames: [&quot;COMPANY_CODE&quot;, &quot;COMPANY_NAME&quot;, null, null, null, null],
+ *       tableHeaders: [&quot;No.&quot;, &quot;Name&quot;, &quot;Street&quot;, &quot;Zip&quot;, &quot;City&quot;, &quot;Country&quot;]
+ *     });
+ *
+ * Example usage in ix dynkwl-script:
+ *
+ *     function getDataIterator() {
+ *       var iterator;
+ *       try {
+ *         iterator = sol.create(&#39;sol.invoice.ix.dynkwl.Company&#39;, {
+ *           dbName: &#39;customers&#39;,
+ *           jdbc: &#39;testconn&#39;
+ *         });
+ *         return new DynamicKeywordDataProvider(iterator);
+ *       } finally {
+ *         log.info(&quot;)getDataIterator&quot;);
+ *       }
+ *     }
+ *
+ * @author NM, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires sol.common.StringUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.UserProfile
+ * @requires sol.common.Locale
+ * @requires sol.common.ix.DynKwlUtils
+ */
+sol.define(&quot;sol.common.ix.DynKwlDatabaseIterator&quot;, {
+  mixins: [&quot;sol.common.ix.DynKwlMixin&quot;],
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-tableTitle'>  /**
+</span>   * @cfg {string} tableTitle
+   * name of this table. The title is displayed by the client.
+   */
+  tableTitle: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-sqlQuery'>  /**
+</span>   * @cfg {string} sqlQuery (required)
+   * sql-query that can contain placeholders ? used by prepared statements.
+   *
+   *     &quot;select CODE, NAME, STREET, ZIPCODE, CITY, COUNTRY_CODE from sol_invoice_company where CODE like ? OR NAME like ?&quot;
+   */
+  sqlQuery: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-sqlParams'>  /**
+</span>   * @cfg {Array} sqlParams
+   * fields that are used by the prepared statements. (Array of config options).
+   *
+   *     [{ name: &#39;IX_MAP_NUMBER&#39;, mode: &#39;STARTS&#39;, message: &#39;field x missing&#39; }]
+   *
+   * if no name is provided current focused field is used.
+   */
+  sqlParams: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-tableKeyNames'>  /**
+</span>   * @cfg {Array} tableKeyNames (required)
+   * mapping between columns and elo group or map fields. if null, value is not transferred.
+   *
+   *     // GRP field     map static field           map table field
+   *     [&#39;INVOICE_NO&#39;, &#39;IX_MAP_INVOICE_DUE_DATE&#39;, &#39;IX_MAP_ACCDESC{i}&#39;];
+   *
+   * Map fields must contain IX_MAP as a prefix and can optionally use {i} as a counter value.
+   */
+  tableKeyNames: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-tableHeaders'>  /**
+</span>   * @cfg {Array} tableHeaders (required)
+   * column header names. if null column is hidden in the client.
+   *
+   *     [&quot;No.&quot;, &quot;Name&quot;, &quot;Street&quot;, &quot;Zip&quot;, &quot;City&quot;, &quot;Country&quot;]
+   */
+  tableHeaders: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-dbName'>  /**
+</span>   * @cfg {string} dbName
+   * JDBC: Database name for the jdbc connection. Should not be defined if table is part of the current archive database.
+   */
+  dbName: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-cfg-jdbc'>  /**
+</span>   * @cfg {string} jdbc
+   * JDBC: Name of the jdbc connection. Should not be defined if table is part of the current archive database.
+   */
+  jdbc: undefined,
+<span id='sol-common-ix-DynKwlDatabaseIterator-property-errorMessage'>  /**
+</span>   * @property
+   * Error message that is passed to the client if value is missing.
+   */
+  errorMessage: &quot;&quot;,
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-initialize'>  initialize: function (config) {
+</span>    this.log = sol.create(&quot;sol.Logger&quot;, { scope: this.$className || &quot;sol.common.ix.DynKwlDatabaseIterator&quot; });
+    this.log.enter(&quot;initialize&quot;, config);
+    config = config || {};
+
+    if ((!this.sqlQuery &amp;&amp; !config.sqlQuery)
+      || (!this.tableKeyNames &amp;&amp; !config.tableKeyNames)
+      || (!this.tableHeaders &amp;&amp; !config.tableHeaders)) {
+      this.log.error(&quot;Dynamic keyword list: sqlQuery, keyNameTemplate, header must be set.&quot;);
+    }
+
+    this.tableTitle = config.tableTitle || this.tableTitle;
+    this.sqlQuery = config.sqlQuery || this.sqlQuery;
+    this.sqlParams = config.sqlParams || this.sqlParams;
+    this.tableKeyNames = config.tableKeyNames || this.tableKeyNames;
+    this.tableHeaders = config.tableHeaders || this.tableHeaders;
+
+    /* jdbc database settings. only pass if table is not part of the archive database */
+    this.dbName = config.dbName || this.dbName;
+    this.jdbc = config.jdbc || this.jdbc;
+
+    this.errorMessage = &quot;&quot;;
+    this.log.exit(&quot;initialize&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-open'>  /**
+</span>   * Opens a connection for the elo java client and non map field capable clients.
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec Events context
+   * @param {Object} sord working version of the current sord object
+   * @param {String} fieldName name of the currently focused field
+   */
+  open: function (ec, sord, fieldName) {
+    var me = this,
+        dbParams;
+    me.log.enter(&quot;open&quot;, { sord: sord, fieldName: fieldName });
+    me.ec = ec;
+
+    me.initOpen(ec, sord, fieldName);
+
+    if (!me.database) {
+      me.database = me.openDbConnection();
+    }
+
+    me._keyNames = me.getTableKeyNames(fieldName);
+    me.index = 0;
+
+    dbParams = this.createDbParameterList(ec, fieldName, null, null, sord);
+
+    me.resultSet = me.database.query(this.sqlQuery, dbParams);
+    me.log.exit(&quot;open&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-openMap'>  /**
+</span>   * Opens a connection for elo wf forms and map field capable components
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec Events context
+   * @param {Object} map map of all entries passed by the client
+   * @param {String} focusName name of the currently focused field
+   */
+  openMap: function (ec, map, focusName) {
+    var me = this,
+        fieldIndex, dbParams;
+
+    me.log.enter(&quot;openMap&quot;, { focusName: focusName, map: map });
+    me.ec = ec;
+
+    me.initOpenMap(ec, map, focusName);
+
+    if (!me.database) {
+      me.database = me.openDbConnection();
+    }
+
+    fieldIndex = me.getIndexFromName(focusName);
+    me._keyNames = me.getTableKeyNames(focusName).map(function (keyName) {
+      return !!keyName ? ((fieldIndex != &quot;&quot;) ? keyName.replace(&quot;{i}&quot;, fieldIndex) : keyName) : null;
+    });
+
+    me.index = 0;
+
+    dbParams = this.createDbParameterList(ec, focusName, fieldIndex, map, null);
+
+    me.resultSet = this.database.query(this.sqlQuery, dbParams);
+    me.log.exit(&quot;openMap&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-close'>  /**
+</span>   * Closes the connection for both map and non map capable clients.
+   */
+  close: function () {
+    this.log.enter(&quot;close&quot;);
+    this.database = null;
+    this.log.exit(&quot;close&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getNextRow'>  /**
+</span>   * Returns the next row of the table.
+   * @param {de.elo.ix.client.IXServerEventsContext} ec Events context
+   * @return {String[]} table row
+   */
+  getNextRow: function () {
+    var me = this,
+        row;
+
+    row = this.resultSet[this.index++];
+    if (row) {
+      me.prepareRow(row);
+      row = row.map(function (value) {
+        return value ? value : &quot;&quot;;
+      });
+      return row;
+    }
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-initOpen'>  /**
+</span>   * Initializes the list for an `open` call
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec Events context
+   * @param {Object} sord working version of the current sord object
+   * @param {String} fieldName name of the currently focused field
+   */
+  initOpen: function (ec, sord, fieldName) {
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-initOpenMap'>  /**
+</span>   * Initializes the list for an `openMap` call
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec Events context
+   * @param {Object} map map of all entries passed by the client
+   * @param {String} focusName name of the currently focused field
+   */
+  initOpenMap: function (ec, map, focusName) {
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-prepareRow'>  /**
+</span>   * Initializes the list
+   * @param {Array} row Row
+   */
+  prepareRow: function (row) {
+    var me = this;
+    me.formatRow(row);
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getHeader'>  /**
+</span>   * Returns the header of this table that can be displayed by the clients.
+   *
+   * @return {String[]} table header
+   */
+  getHeader: function () {
+    return this.tableHeaders;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getKeyNames'>  /**
+</span>   * Returns the keys of this table that can be used in order to map
+   * map or group fields with columns.
+   *
+   * @return {String[]} table keys
+   */
+  getKeyNames: function () {
+    return this._keyNames;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-hasMoreRows'>  /**
+</span>   * Returns true if table has more rows.
+   *
+   * @return {Boolean} has more rows
+   */
+  hasMoreRows: function () {
+    return (this.index &lt; (this.resultSet.length));
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getMessage'>  /**
+</span>   * Returns the error message that should be displayed by the client
+   * instead of the table data.
+   *
+   * @return {String} error message
+   */
+  getMessage: function () {
+    return this.errorMessage;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getTitle'>  /**
+</span>   * Returns a title for this table used by the user interface.
+   *
+   * @return {String} title
+   */
+  getTitle: function () {
+    return this.tableTitle || &quot;Database query&quot;;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-openDbConnection'>  /**
+</span>   * Internal function that opens a database connection for map and non map
+   * capable clients. Via default the archive database is used but can be changed
+   * to a custom database connection if jdbc and dbName has been set.
+   *
+   * @returns {de.elo.ix.jscript.DBConnection} database connection
+   */
+  openDbConnection: function () {
+    if (this.jdbc &amp;&amp; this.dbName) {
+      return new Packages.de.elo.ix.jscript.DBConnection(this.jdbc, this.dbName);
+    } else if (this.jdbc) {
+      return new Packages.de.elo.ix.jscript.DBConnection(this.jdbc);
+    } else {
+      return new Packages.de.elo.ix.jscript.DBConnection();
+    }
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-createDbParameterList'>  /**
+</span>   * Internal function that utilizes the creation of database parameter lists used by
+   * prepared statements.
+   *
+   * configuration as defined by sqlParams is used to identify fields and the query type.
+   *
+   * @param {Object} ec IX ScriptExecContext
+   * @param {String} focusField currently focused field
+   * @param {String} fieldIndex index field
+   * @param {Object} map map of all entries passed by the client
+   * @param {Object} sord working version of the current sord object
+   * @returns {String[]} values for prepared statement
+   */
+  createDbParameterList: function (ec, focusField, fieldIndex, map, sord) {
+    this.log.enter(&quot;createDbParameterList&quot;, { focusField: focusField, fieldIndex: fieldIndex, map: map, sord: sord });
+    var list = [],
+        i, param, fieldName, value;
+
+    this.errorMessage = &quot;&quot;;
+
+    for (i = 0; i &lt; this.sqlParams.length; i++) {
+      param = this.sqlParams[i];
+      fieldName = param.name || focusField;
+      if (fieldIndex) {
+        fieldName = String(fieldName).replace(&quot;{i}&quot;, fieldIndex);
+      }
+
+      if (param.value) {
+        value = param.value;
+      } else if (param.valueType) {
+        switch (param.valueType) {
+          case &quot;LANGUAGE&quot;:
+            value = ec.ci.language;
+            break;
+          default:
+            value = &quot;&quot;;
+        }
+      } else if (map) {
+        // WF currently passes IX_GRP for group fields.
+        // This must be fixed so SQL-Queries can be used in mixed mode.
+        value = (map[fieldName] || map[&quot;IX_GRP_&quot; + fieldName]) || &quot;&quot;;
+      } else {
+        value = sol.common.SordUtils.getObjKeyValue(sord, fieldName) || &quot;&quot;;
+      }
+
+      if (sol.common.StringUtils.isEmpty(value) &amp;&amp; param.message) {
+        this.errorMessage = param.message;
+      }
+
+      switch (param.mode) {
+        case &quot;STARTS_WITH&quot;:
+          list.push(value + &quot;%&quot;);
+          break;
+        case &quot;CONTAINS&quot;:
+          list.push(&quot;%&quot; + value + &quot;%&quot;);
+          break;
+        case &quot;ENDS_WITH&quot;:
+          list.push(&quot;%&quot; + value);
+          break;
+        default:
+          list.push(String(value));
+      }
+    }
+    this.log.exit(&quot;createDbParameterList&quot;);
+    return list;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-getIndexFromName'>  getIndexFromName: function (name) {
+</span>    name = String(name);
+    if (!name) {
+      return &quot;&quot;;
+    }
+    var pos = name.search(/\d+$/);
+    if (pos &gt; 0) {
+      return name.substring(pos);
+    }
+    return &quot;&quot;;
+  },
+
+<span id='sol-common-ix-DynKwlDatabaseIterator-method-formatDecimals'>  /**
+</span>   * @deprecated Use {@link sol.common.ix.DynKwlMixin#formatRow} instead
+   * Formats decimal numbers
+   * @param {Array} row Row
+   * @param {Array} defs definitions
+   * @param {String} defs[].params.columnNames Column names
+   * @param {Array} defs[].params.columnIndexes Column indexes
+   * @param {Number} params.decimalPlaces Decimal places
+   */
+  formatDecimals: function (row, defs) {
+    var me = this,
+        columnIndexes = [],
+        i, j, def, columnNames, columnName, columnIndex, value;
+
+    defs = defs || [];
+
+    for (i = 0; i &lt; defs.length; i++) {
+      def = defs[i];
+      def.groupingSeparator = (def.groupingSeparator == false) ? false : true;
+
+      columnNames = def.columnNames || [];
+      columnIndexes = def.columnIndexes || [];
+
+      for (j = 0; j &lt; columnNames.length; j++) {
+        columnName = columnNames[j];
+        columnIndex = me.tableKeyNames.indexOf(columnName);
+        if (columnIndex &gt; -1) {
+          columnIndexes.push(columnIndex);
+        }
+      }
+
+      for (j = 0; j &lt; columnIndexes.length; j++) {
+        columnIndex = columnIndexes[j];
+        value = row[columnIndex] + &quot;&quot;;
+        if (value == &quot;null&quot;) {
+          value == &quot;&quot;;
+        } else {
+          if (!me.locale) {
+            me.locale = sol.create(&quot;sol.common.Locale&quot;, { ec: me.ec });
+            me.locale.read();
+          }
+          value = me.locale.formatDecimal(value, def);
+          row[columnIndex] = value;
+        }
+      }
+    }
+  }
+
+});
+</pre>
+</body>
+</html>

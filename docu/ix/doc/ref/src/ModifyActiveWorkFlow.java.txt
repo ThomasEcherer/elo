@@ -1,0 +1,190 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.examples.*;
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFNode;
+import de.elo.ix.client.WFNodeAssoc;
+import de.elo.ix.client.WFTypeZ;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+
+/**
+ *
+ * Creates a simple workflow with a person node.
+ * The workflow is started and then checked out and altered before being checked 
+ * in and processed further.
+ */
+public class ModifyActiveWorkFlow {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            createModifyWorkFlow();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+     /**
+     * Create a workflow template
+     */
+    public static void createModifyWorkFlow() throws RemoteException {
+        
+        CONS = ix.getCONST();
+        // create required users
+        int userId_1 = WFHelper.createNewUser(ix, "WF-User1", "elo", false);
+        int userId_2 = WFHelper.createNewUser(ix, "WF-User2", "elo", false);
+        int userId_3 = WFHelper.createNewUser(ix, "WF-User3", "elo", false);
+ 
+        // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("WF-Sord-" + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+        
+        // Call IX to prepare a workfow object.
+        String flowName = "WF-ModifyExample-" + (new Date());
+    
+        WFTypeZ wfType = CONS.getWORKFLOW_TYPE().getACTIVE();
+        WFDiagram wf = ix.ix().createWorkFlow(flowName, wfType);
+        
+        wf.setOwnerId(CONS.getWORKFLOW_NODE().getUSERID_OWNER());
+        
+        // Create an array of nodes.
+        // Begin node
+        WFNode[] nodes = new WFNode[2];
+        nodes[0] = WFHelper.createNode(ix, 0, CONS.getWORKFLOW_NODE().getTYPE_BEGINNODE(),100, 100);
+        nodes[0].setName("Begin-node");
+        nodes[0].setUserId(CONS.getWORKFLOW_NODE().getUSERID_OWNER());
+
+        // Person node 1
+        nodes[1] = WFHelper.createNode(ix, 1, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 100, 200);
+        nodes[1].setName("Person Node 1");
+        nodes[1].setUserId(userId_1);
+        nodes[1].setUserName("WF-User1");
+       
+        // Assign nodes to workflow
+        wf.setNodes(nodes);
+        
+        // Create a matrix that describes how the nodes are connected with each other.
+        WFNodeAssoc[] assocs = new WFNodeAssoc[1];
+        
+        assocs[0] = new WFNodeAssoc();
+        assocs[0].setNodeFrom(0);
+        assocs[0].setNodeTo(1);
+        assocs[0].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+        
+        wf.getMatrix().setAssocs(assocs);
+        
+        // Checkin WF
+        wf.setObjId(Integer.toString(objId));
+        int wfId = ix.ix().checkinWorkFlow(wf, CONS.getWORKFLOW().getMbAll(), CONS.getLOCK().getNO());
+        wf.setId(wfId);
+        System.out.println("Created workflow " + wf.getName() + " with id = " + wf.getId());
+        
+        // Checkout WF to add new nodes
+        wf = ix.ix().checkoutWorkFlow(Integer.toString(wfId), wfType, CONS.getWORKFLOW().getMbAll(), CONS.getLOCK().getYES());
+        
+        // add 2 new nodes - now 4 nodes in total
+        WFNode[] newNodes = new WFNode[4];
+        System.arraycopy(wf.getNodes(), 0, newNodes, 0, 2);
+        wf.setNodes(newNodes);
+
+        wf.getNodes()[2] = WFHelper.createNode(ix, 2, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 100, 300);
+        int nodeId_2 = wf.getNodes()[2].getId();
+        wf.getNodes()[2].setName("Node 2");
+        wf.getNodes()[2].setUserId(userId_2);
+        wf.getNodes()[2].setUserName("WF-User2");
+
+        wf.getNodes()[3] = WFHelper.createNode(ix, 3, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 100, 400);
+        int nodeId_3 = wf.getNodes()[3].getId();
+        wf.getNodes()[3].setName("Node 3");
+        wf.getNodes()[3].setUserId(userId_3);
+        wf.getNodes()[3].setUserName("WF-User3");
+
+        // Insert after first person node in diagram
+        WFNodeAssoc[] assocsNew = new WFNodeAssoc[3];
+        assocsNew[0] = new WFNodeAssoc();
+        assocsNew[0].setNodeFrom(0);
+        assocsNew[0].setNodeTo(1);
+        assocsNew[0].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+
+        assocsNew[1] = new WFNodeAssoc();
+        assocsNew[1].setNodeFrom(1);
+        assocsNew[1].setNodeTo(2);
+        assocsNew[1].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+      
+        assocsNew[2] = new WFNodeAssoc();
+        assocsNew[2].setNodeFrom(2);
+        assocsNew[2].setNodeTo(3);
+        assocsNew[2].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+        
+        wf.getMatrix().setAssocs(assocsNew);
+        
+        // Checkin WF to save changes
+        wfId = ix.ix().checkinWorkFlow(wf, CONS.getWORKFLOW().getMbAll(), LOCK.getNO());
+
+        wf = ix.ix().checkoutWorkFlow(
+                                    Integer.toString(wfId),
+                                    CONS.getWORKFLOW_TYPE().getACTIVE(),
+                                    CONS.getWORKFLOW().getMbAll(),
+                                    LOCK.getNO());
+
+    }
+    
+     //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        //ARCHIVING_MODE = CONS.getARCHIVING_MODE();
+    }
+    
+      // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

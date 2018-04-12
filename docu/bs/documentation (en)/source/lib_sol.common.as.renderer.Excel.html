@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-as-renderer-Excel'>/**
+</span> * Rendering Excel file from a Excel template.
+ *
+ * This can either be used for creating a new Document in the archive (`targetId` specified) or can create a new version on an existing object (`objId`).
+ *
+ * Which fields will be written, is specified by the template (first line of the data worksheet contains the ObjKeys)
+ * or by the first Sord of the data.sords array (all ObjKeys).
+ *
+ * @author ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloas
+ *
+ * @requires sol.common.StringUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.DateUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Template
+ * @requires sol.common.as.ExcelDocument
+ *
+ */
+sol.define(&quot;sol.common.as.renderer.Excel&quot;, {
+
+<span id='sol-common-as-renderer-Excel-cfg-requiredConfig'>  requiredConfig: [&quot;templateId&quot;],
+</span>
+<span id='sol-common-as-renderer-Excel-cfg-templateId'>  /**
+</span>   * @cfg {String} templateId (required)
+   * The template which should be rendered
+   */
+
+<span id='sol-common-as-renderer-Excel-cfg-targetId'>  /**
+</span>   * @cfg {String} targetId
+   * The target folder to store the rendered document
+   */
+
+<span id='sol-common-as-renderer-Excel-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * The rendered document will be saved as a version of this object
+   * Either `targetId` or `objId` has to be defined.
+   */
+
+<span id='sol-common-as-renderer-Excel-cfg-copyMetaData'>  /**
+</span>   * @cfg {Boolean} copyMetaData
+   * If `true`, the mask and the metadata of the template will be copied to the new document
+   */
+
+<span id='sol-common-as-renderer-Excel-cfg-datasheet'>  /**
+</span>   * @cfg {String} [datasheet=&quot;Data&quot;]
+   * Specifies on which worksheet the data should be written
+   */
+
+<span id='sol-common-as-renderer-Excel-property-mapPrefix'>  /**
+</span>   * @private
+   * @property {String} mapPrefix
+   */
+  mapPrefix: &quot;MAP_&quot;,
+
+<span id='sol-common-as-renderer-Excel-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    if (!me.objId &amp;&amp; !me.targetId) {
+      throw &quot;IllegalArgumentException: either &#39;targetId&#39; or &#39;objId&#39; has to defined&quot;;
+    }
+    me.datasheet = config.datasheet || &quot;Data&quot;;
+    me._mapKeys = [];
+  },
+
+<span id='sol-common-as-renderer-Excel-method-render'>  /**
+</span>   * Starts the template rendering.
+   * @param {String} name Name
+   * @param {String} data Data
+   * @return {Object}
+   */
+  render: function (name, data) {
+    var me = this,
+        config = {},
+        templateSord;
+
+    if (me.objId) {
+      config.objId = me.objId;
+    } else {
+      config.name = name;
+      config.parentId = me.targetId;
+    }
+
+    config.format = &quot;xlsx&quot;;
+    if (me.copyMetaData === true) {
+      templateSord = ixConnect.ix().checkoutSord(me.templateId, SordC.mbAllIndex, LockC.NO);
+      config.maskId = templateSord.mask;
+      config.objKeysObj = sol.common.SordUtils.getTemplateSord(templateSord).sord.objKeys;
+    }
+
+    return me.renderExcel(data, config);
+  },
+
+<span id='sol-common-as-renderer-Excel-method-renderExcel'>  /**
+</span>   * @private
+   * @param {Object} data Data
+   * @param {Object} config Configuration
+   * @return {Object}
+   */
+  renderExcel: function (data, config) {
+    var me = this,
+        result = {},
+        excelDocument;
+
+    try {
+      excelDocument = sol.create(&quot;sol.common.as.ExcelDocument&quot;, {});
+      excelDocument.openFromRepo({ objId: me.templateId });
+      me.fillExcelSpreadsheet(excelDocument, data);
+      result.objId = excelDocument.saveToRepo(config);
+    } catch (ex) {
+      me.logger.error([&quot;error rendering report &#39;{0}&#39; (templateId=&#39;{1}&#39;)&quot;, config.name, me.templateId], ex);
+    }
+
+    return result;
+  },
+
+<span id='sol-common-as-renderer-Excel-method-fillExcelSpreadsheet'>  /**
+</span>   * @private
+   * Fills the data to an Excel spreadsheet
+   * @param {sol.common.as.ExcelDocument} excelDocument Excel document
+   * @param {Object} data Data   *
+   */
+  fillExcelSpreadsheet: function (excelDocument, data) {
+    var me = this,
+        workbook = excelDocument.workbook;
+
+    me._worksheet = workbook.worksheets.get(me.datasheet);
+
+    if (!me._worksheet) {
+      return;
+    }
+
+    if (data &amp;&amp; data.sords &amp;&amp; (data.sords.length &gt; 0)) {
+      me.prepareColumnMapping(data.sords[0]);
+      me.prepareHeader();
+      me.writeData(data.sords);
+    }
+  },
+
+<span id='sol-common-as-renderer-Excel-method-prepareColumnMapping'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord Sord
+   */
+  prepareColumnMapping: function (sord) {
+    var me = this,
+        header = me.readHeader(sord),
+        columnIdx, columnDescObj;
+
+    me._columnMapping = {};
+    me._header = [];
+    if (header) {
+      for (columnIdx = 0; columnIdx &lt; header.length; columnIdx++) {
+        columnDescObj = header[columnIdx];
+        columnDescObj.idx = columnIdx;
+        me._columnMapping[columnDescObj.key] = columnDescObj;
+        me._header.push(columnDescObj.key); // to preserve header order
+      }
+    }
+  },
+
+<span id='sol-common-as-renderer-Excel-method-readHeader'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @return {Array}
+   */
+  readHeader: function (sord) {
+    var me = this,
+        header = me.readHeaderFromWorksheet();
+    if (!header) {
+      header = me.readHeaderFromSord(sord);
+    }
+    return header;
+  },
+
+<span id='sol-common-as-renderer-Excel-method-readHeaderFromWorksheet'>  /**
+</span>   * @private
+   * @return {Array}
+   */
+  readHeaderFromWorksheet: function () {
+    var me = this,
+        cells = me._worksheet.getCells(),
+        columnIdx = 0,
+        cell = cells.getCell(0, columnIdx++),
+        headerData = [],
+        value;
+
+    while (cell &amp;&amp; cell.getValue() !== null) {
+      value = {
+        key: cell.getValue() + &quot;&quot;,
+        isDate: me.isDate(cell),
+        isNumber: me.isNumber(cell)
+      };
+
+      headerData.push(value);
+
+      if (sol.common.StringUtils.startsWith(value.key, me.mapPrefix)) {
+        me._mapKeys.push(value.key.replace(me.mapPrefix, &quot;&quot;) + &quot;*&quot;);
+      }
+
+      cell = cells.getCell(0, columnIdx++);
+    }
+
+    return (headerData.length &gt; 0) ? headerData : null;
+  },
+
+<span id='sol-common-as-renderer-Excel-method-isNumber'>  /**
+</span>   * @private
+   * Checks, if a Cell is formated as number.
+   * @param {com.aspose.cells.Cell} cell
+   * @return {Boolean}
+   */
+  isNumber: function (cell) {
+    var styleNumber = cell.style.getNumber();
+    return (styleNumber &gt; 0 &amp;&amp; styleNumber &lt; 14) || (styleNumber &gt; 22 &amp;&amp; styleNumber &lt; 45);
+  },
+
+<span id='sol-common-as-renderer-Excel-method-isDate'>  /**
+</span>   * @private
+   * Checks, if a Cell is formated as date.
+   * @param {com.aspose.cells.Cell} cell
+   * @return {Boolean}
+   */
+  isDate: function (cell) {
+    return cell.style.isDateTime();
+  },
+
+<span id='sol-common-as-renderer-Excel-method-readHeaderFromSord'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @return {Array}
+   */
+  readHeaderFromSord: function (sord) {
+    var headerData = [],
+        objKey;
+    for (objKey in sord.objKeys) {
+      if (sord.objKeys.hasOwnProperty(objKey)) {
+        headerData.push({ key: objKey });
+      }
+    }
+    return (headerData.length &gt; 0) ? headerData : null;
+  },
+
+<span id='sol-common-as-renderer-Excel-method-prepareHeader'>  /**
+</span>   * @private
+   */
+  prepareHeader: function () {
+    var me = this;
+
+    me.writeLine(0, me._header);
+  },
+
+<span id='sol-common-as-renderer-Excel-method-writeData'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord[]} rowSords Row Sords
+   */
+  writeData: function (rowSords) {
+    var me = this,
+        line = 1;
+    rowSords.forEach(function (rowSord) {
+      var rows;
+      if (me._mapKeys.length &gt; 0) {
+        rows = me.expandRowSord(rowSord);
+        if (rows) {
+          rows.forEach(function (row) {
+            me.writeLine(line++, row);
+          });
+        }
+      } else {
+        me.writeLine(line++, rowSord.objKeys);
+      }
+    });
+  },
+
+<span id='sol-common-as-renderer-Excel-method-expandRowSord'>  /**
+</span>   * @private
+   * Extract the lines for the map items.
+   * If there is a map value with an index, the line (the ObjKeys) will be repeated for each map index.
+   * If the `rowSord` contains `mapKeys`, those will be used and the map values will not be checked out again.
+   * @param {de.elo.ix.client.Sord} rowSord Row sord
+   * @return {Object}
+   */
+  expandRowSord: function (rowSord) {
+    var me = this,
+        result = [],
+        mapitems, mapkey, tmpRow;
+
+    if (rowSord.mapKeys &amp;&amp; !sol.common.ObjectUtils.isEmpty(rowSord.mapKeys)) {
+      mapitems = [];
+      for (mapkey in rowSord.mapKeys) {
+        if (rowSord.mapKeys.hasOwnProperty(mapkey)) {
+          mapitems.push(new KeyValue(mapkey, rowSord.mapKeys[mapkey]));
+        }
+      }
+    } else {
+      mapitems = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, rowSord.id, me._mapKeys, LockC.NO).items;
+    }
+
+    mapitems.forEach(function (mapitem) {
+      var key = me.mapPrefix + mapitem.key,
+          idx = me.getIndexFromName(key);
+      if (idx) {
+        if (!result[idx - 1]) {
+          result[idx - 1] = me.copyObject(rowSord);
+        }
+        result[idx - 1][sol.common.StringUtils.removeTrailingNumber(key)] = mapitem.value + &quot;&quot;;
+      } else {
+        if (!tmpRow) {
+          tmpRow = me.copyObject(rowSord);
+        }
+        tmpRow[key] = mapitem.value + &quot;&quot;;
+      }
+    });
+
+    if (tmpRow) {
+      result.push(tmpRow);
+    }
+
+    return (result.length &gt; 0) ? result : [rowSord.objKeys];
+  },
+
+
+<span id='sol-common-as-renderer-Excel-method-copyObject'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} rowSord Row sord
+   * @return {Object}
+   */
+  copyObject: function (rowSord) {
+    var copy = {},
+        prop;
+    for (prop in rowSord.objKeys) {
+      if (rowSord.objKeys.hasOwnProperty(prop)) {
+        copy[prop] = rowSord.objKeys[prop];
+      }
+    }
+    return copy;
+  },
+
+<span id='sol-common-as-renderer-Excel-method-getIndexFromName'>  /**
+</span>   * @private
+   * @param {String} fieldName
+   * @return {String}
+   */
+  getIndexFromName: function (fieldName) {
+    if (!fieldName) {
+      return null;
+    }
+    return sol.common.StringUtils.getTrailingNumber(fieldName);
+  },
+
+<span id='sol-common-as-renderer-Excel-method-writeLine'>  /**
+</span>   * @private
+   * @param {Number} rowIndex Row index
+   * @param {Array} rowData Row data
+   */
+  writeLine: function (rowIndex, rowData) {
+    var me = this,
+        cells = me._worksheet.getCells(),
+        columnIdx, column, value;
+
+    if (sol.common.ObjectUtils.isArray(rowData)) {
+      for (columnIdx = 0; columnIdx &lt; rowData.length; columnIdx++) {
+        cells.getCell(rowIndex, columnIdx).putValue(rowData[columnIdx]);
+      }
+    } else {
+      for (column in rowData) {
+        if (rowData.hasOwnProperty(column) &amp;&amp; rowData[column] &amp;&amp; me._columnMapping.hasOwnProperty(column)) {
+          if (me._columnMapping[column].isDate === true) {
+            value = new java.util.Date(sol.common.DateUtils.isoToDate(rowData[column]).getTime());
+          } else if (me._columnMapping[column].isNumber === true) {
+            try {
+              value = java.lang.Double.parseDouble(rowData[column].replace(&quot;,&quot;, &quot;.&quot;));
+            } catch (ex) {
+              value = rowData[column];
+            }
+          } else {
+            value = rowData[column];
+          }
+          cells.getCell(rowIndex, me._columnMapping[column].idx).putValue(value);
+        }
+      }
+    }
+  }
+});
+</pre>
+</body>
+</html>

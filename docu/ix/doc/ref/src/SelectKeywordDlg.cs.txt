@@ -1,0 +1,331 @@
+using System;
+using System.Drawing;
+using System.Collections;
+using System.ComponentModel;
+using System.Windows.Forms;
+
+namespace Examples
+{
+	/// <summary>
+	/// This is an example dialog for selecting a keyword. 
+	/// The availiable keyword lists are displayed in a combo box.
+	/// 
+	/// The selected item of the combo box becomes the root node 
+	/// in the tree view. 
+	/// 
+  /// The Tag members of the tree nodes are set to
+  /// the corresponding IndexServer.Keyword object.
+  /// 
+	/// Only one level (the direct children) of the keyword 
+	/// hierarchie is read, if a tree node is expanded. 
+	/// 
+	/// Hence, there is no information about the children of 
+	/// the children. To be able to display the children of 
+	/// the children, we add a dummy node to each child. 
+	/// 
+	/// When a node with a dummy child is expanded, the 
+	/// dummy child is replaced by the correct keywords.
+	/// Such a node is recognized by the corresponding 
+	/// IndexServer.Keyword object where it's Tag member 
+	/// points to. The Keyword object of a dummy node 
+	/// has Keyword.children=null.
+	/// 
+	/// 
+	/// </summary>
+	public class SelectKeywordDlg : System.Windows.Forms.Form
+	{
+    private IXClient ix;
+    private IndexServer.ClientInfo ci;
+    private IndexServer.IXServicePortC CONST;
+    public String selectedKeywordText;
+
+    /// <summary>
+    /// Controls whether only one level or the whole subtree is read,
+    /// when a keyword is expanded
+    /// 0: checkout only one level when node is expanded (uses dummy child like explained above)
+    /// -1: checkout whole subtree (does not use dummy child)
+    /// </summary>
+    private int CHECKOUT_KEYWORDS_MAX = 0; 
+    
+    private System.Windows.Forms.TreeView trKeywords;
+    private System.Windows.Forms.Button bnOk;
+    private System.Windows.Forms.Button bnCancel;
+    private System.Windows.Forms.ComboBox cbKeywordListNames;
+    private System.Windows.Forms.Label label1;
+    private System.Windows.Forms.Label label2;
+    private System.Windows.Forms.TextBox edSelectedKeywordText;
+		/// <summary>
+		/// Erforderliche Designervariable.
+		/// </summary>
+		private System.ComponentModel.Container components = null;
+
+		public SelectKeywordDlg(IXClient ix, IndexServer.ClientInfo ci)
+		{
+      this.ix = ix;
+      this.ci = ci;
+      this.CONST = ix.getCONST(ci);
+
+			//
+			// Erforderlich für die Windows Form-Designerunterstützung
+			//
+			InitializeComponent();
+
+			// Fill list of keyword list names.
+      fillKeywordListNames();
+		}
+
+		/// <summary>
+		/// Die verwendeten Ressourcen bereinigen.
+		/// </summary>
+		protected override void Dispose( bool disposing )
+		{
+			if( disposing )
+			{
+				if(components != null)
+				{
+					components.Dispose();
+				}
+			}
+			base.Dispose( disposing );
+		}
+
+		#region Vom Windows Form-Designer generierter Code
+		/// <summary>
+		/// Erforderliche Methode für die Designerunterstützung. 
+		/// Der Inhalt der Methode darf nicht mit dem Code-Editor geändert werden.
+		/// </summary>
+		private void InitializeComponent()
+		{
+      this.trKeywords = new System.Windows.Forms.TreeView();
+      this.bnOk = new System.Windows.Forms.Button();
+      this.bnCancel = new System.Windows.Forms.Button();
+      this.cbKeywordListNames = new System.Windows.Forms.ComboBox();
+      this.label1 = new System.Windows.Forms.Label();
+      this.label2 = new System.Windows.Forms.Label();
+      this.edSelectedKeywordText = new System.Windows.Forms.TextBox();
+      this.SuspendLayout();
+      // 
+      // trKeywords
+      // 
+      this.trKeywords.ImageIndex = -1;
+      this.trKeywords.Location = new System.Drawing.Point(8, 72);
+      this.trKeywords.Name = "trKeywords";
+      this.trKeywords.SelectedImageIndex = -1;
+      this.trKeywords.Size = new System.Drawing.Size(272, 184);
+      this.trKeywords.TabIndex = 0;
+      this.trKeywords.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.trKeywords_AfterSelect);
+      this.trKeywords.BeforeExpand += new System.Windows.Forms.TreeViewCancelEventHandler(this.trKeywords_BeforeExpand);
+      // 
+      // bnOk
+      // 
+      this.bnOk.DialogResult = System.Windows.Forms.DialogResult.OK;
+      this.bnOk.Location = new System.Drawing.Point(8, 336);
+      this.bnOk.Name = "bnOk";
+      this.bnOk.TabIndex = 1;
+      this.bnOk.Text = "OK";
+      this.bnOk.Click += new System.EventHandler(this.bnOk_Click);
+      // 
+      // bnCancel
+      // 
+      this.bnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+      this.bnCancel.Location = new System.Drawing.Point(208, 336);
+      this.bnCancel.Name = "bnCancel";
+      this.bnCancel.TabIndex = 2;
+      this.bnCancel.Text = "Cancel";
+      this.bnCancel.Click += new System.EventHandler(this.bnCancel_Click);
+      // 
+      // cbKeywordListNames
+      // 
+      this.cbKeywordListNames.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+      this.cbKeywordListNames.Location = new System.Drawing.Point(8, 40);
+      this.cbKeywordListNames.Name = "cbKeywordListNames";
+      this.cbKeywordListNames.Size = new System.Drawing.Size(272, 21);
+      this.cbKeywordListNames.TabIndex = 3;
+      this.cbKeywordListNames.SelectedIndexChanged += new System.EventHandler(this.cbKeywordListNames_SelectedIndexChanged);
+      // 
+      // label1
+      // 
+      this.label1.Location = new System.Drawing.Point(8, 8);
+      this.label1.Name = "label1";
+      this.label1.Size = new System.Drawing.Size(272, 23);
+      this.label1.TabIndex = 4;
+      this.label1.Text = "Keyword list";
+      this.label1.Click += new System.EventHandler(this.label1_Click);
+      // 
+      // label2
+      // 
+      this.label2.Location = new System.Drawing.Point(8, 264);
+      this.label2.Name = "label2";
+      this.label2.Size = new System.Drawing.Size(272, 24);
+      this.label2.TabIndex = 5;
+      this.label2.Text = "Selected keyword";
+      // 
+      // edSelectedKeywordText
+      // 
+      this.edSelectedKeywordText.Location = new System.Drawing.Point(8, 288);
+      this.edSelectedKeywordText.Name = "edSelectedKeywordText";
+      this.edSelectedKeywordText.Size = new System.Drawing.Size(272, 20);
+      this.edSelectedKeywordText.TabIndex = 6;
+      this.edSelectedKeywordText.Text = "edSelectedKeywordText";
+      // 
+      // SelectKeywordDlg
+      // 
+      this.AutoScaleBaseSize = new System.Drawing.Size(5, 13);
+      this.ClientSize = new System.Drawing.Size(292, 365);
+      this.Controls.Add(this.edSelectedKeywordText);
+      this.Controls.Add(this.label2);
+      this.Controls.Add(this.label1);
+      this.Controls.Add(this.cbKeywordListNames);
+      this.Controls.Add(this.bnCancel);
+      this.Controls.Add(this.bnOk);
+      this.Controls.Add(this.trKeywords);
+      this.Name = "SelectKeywordDlg";
+      this.Text = "SelectKeywordDlg";
+      this.ResumeLayout(false);
+
+    }
+		#endregion
+
+    /// <summary>
+    /// This function fills the combo box with keyword names.
+    /// </summary>
+    public void fillKeywordListNames() 
+    {
+      IndexServer.Keyword[] rootKeywords = ix.checkoutKeywords(ci, null, CONST.KEYWORD.mbView, 0, CONST.LOCK.NO);
+      cbKeywordListNames.Items.Clear();
+      for (int i = 0; i < rootKeywords.Length; i++) 
+      {
+        cbKeywordListNames.Items.Add(rootKeywords[i].id);
+      }
+    }
+
+    /// <summary>
+    /// Create TreeNode objects for Keyword objects. A dummy childe
+    /// is assigned to all TreeNode objects.
+    /// </summary>
+    /// <param name="keywords"></param>
+    /// <returns></returns>
+    public TreeNode[] makeKeywordTreeNodes(IndexServer.Keyword[] keywords)
+    {
+      TreeNode[] treeNodes = new TreeNode[keywords.Length];
+      for (int i = 0; i < keywords.Length; i++) 
+      {
+        treeNodes[i] = new TreeNode(keywords[i].text, new TreeNode[0]);
+        treeNodes[i].Tag = keywords[i];
+        if (keywords[i].children != null) 
+        {
+          treeNodes[i].Nodes.AddRange(makeKeywordTreeNodes(keywords[i].children));
+        }
+        else
+        {
+          treeNodes[i].Nodes.Add(new TreeNode("dummy"));
+        }
+      }
+      return treeNodes;
+    }
+
+    /// <summary>
+    /// Read the Keyword object with the given ID from IndexServer and 
+    /// create a corresponding TreeNode. For each child of the keyword
+    /// a child tree node with a dummy child is created.
+    /// </summary>
+    /// <param name="kwid"></param>
+    /// <returns></returns>
+    public TreeNode makeKeywordTreeNode(String kwid) 
+    {
+      IndexServer.Keyword keyword = ix.checkoutKeywords(ci, new String[] {kwid}, CONST.KEYWORD.mbView, 
+                                                        CHECKOUT_KEYWORDS_MAX, CONST.LOCK.NO)[0];
+      TreeNode node = new TreeNode(keyword.text, makeKeywordTreeNodes(keyword.children));
+      node.Tag = keyword;
+      return node;
+    }
+
+    /// <summary>
+    /// Clears all nodes in the tree and fills the tree with the Keyword 
+    /// specified by the given Keyword ID.
+    /// </summary>
+    /// <param name="kwid"></param>
+    public void fillKeywordTree(String kwid)
+    {
+      trKeywords.Nodes.Clear();
+      TreeNode parentNode = makeKeywordTreeNode(kwid);
+      trKeywords.Nodes.Add(parentNode);
+    }
+    
+    private void bnOk_Click(object sender, System.EventArgs e)
+    {
+      // use selectedKeywordText
+    }
+
+    private void cbKeywordListNames_SelectedIndexChanged(object sender, System.EventArgs e)
+    {
+      fillKeywordTree(cbKeywordListNames.Text);
+    }
+
+    /// <summary>
+    /// Is called after a tree node is selected and displays the resulting keyword text
+    /// in the edit box below the tree. To evaluate the keyword text, this function calls
+    /// IndexServer.cookKeyword().
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    private void trKeywords_AfterSelect(object sender, System.Windows.Forms.TreeViewEventArgs e)
+    {
+      if (trKeywords.SelectedNode != null)
+      {
+        IndexServer.Keyword keyword = (IndexServer.Keyword)(trKeywords.SelectedNode.Tag);
+        if (keyword != null && keyword.enabled) 
+        {
+          if (keyword.raw) 
+          {
+            selectedKeywordText = ix.cookKeyword(ci, keyword.id);
+          } 
+          else
+          {
+            selectedKeywordText = keyword.text;
+          }
+          edSelectedKeywordText.Text = selectedKeywordText;
+        }
+        else
+        {
+          edSelectedKeywordText.Text = selectedKeywordText = "";
+        }
+        bnOk.Enabled = selectedKeywordText.Length != 0;
+      }
+    }
+
+    /// <summary>
+    /// Before a node is expanded, this function checks whether the node
+    /// has a dummy child. In this case the children were read and 
+    /// inserted as child nodes.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    private void trKeywords_BeforeExpand(object sender, System.Windows.Forms.TreeViewCancelEventArgs e)
+    {
+      if (e.Node != null) 
+      {
+        IndexServer.Keyword keyword = (IndexServer.Keyword)e.Node.Tag;
+
+        // it's a dummy node, if the Keyword object has undefined children.
+        if (keyword.children == null)
+        {
+          keyword = ix.checkoutKeywords(ci, new String[] {keyword.id}, CONST.KEYWORD.mbView, CHECKOUT_KEYWORDS_MAX, CONST.LOCK.NO)[0];
+          e.Node.Tag = keyword;
+          e.Node.Nodes.Clear();
+          e.Node.Nodes.AddRange(makeKeywordTreeNodes(keyword.children));
+        }
+      }
+    }
+
+    private void label1_Click(object sender, System.EventArgs e)
+    {
+    
+    }
+
+    private void bnCancel_Click(object sender, System.EventArgs e)
+    {
+    
+    }
+	}
+}

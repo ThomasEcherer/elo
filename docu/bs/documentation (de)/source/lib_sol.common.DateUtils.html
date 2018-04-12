@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+/* eslint-disable */
+//@include lib_moment.js
+/* eslint-enable */
+
+<span id='sol-common-DateUtils'>/**
+</span> * Utils for handling dates. This allows e.g. converting ELO ISO dates to moment.js date-objects.
+ *
+ * Uses moment.js for converting and handling date strings. Please refer to the official documentation of
+ * moment.js for further information. http://momentjs.com/docs/
+ *
+ *     var momentDate = sol.common.DateUtils.isoToDate(&#39;20151203&#39;);
+ *
+ *     // add 7 days with moment.js
+ *     var oneWeekAfter = momentDate.add(7, &#39;days&#39;);
+ *
+ * @author PZ, ELO Digital Office GmbH
+ *
+ */
+sol.define(&quot;sol.common.DateUtils&quot;, {
+  singleton: true,
+  alternateClassName: &quot;sol.Date&quot;,
+
+<span id='sol-common-DateUtils-property-ISO_CONFIGS'>  /**
+</span>   * @property
+   * @private
+   * Internal date formats used for checking and parsing
+   */
+  ISO_CONFIGS: {
+    ISODATE: { format: &quot;YYYYMMDD&quot;, regex: /^\d{8}$/ },
+    ISODATETIME: { format: &quot;YYYYMMDDHHmmss&quot;, regex: /^\d{14}$/ },
+    ELOTSTAMP: { format: &quot;YYYY.MM.DD.HH.mm.ss&quot;, regex: /^\d{4}(.\d{2}){5}$/ }
+  },
+
+<span id='sol-common-DateUtils-method-isoToDate'>  /**
+</span>   * Converts an iso date string to a date object
+   * @param {String} isoDate The iso date string
+   * @param {Object} config Configuration
+   * @param {Boolean} config.startOfDay Return the start of the day
+   * @param {Boolean} config.endOfDay Return the end of the day
+   * @return {Date} A JavaScript Date object
+   */
+  isoToDate: function (isoDate, config) {
+    var mom, cfg;
+
+    if (!isoDate) {
+      return;
+    }
+
+    config = config || {};
+
+    for (cfg in this.ISO_CONFIGS) {
+      if (this.ISO_CONFIGS.hasOwnProperty(cfg) &amp;&amp; this.ISO_CONFIGS[cfg].regex.test(isoDate)) {
+        mom = moment(isoDate, this.ISO_CONFIGS[cfg].format, true);
+        break;
+      }
+    }
+
+    if (config.startOfDay) {
+      mom = mom.startOf(&quot;day&quot;);
+    } else if (config.endOfDay) {
+      mom = mom.endOf(&quot;day&quot;);
+    }
+
+    if (!mom) {
+      throw &quot;sol.common.DateUtils.isoToDate: Wrong input format, must be an ELO iso date string.&quot;;
+    }
+    return mom.toDate();
+  },
+
+<span id='sol-common-DateUtils-method-dateToIso'>  /**
+</span>   * Converts a date object to an iso string
+   * @param {Date} date The date object
+   * @param {Object} params (optional)
+   * @param {Boolean} [params.withoutTime=false] (optional) If set to `true`, the time will be omitted from the ISO string
+   * @param {Boolean} [params.startOfDay=false] (optional) Start of day
+   * @param {Boolean} params.utcOffset= (optional) UTC offset
+   * @return {String} The resulting iso date
+   */
+  dateToIso: function (date, params) {
+    var isoDate, mo;
+
+    params = params || {};
+    mo = moment(date);
+
+    if (typeof params.utcOffset != &quot;undefined&quot;) {
+      mo.utcOffset(params.utcOffset);
+    }
+
+    if (params.startOfDay) {
+      mo.startOf(&quot;d&quot;);
+    }
+
+    isoDate = (params.withoutTime === true) ? mo.format(this.ISO_CONFIGS.ISODATE.format) : mo.format(this.ISO_CONFIGS.ISODATETIME.format);
+
+    return isoDate;
+  },
+
+<span id='sol-common-DateUtils-method-nowIso'>  /**
+</span>   * Returns now as iso string
+   * @param {Object} params Parameters
+   * @param {String} utcOffset UTC offset
+   * @return {String}
+   */
+  nowIso: function (params) {
+    var me = this,
+        now;
+
+    params = params || {};
+
+    now = me.dateToIso(new Date(), params);
+    return now;
+  },
+
+<span id='sol-common-DateUtils-method-shift'>  /**
+</span>   * Adds or removes time units from a date object.
+   *
+   * The following example will substracts 3 days from myDate and returns a Date
+   *
+   *     sol.common.DateUtils.shift(myDate, -3)
+   *
+   * The following example will adds 7 hours to myDate and returns a String with the specified pattern:
+   *
+   *     sol.common.DateUtils.shift(myDate, 7, { pattern: &quot;YYYY.MM.DD HH:mm:ss&quot;, unit: &quot;h&quot; })
+   *
+   * Supported `unit` patterns:
+   *
+   * - years: Y
+   * - quarters: Q
+   * - months: M
+   * - weeks: w
+   * - days: d
+   * - hours: h
+   * - minutes: m
+   * - seconds: s
+   * - milliseconds: ms
+   *
+   * @param {Date} date The date object which should be used as base for the shift
+   * @param {Number} value The amount which should be shifted
+   * @param {Object} params (optional) Additional parameters
+   * @param {String} params.pattern (optional) Format string (see [moment.js](http://momentjs.com/) for formating options)
+   * @param {String} [params.unit=&quot;d&quot;] (optional) The unit which should be added/substracted
+   * @return {Date|String} Returns a `String` if a params.pattern is defined and a `Date` if not.
+   */
+  shift: function (date, value, params) {
+    var shifted, unit;
+
+    shifted = moment(date.getTime());
+    unit = (params &amp;&amp; params.unit) ? params.unit : &quot;d&quot;;
+
+    if (!(/^[yQMwdhms]$|^ms$/.test(unit))) {
+      throw &quot;IllegalArgumentException: unsupported unit for shift: &quot; + unit;
+    }
+
+    shifted.add(value, unit);
+
+    return (params &amp;&amp; params.pattern) ? shifted.format(params.pattern) : shifted.toDate();
+  },
+
+<span id='sol-common-DateUtils-method-format'>  /**
+</span>   * Formats a Date object.
+   *
+   *      sol.common.DateUtils.format(new Date(), &quot;YYYY.MM.DD HH:mm:ss.SSS&quot;)
+   *
+   * @param {Date} date The date object
+   * @param {String} pattern Format string (see [moment.js](http://momentjs.com/) for formating options)
+   * @return {String}
+   */
+  format: function (date, pattern) {
+    return moment(date.getTime()).format(pattern);
+  },
+
+<span id='sol-common-DateUtils-method-diff'>  /**
+</span>   * Calculates a difference between to dates
+   * @param {Date} startDate Start date
+   * @param {Date} endDate End date
+   * @param {String} unit Unit
+   * @param {Object} config Configuration
+   * @param {Boolean} config.roundUp Round up
+   * @return {Number}
+   */
+  diff: function (startDate, endDate, unit, config) {
+    var number, isQuarter;
+
+    number;
+    isQuarter = false;
+
+    if (!startDate) {
+      throw &quot;Start date is empty&quot;;
+    }
+
+    if (!endDate) {
+      throw &quot;End date is empty&quot;;
+    }
+
+    if (!unit) {
+      throw &quot;Unit is empty&quot;;
+    }
+
+    if (unit == &quot;O&quot;) {
+      return 1;
+    }
+
+    if (unit == &quot;Q&quot;) {
+      isQuarter = true;
+      unit = &quot;M&quot;;
+    }
+
+    config = config || {};
+
+    number = moment(endDate.getTime()).diff(startDate.getTime(), unit, true);
+
+    number = isQuarter ? (number / 3) : number;
+
+    if (config.roundUp) {
+      number = Math.ceil(number);
+    }
+    return number;
+  },
+
+<span id='sol-common-DateUtils-method-isBetween'>  /**
+</span>   * Checks wether a date is between a start date and an end end date
+   * @param {Date} [startDate=now] Start date
+   * @param {Date} [endDate=now] End date
+   * @param {Date} [checkDate=now] Check date
+   * @return {Boolean}
+   */
+  isBetween: function (startDate, endDate, checkDate) {
+    var checkMoment, startMoment, endMoment;
+
+    startMoment = startDate ? moment(startDate.getTime()) : moment();
+    endMoment = endDate ? moment(endDate.getTime()) : moment();
+    checkMoment = checkDate ? moment(checkDate.getTime()) : moment();
+
+    return checkMoment.isBetween(startMoment, endMoment);
+  }
+});
+</pre>
+</body>
+</html>

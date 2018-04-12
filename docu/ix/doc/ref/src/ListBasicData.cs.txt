@@ -1,0 +1,95 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// This example shows how createSord can be used to list basic data
+	/// like storage mask names and storage paths.
+	/// </summary>
+	public class ListBasicData
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+				
+				// use createSord to get mask names
+				Logger.instance().log("createSord...");
+				IndexServer.EditInfo ed = ix.createSord(ci, null, null, CONST.EDIT_INFO.mbBasicData);
+				Logger.instance().log("createSord OK");
+				
+				Logger.instance().log("mask names:");
+				for (int i = 0; i < ed.maskNames.Length; i++) 
+				{
+					Logger.instance().log("  name=" + ed.maskNames[i].name + ", id=" + ed.maskNames[i].id);
+				}
+
+				Logger.instance().log("marker names:");
+				for (int i = 0; i < ed.markerNames.Length; i++) 
+				{
+					Logger.instance().log("  name=" + ed.markerNames[i].name + ", id=" + ed.markerNames[i].id);
+				}
+
+				Logger.instance().log("path names:");
+				for (int i = 0; i < ed.pathNames.Length; i++) 
+				{
+					Logger.instance().log("  name=" + ed.pathNames[i].name + ", id=" + ed.pathNames[i].id);
+				}
+
+				Logger.instance().log("replication set names:");
+				for (int i = 0; i < ed.replNames.Length; i++) 
+				{
+					Logger.instance().log("  name=" + ed.replNames[i].name + ", id=" + ed.replNames[i].id);
+				}
+				
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

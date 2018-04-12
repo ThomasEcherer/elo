@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.JsonUtils.js
+
+<span id='sol-common-FileUtils'>/**
+</span> * File utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;sol.common.FileUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-FileUtils-property-bom'>  bom: &quot;\uFEFF&quot;, // ByteOrderMark (BOM);
+</span>
+<span id='sol-common-FileUtils-method-sanitizeFilename'>  /**
+</span>   * Cleans the given file name so that the name contains only valid file name chars.
+   * @param {String} fileName File name to clean.
+   * @return {java.io.File} Temporary file.
+   */
+  sanitizeFilename: function (fileName) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;sanitizeFilename&quot;, arguments);
+    _result = String(fileName).replace(/[\/\?&lt;&gt;\\:\*\|&quot;:]/g, &quot; &quot;);
+    me.logger.exit(&quot;sanitizeFilename&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-getName'>  /**
+</span>   * Extracts the file name from a File (without the file extension)
+   * @param {java.io.File} file
+   * @return {java.lang.String} The name of the file
+   */
+  getName: function (file) {
+    var me = this,
+        name, extIdx, _result;
+    me.logger.enter(&quot;getName&quot;, arguments);
+    name = file.getName();
+    extIdx = name.lastIndexOf(&quot;.&quot;);
+    _result = name.substring(0, extIdx);
+    me.logger.exit(&quot;getName&quot;, _result + &quot;&quot;);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-getExtension'>  /**
+</span>   * Extracts the file extension from a File
+   * @param {java.io.File} file
+   * @return {java.lang.String} The file extension
+   */
+  getExtension: function (file) {
+    var me = this,
+        name, extIdx, _result;
+    me.logger.enter(&quot;getExtension&quot;, arguments);
+    name = file.getName();
+    extIdx = name.lastIndexOf(&quot;.&quot;);
+    _result = name.substring(extIdx + 1, name.length());
+    me.logger.exit(&quot;getExtension&quot;, _result + &quot;&quot;);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-getExtensionFromPath'>  /**
+</span>   * Extracts the file extension from a path
+   * @param {String} filePath file path
+   * @return {String} File extension
+   */
+  getExtensionFromPath: function (filePath) {
+    var me = this,
+        extIdx, _result;
+    me.logger.enter(&quot;getExtensionFromPath&quot;, arguments);
+    filePath = String(filePath);
+    extIdx = filePath.lastIndexOf(&quot;.&quot;);
+    _result = filePath.substring(extIdx + 1, filePath.length);
+    me.logger.exit(&quot;getExtensionFromPath&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-changeExtension'>  /**
+</span>   * Change the extension of a file.
+   * @param {java.io.File} file Source file
+   * @param {String} extension New file extension
+   * @return {File}
+   */
+  changeExtension: function (file, extension) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;changeExtension&quot;, arguments);
+    _result = new File(me.removeExtension(file.absolutePath) + extension);
+    me.logger.exit(&quot;changeExtension&quot;, _result + &quot;&quot;);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-removeExtension'>  /**
+</span>   * Removes the extension of a file or file path
+   * @param {java.io.File|String} file File or file path
+   * @return {String} File path without extension
+   */
+  removeExtension: function (file) {
+    var pathWithoutExtension;
+    pathWithoutExtension = Packages.org.apache.commons.io.FilenameUtils.removeExtension(file);
+    return pathWithoutExtension;
+  },
+
+<span id='sol-common-FileUtils-method-getTimeStampString'>  /**
+</span>   * Returns a timestamp of the current time as string.
+   * @param {String} pattern Timestamp pattern
+   * @return {String} Timestamp as string
+   */
+  getTimeStampString: function (pattern) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;getTimeStampString&quot;, arguments);
+    pattern = pattern || &quot;yyyyMMddHHmmss&quot;;
+    try {
+      _result = String(Packages.org.apache.commons.lang3.time.DateFormatUtils.format(new java.util.Date(), pattern));
+    } catch (ex) {
+      _result = String(Packages.org.apache.commons.lang.time.DateFormatUtils.format(new java.util.Date(), pattern));
+    }
+    me.logger.exit(&quot;getTimeStampString&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-exists'>  /**
+</span>   * Returns true if the path exists
+   * @param {String} path Path
+   * @return {Boolean}
+   */
+  exists: function (path) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;exists&quot;, arguments);
+    _result = new File(path).exists();
+    me.logger.exit(&quot;exists&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-getParentPath'>  /**
+</span>   * Returns the path of the parent
+   * @param {java.io.File} path Path
+   * @return {String}
+   */
+  getParentPath: function (path) {
+    return String(new File(path).parent);
+  },
+
+<span id='sol-common-FileUtils-method-writeStringToFile'>  /**
+</span>   * Writes a string into a file
+   * @param {String} filePath File path
+   * @param {String} content Text content
+   * @param {Object} params Parameters
+   * @param {Boolean} params.bom Add byte order mark
+   */
+  writeStringToFile: function (filePath, content, params) {
+    var me = this;
+
+    if (!filePath) {
+      throw &quot;File path is empty&quot;;
+    }
+    content = content || &quot;&quot;;
+    params = params || {};
+    content = (params.bom) ? me.bom + content : content;
+    Packages.org.apache.commons.io.FileUtils.writeStringToFile(new File(filePath), content, &quot;UTF-8&quot;);
+  },
+
+<span id='sol-common-FileUtils-method-writeStringArrayToFile'>  /**
+</span>   * Writes a string into a file
+   * @param {String} path Path
+   * @param {String} stringArray String array
+   */
+  writeStringArrayToFile: function (path, stringArray) {
+    var me = this;
+    me.logger.enter(&quot;writeStringArrayToFile&quot;, arguments);
+    Packages.org.apache.commons.io.FileUtils.writeStringToFile(new File(path), stringArray.join(&quot;\r\n&quot;), &quot;UTF-8&quot;);
+    me.logger.exit(&quot;writeStringArrayToFile&quot;);
+  },
+
+<span id='sol-common-FileUtils-method-writeConfigToFile'>  /**
+</span>   * Writes a configuation into a file
+   * @param {String} path Path
+   * @param {String} config Configuration object
+   */
+  writeConfigToFile: function (path, config) {
+    var me = this,
+        content;
+    me.logger.enter(&quot;writeConfigToFile&quot;, arguments);
+    content = sol.common.JsonUtils.stringifyAll(config, { tabStop: 2 });
+    me.writeStringToFile(path, content);
+    me.logger.exit(&quot;writeConfigToFile&quot;);
+  },
+
+<span id='sol-common-FileUtils-method-rename'>  /**
+</span>   * Rename a file
+   * @param {String} path Path
+   * @param {String} newName New file name
+   * @return {java.io.File}
+   */
+  rename: function (path, newName) {
+    var me = this,
+        srcFile, dstFile;
+    me.logger.enter(&quot;rename&quot;, arguments);
+    srcFile = new File(path);
+    dstFile = new File(srcFile.parentFile.absolutePath + File.separator + newName);
+    if (dstFile.exists()) {
+      dstFile.delete();
+    }
+    Packages.org.apache.commons.io.FileUtils.moveFile(srcFile, dstFile);
+    me.logger.exit(&quot;rename&quot;, dstFile + &quot;&quot;);
+    return dstFile;
+  },
+
+<span id='sol-common-FileUtils-method-delete'>  /**
+</span>   * Deletes a file
+   * @param {String} path Path
+   * @param {Object} params Parameters
+   * @param {Boolean} params.quietly Delete quietly
+   */
+  delete: function (path, params) {
+    var me = this,
+        file;
+
+    params = params || {};
+    me.logger.enter(&quot;delete&quot;, arguments);
+    file = new File(path);
+    if (params.quietly) {
+      Packages.org.apache.commons.io.FileUtils.deleteQuietly(file);
+    } else {
+      file[&quot;delete&quot;]();
+    }
+    me.logger.exit(&quot;delete&quot;);
+  },
+
+<span id='sol-common-FileUtils-method-deleteFiles'>  /**
+</span>   * Deletes files
+   * @param {Object} config Config
+   * @param {String} config.dirPath Directory path
+   * @param {String} config.prefix Prefix
+   * @param {String} config.suffix Suffix
+   */
+  deleteFiles: function (config) {
+    var me = this,
+        filesIterator;
+    me.logger.enter(&quot;deleteFiles&quot;, arguments);
+
+    if (config.dirPath &amp;&amp; config.prefix) {
+      filesIterator = Packages.org.apache.commons.io.FileUtils.iterateFiles(new File(config.dirPath),
+        new Packages.org.apache.commons.io.filefilter.PrefixFileFilter(config.prefix, Packages.org.apache.commons.io.IOCase.INSENSITIVE), null);
+    }
+    if (config.dirPath &amp;&amp; config.suffix) {
+      filesIterator = Packages.org.apache.commons.io.FileUtils.iterateFiles(new File(config.dirPath),
+        new Packages.org.apache.commons.io.filefilter.SuffixFileFilter(config.suffix, Packages.org.apache.commons.io.IOCase.INSENSITIVE), null);
+    }
+    if (!filesIterator) {
+      me.logger.exit(&quot;deleteFiles&quot;);
+      return;
+    }
+    while (filesIterator.hasNext()) {
+      Packages.org.apache.commons.io.FileUtils.deleteQuietly(filesIterator.next());
+    }
+    me.logger.exit(&quot;deleteFiles&quot;);
+  },
+
+<span id='sol-common-FileUtils-property-contentTypeExtensions'>  contentTypeExtensions: {
+</span>    bmp: &quot;image/bmp&quot;,
+    ico: &quot;image/x-ico&quot;,
+    jpg: &quot;image/jpeg&quot;,
+    png: &quot;image/png&quot;
+  },
+
+<span id='sol-common-FileUtils-method-loadToFileData'>  /**
+</span>   * Loads a file to a FileData structure
+   * @param {String} filePath File path
+   * @param {String} contentType Content type
+   * @return {de.elo.ix.client.FileData}
+   */
+  loadToFileData: function (filePath, contentType) {
+    var me = this,
+        fileData;
+    me.logger.enter(&quot;loadToFileData&quot;, arguments);
+    fileData = new FileData();
+    if (!contentType) {
+      contentType = me.contentTypeExtensions[me.getExtensionFromPath(filePath).toLowerCase()];
+    }
+    fileData.contentType = contentType;
+    fileData.data = Packages.org.apache.commons.io.FileUtils.readFileToByteArray(new File(filePath));
+    me.logger.exit(&quot;loadToFileData&quot;, fileData);
+    return fileData;
+  },
+
+<span id='sol-common-FileUtils-method-saveFileData'>  /**
+</span>   * Save file data to file
+   * @param {de.elo.ix.client.FileData} fileData
+   * @param {String} filePath
+   */
+  saveFileData: function (fileData, filePath) {
+    if (!fileData) {
+      throw &quot;fileData is empty&quot;;
+    }
+    if (!filePath) {
+      throw &quot;filePath is empty&quot;;
+    }
+    Packages.org.apache.commons.io.FileUtils.writeByteArrayToFile(new File(filePath), fileData.data);
+  },
+
+<span id='sol-common-FileUtils-method-readFileToString'>  /**
+</span>   * Reads a file into a string
+   * @param {String} filePath FilePath
+   * @param {Object} params Parameters
+   * @param {String} params.encoding Encoding
+   * @return {String}
+   */
+  readFileToString: function (filePath, params) {
+    var me = this,
+        str;
+    me.logger.enter(&quot;readFileToString&quot;, arguments);
+    params = params || {};
+    params.encoding = params.encoding || &quot;UTF-8&quot;;
+    str = String(Packages.org.apache.commons.io.FileUtils.readFileToString(new File(filePath), params.encoding));
+    me.logger.exit(&quot;readFileToString&quot;);
+    return str;
+  },
+
+<span id='sol-common-FileUtils-method-readFileToObject'>  /**
+</span>   * Reads a file into an object
+   * @param {String} filePath FilePath
+   * @param {Object} params Parameters
+   * @param {String} params.encoding Encoding
+   * @return {String}
+   */
+  readFileToObject: function (filePath, params) {
+    var me = this,
+        str, obj;
+
+    str = me.readFileToString(filePath, params);
+
+    obj = JSON.parse(str);
+
+    return obj;
+  },
+
+<span id='sol-common-FileUtils-method-readConfig'>  /**
+</span>   * Reads a file into a string
+   * @param {String} filePath FilePath
+   * @return {String}
+   */
+  readConfig: function (filePath) {
+    var me = this,
+        content, _result;
+    me.logger.enter(&quot;readConfig&quot;, arguments);
+    content = me.readFileToString(filePath);
+    _result = JSON.parse(content);
+    me.logger.exit(&quot;readConfig&quot;, _result);
+    return _result;
+  },
+
+<span id='sol-common-FileUtils-method-getUrlFromFilePath'>  /**
+</span>   * Returns the URL of a file
+   * @param {String} filePath File path
+   * @return {String} URL
+   */
+  getUrlFromFilePath: function (filePath) {
+    var url;
+
+    if (!filePath) {
+      throw &quot;File path is empty&quot;;
+    }
+    url = String(new File(filePath).toURI().toURL().toString());
+    return url;
+  },
+
+<span id='sol-common-FileUtils-method-getTempDirPath'>  /**
+</span>   * Returns the temp directory path
+   * @return {String} Temp directory path
+   */
+  getTempDirPath: function () {
+    var tempDirPath;
+    tempDirPath = String(java.lang.System.getProperty(&quot;java.io.tmpdir&quot;));
+    return tempDirPath;
+  },
+
+<span id='sol-common-FileUtils-method-createTempDir'>  /**
+</span>   * Creates a temporary directory
+   * @param {Object} params Parameters
+   * @param {String} params.prefix Prefix
+   * @return {java.io.File} Temporary directory
+   */
+  createTempDir: function (params) {
+    var me = this,
+        tempDirBasePath, timestamp, tempDirPath, tempDir;
+
+    params = params || {};
+    params.prefix = params.prefix || &quot;dir&quot;;
+    tempDirBasePath = me.getTempDirPath();
+    timestamp = me.getTimeStampString();
+    tempDirPath = tempDirBasePath + File.separator + params.prefix + &quot;_&quot; + timestamp;
+    tempDir = new File(tempDirPath);
+    Packages.org.apache.commons.io.FileUtils.forceMkdir(tempDir);
+    return tempDir;
+  },
+
+<span id='sol-common-FileUtils-method-makeDirectories'>  /**
+</span>   * Makes directories
+   * @param {java.io.File} dir Directory
+   */
+  makeDirectories: function (dir) {
+    Packages.org.apache.commons.io.FileUtils.forceMkdir(dir);
+  },
+
+<span id='sol-common-FileUtils-method-copyFile'>  /**
+</span>   * Copies a file
+   * @param {java.io.File} srcFile
+   * @param {java.io.File} dstFile
+   */
+  copyFile: function (srcFile, dstFile) {
+    if (!srcFile) {
+      throw &quot;Source file is empty&quot;;
+    }
+    if (!dstFile) {
+      throw &quot;Destination file is empty&quot;;
+    }
+    Packages.org.apache.commons.io.FileUtils.copyFile(srcFile, dstFile);
+  },
+
+<span id='sol-common-FileUtils-method-downloadDocuments'>  /**
+</span>   * Download documents
+   * @param {String} objId Folder or object ID
+   * @param {String} dstDirPath Destination directory path
+   * @param {Object} params Parameters
+   * @param {Boolean} [params.makeDstDirs=true] Make directories
+   * @param {Boolean} params.cleanDstDir Clean destination directory
+   */
+  downloadDocuments: function (objId, dstDirPath, params) {
+    var me = this,
+        sord, children, dstDir;
+
+    if (!objId) {
+      throw &quot;Folder ID is empty&quot;;
+    }
+
+    if (!dstDirPath) {
+      throw &quot;Destination directory path is empty&quot;;
+    }
+
+    dstDir = new java.io.File(dstDirPath);
+
+    params = params || {};
+    params.makeDstDirs = (params.makeDstDirs == false) ? false : true;
+
+    if (params.makeDstDirs) {
+      sol.common.FileUtils.makeDirectories(dstDir);
+    }
+
+    if (params.cleanDstDir) {
+      sol.common.FileUtils.deleteFiles({ dirPath: dstDirPath });
+    }
+
+    sord = ixConnect.ix().checkoutSord(objId, SordC.mbLean, LockC.NO);
+
+    if (sol.common.SordUtils.isFolder(sord)) {
+      children = sol.common.RepoUtils.findChildren(sord.id, { includeFolders: false, includeDocuments: true });
+      children.forEach(function (child) {
+        me.downloadDocument(child.id, dstDirPath);
+      });
+    } else {
+      me.downloadDocument(sord.id, dstDirPath);
+    }
+  },
+
+<span id='sol-common-FileUtils-method-downloadDocument'>  /**
+</span>   * Download file
+   * @param {String} objId Object ID
+   * @param {String} dstDirPath Destination directory path
+   */
+  downloadDocument: function (objId, dstDirPath) {
+    var me = this,
+        editInfo, docVersion, sordName, dstFile;
+
+    editInfo = ixConnect.ix().checkoutDoc(objId, null, new EditInfoZ(EditInfoC.mbDocumentMembers, SordC.mbLean), LockC.NO),
+    docVersion = editInfo.document.docs[0],
+    sordName = me.sanitizeFilename(editInfo.sord.name);
+    dstFile = new java.io.File(dstDirPath + java.io.File.separator + sordName + &quot;.&quot; + docVersion.ext);
+    ixConnect.download(docVersion.url, dstFile);
+  }
+});
+</pre>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+api.require({
+  namespace: [&quot;sol&quot;, &quot;sol.common.web.BarcodeRegistry&quot;]
+}, function () {
+
+<span id='sol-common-web-ActionDefinitionUtils'>/**
+</span> * This class loads ELO Business Solutions action definitions and creates the ribbon, button groups and buttons.
+ *
+ * This class is automatically called during client startup.
+ *
+ * @requires sol.common.IxUtils
+ */
+  sol.define(&quot;sol.common.web.ActionDefinitionUtils&quot;, {
+    singleton: true,
+
+<span id='sol-common-web-ActionDefinitionUtils-property-TAB_CONST'>    TAB_CONST: {
+</span>      HOME: { name: &quot;START&quot;, position: 1000 },
+      DOCUMENT: { name: &quot;EXTENDED&quot;, position: 2000 },
+      ARCHIVE: {},
+      VIEW: { name: &quot;VIEW&quot;, position: 3000 },
+      WORKFLOW: { name: &quot;TASK&quot;, position: 4000 },
+      INTRAY: {},
+      SEARCH: { name: &quot;SEARCH&quot;, position: 6000 }
+    },
+
+<span id='sol-common-web-ActionDefinitionUtils-method-initializeRibbon'>    /**
+</span>	   * Initializes ribbon buttons, groups and tabs for ELO Business Solutions.
+	   * @param {Object} contect. The current script scope.
+	   */
+    initializeRibbon: function () {
+      var me = this,
+          any, anyResult, result;
+
+      try {
+        // force synchronous call
+        any = new de.elo.ix.client.Any();
+        any.type = elo.CONST.ANY.TYPE_STRING;
+        any.stringValue = JSON.stringify({});
+        anyResult = api.Webclient.getIXConnection().ix().executeRegisteredFunction(&quot;RF_sol_common_services_ActionDefinitionCollector&quot;, any);
+        result = JSON.parse((anyResult &amp;&amp; anyResult.stringValue) ? String(anyResult.stringValue) : &quot;{}&quot;);
+
+        if (result &amp;&amp; result.definitions) {
+          me.buildRibbonFromDefinition(result.definitions);
+        }
+      } catch (e) {
+        console.error(&quot;[sol.common.web.ActionDefinitionUtils] loading ribbon definition failed.&quot; + e);
+      }
+    },
+
+<span id='sol-common-web-ActionDefinitionUtils-method-buildRibbonFromDefinition'>    /**
+</span>     * Builds the web client ribbon based on ribbon button/ group/ tab definitions given by RF_sol_common_services_ActionDefinitionCollector.
+     * @private
+     * @param {Object[]} defs action/ ribbon definition
+     */
+    buildRibbonFromDefinition: function (defs) {
+      var me = this,
+          i, j, k, def, localDef, group, button, tab, webclientStdTab,
+          dpi = (elo &amp;&amp; elo.data &amp;&amp; elo.data.dpi) ? elo.data.dpi : 100,
+          dynRibbon = {
+            _buttons: {},
+            buttons: [],
+            _groups: {},
+            groups: [],
+            _tabs: {},
+            tabs: []
+          },
+          groupsForStandardRibbons = [],
+          addedGroupsForStandardRibbons = {},
+          handler = function (def, objId) {
+            switch (def.type) {
+              case &quot;ADVANCED_ACTION&quot;:
+                sol.common.web.ActionHelper.executeAdvancedAction(objId, def.action);
+                break;
+              case &quot;SIMPLE_ACTION&quot;:
+                sol.common.web.ActionHelper.executeSimpleAction(objId, def.action);
+                break;
+              default:
+                console.error(&quot;No handler found for ribbon definition&quot;, def);
+            }
+          },
+          getLineByGroup = function (sord, group) {
+            var i, objKeys = sord.get(&quot;objKeys&quot;);
+            if (sord === null || objKeys === undefined) {
+              return null;
+            }
+            for (i = 0; i &lt; objKeys.length; i += 1) {
+              if (objKeys[i].name === group &amp;&amp; objKeys[i].data &amp;&amp; objKeys[i].data.length &gt; 0) {
+                return objKeys[i].data[0];
+              }
+            }
+            return null;
+          },
+          btnAccess = function (state) {
+            var def = this.def,
+                access = (!def.ribbon.button.access
+                || ((def.ribbon.button.access.document ? state.hasSord() &amp;&amp; !state.getSord().isFolder() : false)
+                || (def.ribbon.button.access.folder ? state.hasSord() &amp;&amp; state.getSord().isFolder() : false)
+                || (!def.ribbon.button.access.folder &amp;&amp; !def.ribbon.button.access.document)))
+                &amp;&amp; ((def.ribbon.button.access &amp;&amp; def.ribbon.button.access.solTypes &amp;&amp; def.ribbon.button.access.solTypes.length &gt; 0 &amp;&amp; state.hasSord())
+                     ? def.ribbon.button.access.solTypes.indexOf(getLineByGroup(state.getSord(), &quot;SOL_TYPE&quot;)) != -1 : true);
+            return access;
+          },
+          btnHandler = function (state) {
+            var def = this.def, sord;
+            if (state.hasSord()) {
+              sord = state.getSord();
+            }
+            handler(def, sord ? sord.get(&quot;id&quot;) : null);
+          };
+      for (i = 0; i &lt; defs.length; i++) {
+        def = defs[i];
+
+        if (def.ribbon &amp;&amp; def.ribbon.button &amp;&amp; def.ribbon.ribbonTab &amp;&amp; def.ribbon.buttongroup) {
+          // create web client ribbon button
+          dynRibbon._buttons[def.ribbon.button.name] = new api.Button({
+            name: def.ribbon.button.name,
+            def: def,
+            access: btnAccess,
+            handler: btnHandler,
+            text: def.ribbon.button.text,
+            splitText: def.ribbon.button.splitText,
+            tooltipTitle: &quot;&lt;span class=&#39;title&#39;&gt;&quot; + def.ribbon.button.text + &quot;&lt;/span&gt;&quot;,
+            tooltipText: &quot;&lt;p&gt;&quot; + def.ribbon.button.tooltipText + &quot;&lt;/p&gt;&quot;,
+            bigIconCls: (def.ribbon.button.web.bigIconHighRes &amp;&amp; dpi &gt; 150) ? def.ribbon.button.web.bigIconHighRes : def.ribbon.button.web.bigIcon,
+            smallIconCls: (def.ribbon.button.web.smallIconHighRes &amp;&amp; dpi &gt; 150) ? def.ribbon.button.web.bigIconHighRes : def.ribbon.button.web.smallIcon,
+            position: def.ribbon.button.position,
+            asTile: !!def.ribbon.button.asTile,
+            iconName: def.ribbon.button.web.iconName
+          });
+          me.logger.info(&quot;registered button: &quot; + def.ribbon.button.name);
+          dynRibbon.buttons.push(dynRibbon._buttons[def.ribbon.button.name]);
+
+          webclientStdTab = me.TAB_CONST[def.ribbon.ribbonTab.name];
+
+          // read ribbon tab if new
+          if (!webclientStdTab &amp;&amp; !dynRibbon._tabs[def.ribbon.ribbonTab.name]) {
+            me.logger.info(&quot;new ribbon tab: &quot; + def.ribbon.ribbonTab.name);
+            dynRibbon._tabs[def.ribbon.ribbonTab.name] = {
+              cfg: def.ribbon.ribbonTab,
+              name: def.ribbon.ribbonTab.name,
+              text: def.ribbon.ribbonTab.text,
+              position: def.ribbon.ribbonTab.position,
+              groups: [],                     // group names
+              _groups: []                     // group definitions
+            };
+            dynRibbon.tabs.push(dynRibbon._tabs[def.ribbon.ribbonTab.name]);
+          }
+
+          // read ribbon group if new
+          if (!dynRibbon._groups[def.ribbon.buttongroup.name]) {
+            me.logger.info(&quot;new button group: &quot; + def.ribbon.buttongroup.name);
+            dynRibbon._groups[def.ribbon.buttongroup.name] = {
+              cfg: def.ribbon.buttongroup,
+              name: def.ribbon.buttongroup.name,
+              text: def.ribbon.buttongroup.text,
+              mode: def.ribbon.buttongroup.mode,
+              buttons: [],                    // button names
+              _buttons: []                    // button definitions
+            };
+            dynRibbon.groups.push(dynRibbon._groups[def.ribbon.buttongroup.name]);
+
+            if (dynRibbon._tabs[def.ribbon.ribbonTab.name]) {
+              // is dynamic tab
+              dynRibbon._tabs[def.ribbon.ribbonTab.name]._groups.push();
+              dynRibbon._tabs[def.ribbon.ribbonTab.name]._groups.push(dynRibbon._groups[def.ribbon.buttongroup.name]);
+            } else if (webclientStdTab &amp;&amp; webclientStdTab.name &amp;&amp; webclientStdTab.position) {
+              // expect web client tab
+              groupsForStandardRibbons.push({
+                def: def,
+                stdTab: webclientStdTab
+              });
+            }
+          }
+
+          // register button in group
+          if (dynRibbon._groups[def.ribbon.buttongroup.name]) {
+            // is dynamic group
+            dynRibbon._groups[def.ribbon.buttongroup.name]._buttons.push({
+              def: def,
+              btn: dynRibbon._buttons[def.ribbon.button.name]
+            });
+          } else {
+            // expect web client group
+            //         api.Registry.addRibbonButton(def.ribbon.button.name, def.ribbon.buttongroup.name, def.ribbon.button.position);
+          }
+        }
+
+        // register barcode handlers
+        if (def.barcode &amp;&amp; def.barcode.identifier) {
+          localDef = def;
+          sol.common.web.BarcodeRegistry.register(def.barcode.identifier, def.action.fct,
+          function (identifier, objId, data) {
+            handler(localDef, objId);
+          });
+        }
+      }
+
+      // register groups
+      for (j = 0; j &lt; dynRibbon.groups.length; j++) {
+        group = dynRibbon.groups[j];
+        group._buttons = group._buttons.sort(function (a, b) {
+          return a.def.ribbon.button.position &gt; b.def.ribbon.button.position ? 1 : -1;
+        });
+
+        // add buttons to group
+        for (k = 0; k &lt; group._buttons.length; k++) {
+          button = group._buttons[k];
+          group.buttons.push(button.def.ribbon.button.name);
+        }
+
+        me.logger.info(&quot;registered button group: &quot; + group.name);
+        group._group = new api.ButtonGroup(group);
+      }
+
+      for (j = 0; j &lt; groupsForStandardRibbons.length; j++) {
+        var grpForStdtTab = groupsForStandardRibbons[j];
+        if (grpForStdtTab.def &amp;&amp; grpForStdtTab.stdTab &amp;&amp; !addedGroupsForStandardRibbons[grpForStdtTab.def.ribbon.buttongroup.name]) {
+          addedGroupsForStandardRibbons[grpForStdtTab.def.ribbon.buttongroup.name] = true;
+          api.Registry.addButtonGroup(grpForStdtTab.def.ribbon.buttongroup.name, grpForStdtTab.stdTab.name, grpForStdtTab.def.ribbon.buttongroup.position * 100);
+        }
+      }
+
+      // register tabs
+      for (j = 0; j &lt; dynRibbon.tabs.length; j++) {
+        tab = dynRibbon.tabs[j];
+        tab._groups = tab._groups.sort(function (a, b) {
+          return a.cfg.position &gt; b.cfg.position ? 1 : -1;
+        });
+
+        // add groups to tabs
+        for (k = 0; k &lt; tab._groups.length; k++) {
+          group = tab._groups[k];
+          tab.groups.push(group.name);
+        }
+
+        me.logger.info(&quot;registered tab: &quot; + tab.name);
+        tab._tab = new api.RibbonTab(tab);
+        api.Registry.addRibbonTab(tab.name, tab.position * 100);
+      }
+    }
+  });
+
+  sol.common.web.ActionDefinitionUtils.initializeRibbon();
+});
+
+//# sourceURL=sol.common.web.ActionDefinitionUtils.js</pre>
+</body>
+</html>

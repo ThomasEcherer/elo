@@ -1,0 +1,132 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.UserInfo;
+import de.elo.ix.client.UserInfoC;
+import de.elo.ix.client.AccessC;
+import de.elo.ix.client.CheckoutUsersC;
+import de.elo.ix.client.CheckinUsersC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This example shows how to create and delete users from ELO using the Index Server
+ * 
+ * Creates a group and user in the group
+ * Deletes the user and group
+ */
+public class CreateDeleteUser {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static UserInfoC USER_INFO;
+    private static LockC LOCK;
+    private static AccessC ACCESS;
+    private static CheckoutUsersC CHECKOUT_USERS;    
+    private static CheckinUsersC CHECKIN_USERS;
+    private static UserInfo gi;
+    private static UserInfo ui;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new user
+            createUser();
+            
+            // Delete users from archive
+            // This row should be commented out if the users are not to be deleted.
+            deleteUser();
+            
+            //Unlock the user data
+            unlock();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void createUser() throws RemoteException {
+        
+        // Create a user and a group
+        // Lock users to avoid simultaneous changes!
+        ix.ix().checkoutUsers(null, CHECKOUT_USERS.getNOTHING(), LOCK.getYES());
+        System.out.println("Users locked.");
+        
+        //Create the new group
+        gi = ix.ix().createUser(null);
+        gi.setType(USER_INFO.getTYPE_GROUP());
+        gi.setName("Example Group1");
+        gi.setFlags(ACCESS.getFLAG_EDITSTRUCTURE() | ACCESS.getFLAG_EDITDOCS());
+        gi.setId(ix.ix().checkinUsers(new UserInfo[] {gi}, CHECKIN_USERS.getWRITE(), LOCK.getNO()) [0]);
+        
+        //Create the new user
+        ui = ix.ix().createUser(null);
+        ui.setType(USER_INFO.getTYPE_USER());
+        ui.setName("Example User1");
+        ui.setPwd("elo");
+        ui.setFlags(ACCESS.getFLAG_IMPORT());
+        ui.setGroupList(new int[] {gi.getId()});
+        ui.setId(ix.ix().checkinUsers(new UserInfo[] {ui}, CHECKIN_USERS.getWRITE(), LOCK.getNO()) [0]);
+        
+    }
+     
+    
+    public static void deleteUser() throws RemoteException {
+        
+        // Delete the user and group from the user data
+        ix.ix().deleteUsers(new String[] {gi.getName(), ui.getName()}, LOCK.getNO());
+        
+    }
+    
+    
+     public static void unlock() throws RemoteException {
+        
+         // Unlock the user data
+        ix.ix().checkinUsers(null, CHECKIN_USERS.getNOTHING(), LOCK.getYES());
+        
+    }   
+       
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        USER_INFO = CONS.getUSER_INFO();
+        LOCK = CONS.getLOCK();
+        ACCESS = CONS.getACCESS();
+        CHECKOUT_USERS = CONS.getCHECKOUT_USERS();
+        CHECKIN_USERS = CONS.getCHECKIN_USERS();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

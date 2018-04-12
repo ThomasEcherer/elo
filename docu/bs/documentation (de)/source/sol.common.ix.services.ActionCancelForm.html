@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.Map.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ActionCancelForm&quot; });
+
+<span id='sol-common-ix-services-ActionCancelForm'>/**
+</span> * Forwards a workflow to the next cancel node.
+ *
+ * This service is called by the clients if a user closes a workflow form dialog in order to cancel an action.
+ *
+ * Please note that cancel nodes should be defined by using a localization key `sol.common.wf.node.cancel`.
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @requires  sol.common.IxUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.ActionCancelForm&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-ActionCancelForm-property-wfMapSavedFlag'>  wfMapSavedFlag: &quot;FORM_SAVED&quot;,
+</span>
+<span id='sol-common-ix-services-ActionCancelForm-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId (required)
+   * Flow ID
+   */
+
+<span id='sol-common-ix-services-ActionCancelForm-cfg-nodeId'>  /**
+</span>   * @cfg {String} nodeId (required)
+   * Node ID
+   */
+
+<span id='sol-common-ix-services-ActionCancelForm-cfg-cancelNodeNameTranslationKeys'>  /**
+</span>   * @cfg {Array} cancelNodeNameTranslationKeys
+   * Translation keys for the node name of cancel nodes
+   */
+  cancelNodeNameTranslationKeys: [
+    &quot;sol.common.wf.node.cancel&quot;,
+    &quot;sol.common.wf.node.abort&quot;,
+    &quot;sol.common.wf.node.abbort&quot;
+  ],
+
+<span id='sol-common-ix-services-ActionCancelForm-cfg-cancelIconNames'>  /**
+</span>   * @cfg {Array} cancelIconNames
+   * Icon names of cancel nodes
+   */
+  cancelIconNames: [
+    &quot;sol.common.Cancel&quot;,
+    &quot;sol.common.Abort&quot;,
+    &quot;sol.common.Abbort&quot;
+  ],
+
+<span id='sol-common-ix-services-ActionCancelForm-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-ActionCancelForm-method-process'>  /**
+</span>   * Forwards a workflow to the next cancel node
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        result = false,
+        saveClicked, workflow, succNode;
+
+    saveClicked = me.determineAndResetSavedState();
+
+    if (!saveClicked) {
+      workflow = sol.common.WfUtils.getWorkflow(me.flowId);
+
+      succNode = sol.common.WfUtils.getSuccessorNode(workflow, me.nodeId, {
+        nameTranslationKeys: me.cancelNodeNameTranslationKeys,
+        iconNames: me.cancelIconNames
+      });
+
+      if (succNode) {
+        sol.common.WfUtils.forwardWorkflow(me.flowId, me.nodeId, [succNode.id]);
+        result = true;
+      }
+    }
+
+    return JSON.stringify({ result: result });
+  },
+
+<span id='sol-common-ix-services-ActionCancelForm-method-determineAndResetSavedState'>  /**
+</span>   * @private
+   * Determines, if the &#39;saved flag&#39; (wf map field `FORM_SAVED`) is set to &#39;1&#39;.
+   * If that&#39;s the case it returns `true` and resets the flag, else it returns `false` and leaves the entry untouched.
+   * @return {Boolean}
+   */
+  determineAndResetSavedState: function () {
+    var me = this,
+        wfMap, savedFlag;
+
+    wfMap = sol.create(&quot;sol.common.WfMap&quot;, {
+      flowId: me.flowId,
+      objId: me.nodeId
+    });
+    wfMap.read([me.wfMapSavedFlag]);
+
+    savedFlag = (wfMap.getValue(me.wfMapSavedFlag) === &quot;1&quot;);
+
+    if (savedFlag === true) {
+      wfMap.setValue(me.wfMapSavedFlag, null);
+      wfMap.write();
+    }
+
+    return savedFlag;
+  }
+
+});
+
+<span id='sol-common-ix-services-ActionCancelForm-static-method-RF_sol_common_service_ActionCancelForm'>/**
+</span> * @member sol.common.ix.services.ActionCancelForm
+ * @method RF_sol_common_service_ActionCancelForm
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_ActionCancelForm(ec, args) {
+  logger.enter(&quot;RF_sol_common_service_ActionCancelForm&quot;, args);
+  var params, service, result;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;flowId&quot;, &quot;nodeId&quot;);
+
+  service = sol.create(&quot;sol.common.ix.services.ActionCancelForm&quot;, params);
+  result = service.process();
+
+  logger.exit(&quot;RF_sol_common_service_ActionCancelForm&quot;, result);
+  return result;
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,319 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.UserInfo;
+import de.elo.ix.client.UserName;
+import de.elo.ix.client.WFCollectNode;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFEditNode;
+import de.elo.ix.client.WFNode;
+import java.rmi.RemoteException;
+
+
+/**
+ *
+ * Helper class containing methods available to all functions.
+ * Various functions used in the examples have been included in this class to 
+ * reduce the size of the individual examples.
+ */
+public class WFHelper {
+    
+    // 
+    /**
+     * Creates a workflow node and places it according to the coordinates
+     * @param ix    IXConnection object
+     * @param id    Node Id
+     * @param type  Node Type
+     * @param xpos  X coordinate
+     * @param ypos  y coordinate
+     * @return
+     * @throws java.rmi.RemoteException
+     */
+    public static WFNode createNode(IXConnection ix, int id, int type, int xpos, int ypos) throws RemoteException {        
+        WFNode node = ix.ix().createWFNode(id, type);
+        node.setAllowActivate(true);
+        node.setComment("");
+        node.setEnterDateIso("");
+        node.setExitDateIso("");
+        node.setFlags(0);
+        node.setInUseDateIso("");
+        node.setIsNext(0);
+        node.setName("");
+        node.setNbOfDonesToExit(0);
+        node.setOnEnter("");
+        node.setOnExit("");
+        node.setPosX(xpos);
+        node.setPosY(ypos);
+        node.setUserId(-1);
+        node.setYesNoCondition("");
+        
+        return node;
+    }
+    
+
+    /**
+     * User with userName will be created if not already existing in ELO
+     * User will be assigned workflow admin rights
+     *
+     * @param ix    IXConnection object
+     * @param ci    ClientInfo object
+     * @param userName  name of the user
+     * @param pwd       password for the user
+     * @return
+     * @throws java.rmi.RemoteException
+     */
+    public static int createNewUser(IXConnection ix, String userName, String pwd) throws RemoteException {
+        int userId = -1;
+        
+        userId = createNewUser(ix, userName, pwd, true);
+        return userId;
+    }
+    
+    /**
+     * User with userName will be created. If already existing the user will be deleted
+     * and re-created to ensure the admin rights are correct.
+     * User will be assigned workflow admin rights (FLAG_EDITWF) depending upon admin parameter.
+     *
+     * @param ix    IXConnection object
+     * @param userName  name of the user
+     * @param pwd       password for the user
+     * @param admin     if true the user will be assigned workflow admin rights
+     * @return
+     * @throws java.rmi.RemoteException
+     */
+    public static int createNewUser(IXConnection ix, String userName, String pwd, boolean admin) throws RemoteException {
+        IXServicePortC CONS = ix.getCONST();
+        int userId = -1;
+        
+        try {
+            String[] user = new String[] {userName};
+            UserName[] un = ix.ix().getUserNames(user, CONS.getCHECKOUT_USERS().getBY_IDS());
+            // User exists so delete user and re-create user to ensure rights are correct
+            ix.ix().deleteUsers(user, CONS.getLOCK().getYES());
+            
+        } catch (RemoteException e) {          
+            // User does not exist - continue and create user
+        }
+        
+        UserInfo ui = ix.ix().createUser("0");
+        ui.setName(userName);
+        ui.setPwd(pwd);
+        ui.setType(CONS.getUSER_INFO().getTYPE_USER());
+            // Assign rights to user
+            if (admin == true){
+                //Workflow admin user
+               ui.setFlags(CONS.getACCESS().getFLAG_ALL() & ~ 
+                           CONS.getACCESS().getFLAG_ADMIN() & ~ 
+                           CONS.getACCESS().getFLAG_IGNOREACL());
+            } else {
+                // user without workflow admin role
+                ui.setFlags(CONS.getACCESS().getFLAG_ALL() & ~ 
+                            CONS.getACCESS().getFLAG_ADMIN() & ~ 
+                            CONS.getACCESS().getFLAG_EDITWF() & ~ 
+                            CONS.getACCESS().getFLAG_IGNOREACL());
+            }
+            int[] userIds = ix.ix().checkinUsers(new UserInfo[] {ui},
+                    CONS.getCHECKIN_USERS().getNEW_USER(),
+                    CONS.getLOCK().getNO());
+            userId = userIds[0];
+        
+        return userId;
+    }
+    
+     
+    /**
+     * Creates a group and then assigns supplied users to the group. If group
+     * already exists it will be deleted and re-created
+     * @param ix IXConnection object
+     * @param ci ClientInfo object
+     * @param groupName the name of the new group
+     * @param users an array containing the user names to be created
+     * @return the id of the group
+     * @throws java.rmi.RemoteException
+     */
+    public static int createGroupWithUsers(IXConnection ix, String groupName, String[] users) throws RemoteException {
+        IXServicePortC CONS = ix.getCONST();
+        int groupId = -1;
+        String[] group = new String[] {groupName};
+        try {
+            UserName[] gn = ix.ix().getUserNames(new String[] {groupName}, CONS.getCHECKOUT_USERS().getBY_IDS());
+            // User exists so delete user and re-create user to ensure rights are correct
+            ix.ix().deleteUsers(group, CONS.getLOCK().getYES());
+        } catch (RemoteException e) {
+        
+        }
+        UserInfo ui = ix.ix().createUser("0");
+        ui.setName(groupName);
+        ui.setType(CONS.getUSER_INFO().getTYPE_GROUP());
+        // Assign rights to group - no WF admin
+        ui.setFlags(CONS.getACCESS().getFLAG_ALL() & ~ 
+                    CONS.getACCESS().getFLAG_ADMIN() & ~ 
+                    CONS.getACCESS().getFLAG_EDITWF() & ~ 
+                    CONS.getACCESS().getFLAG_IGNOREACL());
+          
+        int[] userIds = ix.ix().checkinUsers(new UserInfo[] {ui},
+                                           CONS.getCHECKIN_USERS().getNEW_USER(),
+                                           CONS.getLOCK().getNO());
+        groupId = userIds[0];
+        
+        
+        //Add users to group
+        UserInfo[] members = ix.ix().checkoutUsers(users, CONS.getCHECKOUT_USERS().getBY_IDS(), CONS.getLOCK().getNO());
+        // Add group to each member
+        for (int i = 0; i < members.length; i++){
+            // Get existing groups
+            int[] groups = members[i].getGroupList();
+            boolean groupAssigned = false;
+            for (int j = 0; j < groups.length; j++){
+                if (groups[j] == groupId) groupAssigned = true;
+            }
+            // when group already assigned do nothing
+            if (!groupAssigned){ 
+                // otherwise assign group to user
+                if (groups.length != 0){
+                    // Create new array with space for new group
+                    int[] newGroups = new int[(groups.length + 1)];
+                    // Copy groups into newGroups and add new group 
+                    System.arraycopy(groups,
+                                     0,
+                                     newGroups,
+                                     0,
+                                     groups.length);
+                    newGroups[(groups.length)] = groupId;
+                    // Assign newGroups to user
+                    members[i].setGroupList(newGroups);
+                } else { // user has no existing groups
+                    members[i].setGroupList(new int[] {groupId});
+                }
+            }
+        }
+        // Checkin users
+        ix.ix().checkinUsers(members,
+                    CONS.getCHECKIN_USERS().getWRITE(),
+                    CONS.getLOCK().getNO());
+        
+        return groupId;
+    }
+    
+    /**
+     * Creates a new SplitCollectNodesTemplate template
+     * @param ix    IXConnection object
+     * @param flowname  name of the template
+     * @return          workflow diagram
+     * @throws java.rmi.RemoteException
+     */
+    public static WFDiagram createSplitterTemplate(IXConnection ix, String flowname) throws RemoteException{
+               
+        WFDiagram wfd   = SplitCollectNodesTemplate.createTemplate(ix, flowname);
+        return wfd;
+    }
+    
+    
+     /**
+     * Creates a new Sequential template for supplied users
+     * @param ix    IXConnection object
+     * @param flowname  name of the template
+     * @return          workflow diagram
+     * @throws java.rmi.RemoteException
+     */
+    public static WFDiagram createSeqTemplateForUsers(IXConnection ix, String flowname, String[] userName) throws RemoteException{
+               
+        WFDiagram wfd   = CreateSeqTemplateForUsers.createTemplate(ix, flowname, userName);
+        return wfd;
+    }
+    
+    
+    /**
+     * Creates a new decision template
+     * @param ix    IXConnection object
+     * @param flowname  name of the template
+     * @return      workflow diagram
+     * @throws java.rmi.RemoteException
+     */
+    public static WFDiagram createDecisionTemplate(IXConnection ix, String flowname, String conditionText) throws RemoteException{
+               
+        WFDiagram wfd   = DecisionNodeTemplate.createDecisionTemplate(ix, flowname, conditionText);
+        return wfd;
+    }
+    
+    /**
+     * Creates a new decision template
+     * @param ix    IXConnection object
+     * @param ci    ClientInfo object
+     * @param flowname  name of the template
+     * @return      workflow diagram
+     * @throws java.rmi.RemoteException
+     */
+    public static WFDiagram createTemplateWithScript(IXConnection ix, String flowname, String[] users) throws RemoteException{
+               
+        WFDiagram wfd   = TemplateWithScript.createTemplate(ix, flowname, users);
+        return wfd;
+    }
+    
+    // Default constructor
+    public WFHelper(){
+    
+    }
+
+    public static void forwardNode(IXConnFactory connFact, WFCollectNode node, String comment) throws RemoteException{
+
+        IXConnection connUser = connFact.create(node.getUserName(), "elo", "IX-Workshop", null);
+        
+        // Forward first node
+        // Lock the node and get the required values to fill a dialogue
+        WFEditNode editNode = connUser.ix().beginEditWorkFlowNode(
+                                                          node.getFlowId(), 
+                                                          node.getNodeId(),
+                                                          LockC.YES);
+        
+        // forward to successor
+        WFNode[] succNodes = editNode.getSuccNodes();
+        int[] nextNode = new int[1];
+        boolean nextNodeFound = false;
+        if (succNodes.length > 0) {
+            for (int i = 0; i < succNodes.length; i++){
+                // 'Cancel' node is always available so compare dates to see if successor 
+                // node has already been forwarded
+                if (succNodes[i].getExitDateIso().equals("")){
+                    nextNode[0] = succNodes[i].getId();
+                    nextNodeFound = true;
+                    
+                }
+            }  
+        }
+         
+        // forward
+        if (nextNodeFound){   
+            // Forward to next node
+            connUser.ix().endEditWorkFlowNode(
+                                      node.getFlowId(), 
+                                      node.getNodeId(), 
+                                      false,           // do not terminate flow
+                                      false,           // do not cancel editing
+                                      editNode.getNode().getName(), // new node name = old name
+                                      comment,
+                                      nextNode
+                                      );
+        } else {
+            // Final node - end workflow
+            connUser.ix().endEditWorkFlowNode(
+                                      node.getFlowId(), 
+                                      node.getNodeId(), 
+                                      false,           // do not terminate flow
+                                      false,           // do not cancel editing
+                                      editNode.getNode().getName(), // new node name = old name
+                                      "Forwarding this node finished the workflow!",
+                                      null
+                                      );
+        }
+        System.out.println("Node with id = " + node.getNodeId() + " forwarded by user " + connUser.getLogin().lr().getUser().getName());
+        connUser.ix().logout();
+    }
+    
+}
+
+

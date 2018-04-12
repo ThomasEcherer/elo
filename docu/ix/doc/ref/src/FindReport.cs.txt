@@ -1,0 +1,115 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für FindReport.
+	/// </summary>
+	public class FindReport
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// Create a Sord object to generate some report information
+				Logger.instance().log("create sord...");
+				IndexServer.Sord sord = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+				sord.name = "C# Example Report";
+				sord.id = ix.checkinSord(ci, sord, CONST.SORD.mbLean, CONST.LOCK.NO);
+				Logger.instance().log("create sord OK");
+
+				// Wait some seconds. Report information is wirtten with a little
+				// time delay after the action was taken. 
+				Logger.instance().log("sleep two seconds ...");
+				System.Threading.Thread.Sleep(2000);
+				Logger.instance().log("sleep two seconds OK");
+
+				// Find report entries to sord 
+				Logger.instance().log("find report...");
+				IndexServer.FindReportInfo findReport = new IndexServer.FindReportInfo();
+				findReport.objId = sord.guid;
+        IndexServer.FindResult findResult = ix.findFirstReportInfos(ci, findReport, 10);
+
+        int idx = 0;
+        while (true)
+        {
+          IndexServer.ReportInfo[] rinfos = findResult.reportInfos;
+          Logger.instance().log("find report OK, #infos=" + rinfos.Length);
+
+          // Dump report information.
+          // There could be more information since already deleted sord objects 
+          // could have had the same ID. 
+          for (int i = 0; i < rinfos.Length; i++)
+          {
+            Logger.instance().log("  action=" + rinfos[i].action);
+            Logger.instance().log("    time=" + rinfos[i].actTimeISO);
+            Logger.instance().log("    user=" + rinfos[i].userId);
+            Logger.instance().log("    text=" + rinfos[i].text);
+          }
+
+          if (!findResult.moreResults)
+          {
+            break;
+          }
+
+          idx += rinfos.Length;
+          findResult = ix.findNextReportInfos(ci, findResult.searchId, idx, 10);
+        }
+
+        IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+        delOpts.deleteFinally = true;
+        ix.deleteSord(ci, null, sord.guid, CONST.LOCK.NO, null);
+        ix.deleteSord(ci, null, sord.guid, CONST.LOCK.NO, delOpts);
+								
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

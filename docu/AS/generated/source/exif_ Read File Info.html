@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// Read EXIF data from JPEG files
+//
+// usage:
+//
+// var myFileInfo = new Exif();
+// myFileInfo.readFromFile(&quot;c:\\temp\\myPicture.jpg&quot;);
+// var height = myFileInfo.valueOf(&quot;Image Height&quot;);
+//
+// var archiveDocInfo = new Exif();
+// archiveDocInfo.readFromDoc(Sord.id);
+// var xres = archiveDocInfo.valueOf(&quot;X Resolution&quot;);
+//
+
+importPackage(Packages.com.drew.imaging);
+importPackage(Packages.com.drew.metadata);
+
+<span id='Exif'>/**
+</span> * @class Exif
+ */
+function Exif() {
+  this.metadata = null;
+}
+
+<span id='Exif-method-readFromFile'>/**
+</span> * Liest die EXIF-Daten aus der angegebenen Bild-Datei.
+ * 
+ * @param {File} file Bilddatei
+ */
+Exif.prototype.readFromFile = function(file) {
+  if (file instanceof String) {
+    file = new File(file);
+  }
+  
+  this.metadata = ImageMetadataReader.readMetadata(file);
+  
+  this.map = new Array();
+  var dirs = this.metadata.directories.iterator();
+  while(dirs.hasNext()) {
+    var dir = dirs.next();
+    var tags = dir.tags.iterator();
+    while (tags.hasNext()) {
+      var tag = tags.next();
+      this.map[tag.tagName] = tag.description;
+      log.info(&quot;Tag: &quot; + tag.tagName + &quot; : &quot; + tag.description);
+    }
+  }
+};
+
+<span id='Exif-method-readFromDoc'>/**
+</span> * Liest die EXIF-Daten aus dem angegebenen Archivdokument.
+ * 
+ * @param {String} objid ID des Archivdokuments
+ */
+Exif.prototype.readFromDoc = function(objid) {
+  var tempFile = fu.getTempFile(objid);
+  if (tempFile) {
+    this.readFromFile(tempFile);
+    fu.deleteFile(tempFile);
+  }
+};
+
+<span id='Exif-method-valueOf'>/**
+</span> * Liefert den Wert des angegebenen Schlüssels zurück.
+ * 
+ * @param {String} tagName Schlüssel
+ * @returns {Object} Wert des Schlüssels
+ */
+Exif.prototype.valueOf = function(tagName) {
+  return this.map[tagName];
+};
+
+<span id='Exif-method-getMetadata'>/**
+</span> * Liefert die aktuellen Metadaten zurück.
+ * 
+ * @returns {Object} Metadaten
+ */
+Exif.prototype.getMetadata = function() {
+ return this.metadata;
+};
+
+<span id='Exif-method-getAllTags'>/**
+</span> * Liefert die Liste mit den Tag-Daten zurück.
+ * 
+ * @returns {Array} Liste mit Tag-Daten
+ */
+Exif.prototype.getAllTags = function() {
+  return this.map;
+};
+
+</pre>
+</body>
+</html>

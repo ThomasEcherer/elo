@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='sol-common-as-WfController'>/**
+</span> * ELOas workflow controller.
+ *
+ * This class handles ELO AS functions. Functions must be a subclass of sol.common.as.FunctionBase.
+ *
+ * ELO AS functions can be used as workflow nodes. Compared to Index Server functions, there&#39;s no script that can be called.
+ * Therefore a direct rule is called by this controller. The required rule must be passed as a param in the workflows node description field.
+ *
+ * # Sample node configuration:
+ *
+ *     {
+ *       &quot;$directRule&quot;: &quot;sol.common.as.functions.MyFunction&quot;,
+ *       &quot;doSth&quot;: &quot;like this&quot;
+ *     }
+ *
+ * # Controller functions
+ * Instead of a direct rule, the `WfController` can use a `$controllerFunction`.
+ * Currently only  {@link #wait} is supported.
+ *
+ * # Forwarding behavior
+ * If the controller calls a direct function, the return value of this function will affect the forwarding behavior.
+ *
+ * To forward to the next node (if there are more than one that will be the first one) the direct rule has to return
+ *
+ *     { passOn: true }
+ *
+ * To prevent the forwarding the direct rule has to return
+ *
+ *     { passOn: false }
+ *
+ * If all successor nodes should be activated the result has to be
+ *
+ *     { passOn: { all: true } }
+ *
+ * If the forwarding should happen to specific successor nodes this could be defined by the following result
+ *
+ *     { passOn: { nodes: [] } }
+ *
+ * The nodes list has to contain strings. Those could be node translation keys, names or ids.
+ *
+ * If the controller uses a `$controllerFunction` check the specific function for forwarding configuration (e.g. {@link #wait}).
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloas
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.ExceptionUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.as.Utils
+ *
+ */
+sol.define(&quot;sol.common.as.WfController&quot;, {
+  singleton: true,
+
+<span id='sol-common-as-WfController-property-requiredAsVersion'>  requiredAsVersion: &quot;9.03.006&quot;,
+</span>
+<span id='sol-common-as-WfController-property-solutionAsConfigs'>  solutionAsConfigs: [],
+</span>
+<span id='sol-common-as-WfController-method-run'>  /**
+</span>   * Runs workflow rules
+   */
+  run: function () {
+
+    var me = this,
+        currentVersion, versionCheckResult,
+        nodeConfig, result,
+        controllerFunction, controllerFunctionName,
+        resultObj = {};
+
+    if (!me.logger) {
+      me.logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.as.WfController&quot; });
+    }
+
+    if (!me.versionChecked) {
+      if (!sol.common.as.Utils.isDebugger()) {
+        currentVersion = sol.common.as.Utils.getAsVersion();
+        versionCheckResult = sol.common.RepoUtils.checkVersion(currentVersion, me.requiredAsVersion);
+        if (!versionCheckResult) {
+          me.logger.warn(&quot;ELOas version &quot; + me.requiredAsVersion + &quot; or higher is required.&quot;);
+          return;
+        }
+      }
+      me.versionChecked = true;
+    }
+
+    me.logger.enter(&quot;WfController.run&quot;, { flowName: EM_WF_NODE.flowName + &quot;&quot;, flowId: EM_WF_NODE.flowId + &quot;&quot;, nodeName: EM_WF_NODE.nodeName + &quot;&quot; });
+
+    nodeConfig = me.getNodeConfig();
+    if (!nodeConfig) {
+      me.logger.info([&quot;Skipping node \&quot;{0}\&quot; (flowName={1}, flowId={2}). No configuration given.&quot;, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId]);
+      return;
+    }
+
+    if (!nodeConfig.$directRule &amp;&amp; !nodeConfig.$controllerFunction) {
+      me.logger.info([&quot;Skipping node \&quot;{0}\&quot; (flowName={1}, flowId={2}). Node has no direct rule or controller function configuration.&quot;, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId]);
+      return;
+    }
+
+    if (nodeConfig.$directRule) {
+      if (!ruleExecutor.hasDirectRule(nodeConfig.$directRule)) {
+        me.handleException(&quot;Direct rule &#39;&quot; + nodeConfig.$directRule + &quot;&#39; not found.&quot;);
+        return;
+      }
+
+      me.logger.debug([&quot;Execute direct rule: directRule={0}, nodeName={1}, flowName={2}, flowId={3}&quot;, nodeConfig.$directRule, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId], nodeConfig);
+
+      nodeConfig.EM_WF_NODE = {
+        nodeName: String(EM_WF_NODE.nodeName),
+        flowName: String(EM_WF_NODE.flowName),
+        flowId: String(EM_WF_NODE.flowId),
+        objId: String(EM_WF_NODE.objId),
+        workflowOwnerName: String(EM_WF_NODE.workflowOwnerName)
+      };
+
+      result = ruleExecutor.runDirectRule(nodeConfig.$directRule, EM_ACT_SORD.id, JSON.stringify(nodeConfig), &quot;&quot;);
+
+      me.logger.debug([&quot;Direct rule result: {0}&quot;, result]);
+
+      if (!result || result == &quot;undefined&quot;) {
+        me.handleException(&quot;Direct rule result is empty&quot;);
+        return;
+      }
+
+      if (result) {
+        if (result.indexOf(&quot;Ruleset not found&quot;) == 0) {
+          me.handleException(&quot;Direct rule not found&quot;);
+          return;
+        }
+        try {
+          resultObj = JSON.parse(result);
+        } catch (ex) {
+          me.handleException(&quot;Can&#39;t parse direct rule result&quot;);
+          return;
+        }
+        if (resultObj.exception) {
+          me.handleException(&quot;Direct rule exception: &quot; + resultObj.exception);
+          return;
+        }
+      }
+    }
+
+    if (nodeConfig.$controllerFunction) {
+      controllerFunctionName = nodeConfig.$controllerFunction;
+      controllerFunction = me[controllerFunctionName];
+      if (!controllerFunction) {
+        me.handleException(&quot;Controller function &#39;&quot; + controllerFunctionName + &quot;&#39; not found.&quot;);
+        return;
+      }
+
+      me.logger.debug([&quot;Execute controller function: controllerFunction={0}, nodeName={1}, flowName={2}, flowId={3}&quot;, controllerFunctionName, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId], nodeConfig);
+      try {
+        resultObj = controllerFunction.call(me, nodeConfig);
+      } catch (ex) {
+        me.handleException(&quot;Exception in controller function: &quot; + sol.common.ExceptionUtils.parseException(ex));
+        return;
+      }
+
+      if (!resultObj) {
+        me.handleException(&quot;Controller function &#39;&quot; + controllerFunctionName + &quot;&#39; must provide a result.&quot;);
+        return;
+      }
+      me.logger.debug([&quot;Controller function result: {0}&quot;, JSON.stringify(resultObj)]);
+    }
+
+    if (nodeConfig.debug) {
+      EM_WF_NEXT = &quot;&quot;;
+      me.logger.debug([&quot;Debug mode - don&#39;t pass on: EM_WF_NODE = \&quot;\&quot;&quot;]);
+    } else {
+      me.dispatch(resultObj, nodeConfig);
+    }
+
+    me.logger.exit(&quot;WfController.run&quot;);
+  },
+
+<span id='sol-common-as-WfController-method-getNodeConfig'>  /**
+</span>   * @private
+   * Get node configuration
+   * @return {Object} Node configuration
+   */
+  getNodeConfig: function () {
+    var me = this,
+        nodeConfigString, nodeConfig, jsonEndPos, properties, comment;
+
+    properties = EM_WF_NODE.properties + &quot;&quot;;
+    comment = EM_WF_NODE.nodeComment + &quot;&quot;;
+
+    nodeConfigString = properties || comment;
+    try {
+      if (nodeConfigString) {
+        if ((nodeConfigString.length &gt; 1) &amp;&amp; (nodeConfigString.charAt(0) == &quot;{&quot;)) {
+          jsonEndPos = nodeConfigString.lastIndexOf(&quot;}&quot;);
+          nodeConfigString = nodeConfigString.substring(0, jsonEndPos + 1);
+        }
+        nodeConfig = sol.common.ConfigMixin.mergeConfiguration(nodeConfigString);
+        nodeConfig.objId = EM_ACT_SORD.id;
+        nodeConfig.flowId = EM_WF_NODE.flowId;
+        nodeConfig.nodeId = EM_WF_NODE.nodeId;
+      } else {
+        me.logger.info([&quot;Node configuration is empty: nodeName={0}, flowName={1}, flowName={2}&quot;, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId]);
+        me.logger.debug([&quot;wfNode.properties={0}&quot;, properties]);
+        me.logger.debug([&quot;wfNode.comment={0}&quot;, comment]);
+      }
+    } catch (ex) {
+      me.logger.info([&quot;Can&#39;t parse node configuration: nodeName={0}, flowName={1}, flowId={2} exception={3})&quot;, EM_WF_NODE.nodeName, EM_WF_NODE.flowName, EM_WF_NODE.flowId, ex]);
+      me.logger.debug([&quot;wfNode.properties={0}&quot;, properties]);
+      me.logger.debug([&quot;wfNode.comment={0}&quot;, comment]);
+    }
+
+    return nodeConfig;
+  },
+
+<span id='sol-common-as-WfController-method-dispatch'>  /**
+</span>   * @private
+   * Handles the workflow forwarding.
+   * @param {Object} resultObj The result of either the controller function or the direct rule
+   * @param {Object} nodeConfig The configuration of the current node
+   */
+  dispatch: function (resultObj, nodeConfig) {
+    var me = this,
+        nextNodes;
+
+    if (resultObj.passOn === true) {
+      nextNodes = nodeConfig.nextNode || &quot;0&quot;;
+    } else if (resultObj.passOn &amp;&amp; (resultObj.passOn.all === true)) {
+      nextNodes = me.getNextNodes();
+    } else if (resultObj.passOn &amp;&amp; resultObj.passOn.nodes) {
+      nextNodes = me.getNextNodes({ nodes: resultObj.passOn.nodes });
+    }
+
+    if (nextNodes) {
+      EM_WF_NEXT = nextNodes;
+    }
+
+  },
+
+<span id='sol-common-as-WfController-method-getNextNodes'>  /**
+</span>   * @private
+   * Determines the follow up nodes.
+   * @param {Object} params (optional)
+   * @param {String[]} params.nodes (optional) If set, it will be used to determine the following node IDs. This array could contain node names, translation keys or IDs.
+   * If the parameter is not set, all successor nodes will be returned.
+   * @return {String} Comma separated list of node IDs
+   */
+  getNextNodes: function (params) {
+    var me = this,
+        wfEditNode, successorNodes, idx, successorNodeIndexes, currentSuccNode, i, nodeFilter, successorNodeIndexesString;
+
+    wfEditNode = ixConnect.ix().beginForwardWorkflowNode(EM_WF_NODE.flowId, EM_WF_NODE.nodeId, new BeginForwardWorkflowNodeInfo(), LockC.NO);
+    successorNodes = wfEditNode.succNodes;
+
+    if (successorNodes &amp;&amp; (successorNodes.length &gt; 0)) {
+      successorNodeIndexes = [];
+      for (idx = 0; idx &lt; successorNodes.length; idx++) {
+        if (!params || !params.nodes || (params.nodes.length &lt;= 0)) {
+          successorNodeIndexes.push(idx);
+        } else { // filter for specific nodes
+          currentSuccNode = successorNodes[idx];
+          for (i = 0; i &lt; params.nodes.length; i++) {
+            nodeFilter = params.nodes[i];
+            if (nodeFilter == currentSuccNode.nameTranslationKey || nodeFilter == currentSuccNode.name || nodeFilter == currentSuccNode.id) {
+              successorNodeIndexes.push(idx);
+            }
+          }
+        }
+      }
+    }
+
+    if (successorNodeIndexes &amp;&amp; (successorNodeIndexes.length &gt; 0)) {
+      successorNodeIndexesString = successorNodeIndexes.join(sol.common.RepoUtils.pilcrow);
+    } else {
+      me.logger.warn(&quot;No successor nodes found. Forward to first node.&quot;);
+      successorNodeIndexesString = &quot;0&quot;;
+    }
+
+    return successorNodeIndexesString;
+  },
+
+<span id='sol-common-as-WfController-method-handleException'>  /**
+</span>   * @private
+   * Handle an exception
+   * @param {String|Exception} ex
+   */
+  handleException: function (ex) {
+    var me = this,
+        nodeConfig, errorMessage,
+        errorUser = &quot;&quot;;
+
+    nodeConfig = me.getNodeConfig() || {};
+
+    errorMessage = sol.common.ExceptionUtils.parseException(ex);
+
+    if (nodeConfig.debug) {
+      me.logger.debug([&quot;Debug mode - don&#39;t change user&quot;]);
+    } else if (nodeConfig.errorNode) {
+      EM_WF_NEXT = nodeConfig.errorNode;
+    } else {
+      errorUser = nodeConfig.errorUser || &quot;0&quot;;
+    }
+
+    if (errorUser) {
+      sol.common.WfUtils.changeNodeUser(EM_WF_NODE, errorUser);
+    }
+
+    me.logger.warn([errorMessage + &quot;: objId={0}, flowName={1}, flowId={2}, nodeName={3}, directRule={4}, nodeConfig={5}, errorUser={6}&quot;,
+      EM_ACT_SORD.id, EM_WF_NODE.flowName, EM_WF_NODE.flowId, EM_WF_NODE.nodeName, nodeConfig.$directRule || &quot;&quot;, JSON.stringify(nodeConfig), errorUser]);
+  },
+
+<span id='sol-common-as-WfController-method-wait'>  /**
+</span>   * Wait
+   *
+   * Node configuration examples:
+   *
+   *     {
+   *       &quot;$controllerFunction&quot;: &quot;wait&quot;,
+   *       &quot;fieldName&quot;: &quot;INVOICE_DATACOLLECTION&quot;,
+   *       &quot;fieldValue&quot;: &quot;DocXtractor&quot;
+   *     }
+   *
+   *     {
+   *       &quot;$controllerFunction&quot;: &quot;wait&quot;,
+   *       &quot;fieldName&quot;: &quot;INVOICE_STATUS&quot;,
+   *       &quot;fieldValueStartsWith&quot;: &quot;7&quot;
+   *     }
+   *
+   * Only forwards an entry when the date defined in GRP-field &quot;FORWARDING_DATE&quot; is reached.
+   *
+   *     {
+   *       &quot;$controllerFunction&quot;: &quot;wait&quot;,
+   *       &quot;fieldName&quot;: &quot;FORWARDING_DATE&quot;,
+   *       &quot;waitUntil&quot;: true
+   *     }
+   *
+   * The default forwarding behavior, in case of more then one successor node, is to forward to the first one.
+   * To forward to all successor nodes, an additionall parameter `forwardToAll` has to be defined
+   *
+   *     {
+   *       &quot;$controllerFunction&quot;: &quot;wait&quot;,
+   *       &quot;fieldName&quot;: &quot;INVOICE_DATACOLLECTION&quot;,
+   *       &quot;fieldValue&quot;: &quot;DocXtractor&quot;,
+   *       &quot;forwardToAll&quot;: true
+   *     }
+   *
+   * Instead of forwarding to the first or all nodes there could be a configuration to forward to specific nodes depending on a field value.
+   * The `forwardToNodes` parameter has an array with node configurations
+   *
+   *     {
+   *       &quot;$controllerFunction&quot;: &quot;wait&quot;,
+   *       &quot;fieldName&quot;: &quot;INVOICE_STATUS&quot;,
+   *       &quot;forwardToNodes&quot;: [
+   *         { &quot;node&quot;: &quot;Error&quot;, &quot;fieldValue&quot;: &quot;DECLINED&quot; },
+   *         { &quot;node&quot;: &quot;Exported&quot;, &quot;fieldValueStartsWith&quot;: &quot;7&quot; },
+   *         { &quot;node&quot;: &quot;ExportedConditionally&quot;, &quot;fieldValueStartsWith&quot;: &quot;8&quot; }
+   *       ]
+   *     }
+   *
+   * This configuration shows the following cases:
+   *
+   * - value of the field &#39;INVOICE_STATUS&#39; is &#39;DECLINED&#39; the workflow gets forwarded to the successor node &#39;Error&#39; =&gt; `{ passOn: { nodes: [&quot;Error&quot;] } }`
+   * - value of the field &#39;INVOICE_STATUS&#39; starts with &#39;7&#39; the workflow gets forwarded to the successor node &#39;Exported&#39; =&gt; `{ passOn: { nodes: [&quot;Exported&quot;] } }`
+   * - value of the field &#39;INVOICE_STATUS&#39; starts with &#39;8&#39; the workflow gets forwarded to the successor node &#39;ExportedConditionally&#39; =&gt; `{ passOn: { nodes: [&quot;ExportedConditionally&quot;] } }`
+   *
+   * The property &#39;node&#39; could either be the translation key, the name or the id of the successor node.
+   *
+   * @param {Object} nodeConfig Node configuration
+   * @return {Object} result
+   */
+  wait: function (nodeConfig) {
+    var me = this,
+        forwardingCfg = { passOn: false },
+        value, succNodes;
+
+    if (nodeConfig.fieldName) {
+      value = sol.common.SordUtils.getObjKeyValue(EM_ACT_SORD, nodeConfig.fieldName);
+
+      if (nodeConfig &amp;&amp; (nodeConfig.forwardToAll === true) &amp;&amp; me.checkCondition(value, nodeConfig)) {
+        // forward to all successor nodes
+        forwardingCfg.passOn = { all: true };
+      } else if (nodeConfig &amp;&amp; nodeConfig.forwardToNodes) {
+        // forward to specific successor nodes
+        succNodes = me.determinePassOnNodes(value, nodeConfig);
+        forwardingCfg.passOn = (succNodes &amp;&amp; (succNodes.length &gt; 0)) ? { nodes: succNodes } : false;
+      } else if (me.checkCondition(value, nodeConfig)) {
+        // forward to first successor node
+        forwardingCfg.passOn = true;
+      }
+    }
+
+    return forwardingCfg;
+  },
+
+<span id='sol-common-as-WfController-method-determinePassOnNodes'>  /**
+</span>   * @private
+   * @param {String} value Value to check
+   * @param {Object} nodeConfig Node configuration
+   * @return {String []}
+   */
+  determinePassOnNodes: function (value, nodeConfig) {
+    var me = this,
+        succNodes = [];
+
+    if (nodeConfig &amp;&amp; nodeConfig.forwardToNodes &amp;&amp; (nodeConfig.forwardToNodes.length &gt; 0)) {
+      nodeConfig.forwardToNodes.forEach(function (nodeCondition) {
+        if (me.checkCondition(value, nodeCondition)) {
+          succNodes.push(nodeCondition.node);
+        }
+      });
+    }
+
+    return succNodes;
+  },
+
+<span id='sol-common-as-WfController-method-checkCondition'>  /**
+</span>   * @private
+   * @param {String} value Value to check
+   * @param {Object} nodeConfig Node configuration
+   * @return {Boolean}
+   */
+  checkCondition: function (value, nodeConfig) {
+    if (nodeConfig) {
+      if (nodeConfig.fieldValue &amp;&amp; (nodeConfig.fieldValue == value)) {
+        return true;
+      }
+      if (nodeConfig.fieldValueStartsWith &amp;&amp; (value.indexOf(nodeConfig.fieldValueStartsWith) == 0)) {
+        return true;
+      }
+      if (nodeConfig.waitUntil &amp;&amp; value) {
+        // date.beginningofday &lt;= today.beginningofday
+        if (sol.common.DateUtils.dateToIso((sol.common.DateUtils.isoToDate(value)), { startOfDay: true }) &lt;= sol.common.DateUtils.nowIso({ startOfDay: true })) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+});
+
+var EM_WF_WITH_GROUP = true;
+
+<span id='sol-common-as-WfController-method-doWorkflow'>/**
+</span> * Patch for the ELOas standard library function ´doWorkflow´ to include tasks for groups
+ */
+bt.doWorkflow = function () {
+  var result, fTI,
+      idx = 0;
+
+  try {
+    fTI = new FindTasksInfo();
+    fTI.inclWorkflows = true;
+    fTI.lowestPriority = 2;
+    fTI.highestPriority = 0;
+    fTI.inclDeleted = (typeof EM_WF_WITH_DELETED !== &quot;undefined&quot;) ? EM_WF_WITH_DELETED : false;
+    fTI.inclGroup = (typeof EM_WF_WITH_GROUP !== &quot;undefined&quot;) ? EM_WF_WITH_GROUP : false;
+    result = ixConnect.ix().findFirstTasks(fTI, EM_SEARCHCOUNT);
+    idx = 0;
+    for (;;) {
+      if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+        log.info(&quot;doWorkflow interrupted&quot;);
+        return;
+      }
+
+      EM_TASKLIST = result.tasks;
+
+      try {
+        bt.processTaskList();
+      } catch (ex2) {
+        log.error(&quot;Error processing task list: &quot; + ex2);
+      }
+
+      if (!result.moreResults) {
+        break;
+      }
+
+      idx += EM_TASKLIST.length;
+      result = ixConnect.ix().findNextTasks(result.searchId, idx, EM_SEARCHCOUNT);
+    }
+  } catch (ex) {
+    log.error(&quot;Error collection task list: &quot; + ex);
+    return;
+  } finally {
+    if (result) {
+      ixConnect.ix().findClose(result.searchId);
+    }
+  }
+};</pre>
+</body>
+</html>

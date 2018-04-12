@@ -1,0 +1,97 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.KeyInfo;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to create and delete keys.
+ * 
+ */
+
+public class CreateDeleteKeys {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            createDeleteKey();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void createDeleteKey() throws RemoteException {
+        
+        // Lock key data
+        // This step is not strictly necessary as checkinKeys and deleteKeys also check the lock
+        ix.ix().checkoutKeys(null, LOCK.getYES());
+        System.out.println("Keys locked");
+        
+        // Create key
+        // NOTE: KeyInfo.id must be set to -1 to create a new key
+        KeyInfo ki = new KeyInfo();
+        ki.setId(-1);
+        ki.setName("Demo Key");
+        ki.setId(ix.ix().checkinKeys(new KeyInfo[] {ki}, LOCK.getNO())[0]);
+        System.out.println("Keys created with id = " + ki.getId() + " and name = " + ki.getName());
+        
+        // Delete key
+        // Set delete = true to delete mask
+        boolean delete = false;
+        if (delete == true){
+            
+            ix.ix().deleteKeys(new String[] {ki.getName()}, LOCK.getYES());
+            System.out.println("Key deleted");
+        } else{
+            // Checkin key to unlock it in ELO
+            ix.ix().checkinKeys(new KeyInfo[] {ki}, LOCK.getYES());
+        }
+        
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+  
+        LOCK = CONS.getLOCK();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

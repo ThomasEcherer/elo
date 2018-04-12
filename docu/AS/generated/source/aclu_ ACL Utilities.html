@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// JavaScript Dokument
+
+<span id='aclu'>/**
+</span> * @class aclu
+ * @singleton
+ */
+var aclu = new ELOAclUtils();
+
+function ELOAclUtils() {
+}
+
+<span id='aclu-method-aclsSplitGroup'>/**
+</span> * @method aclsSplitGroup
+ * Trennt die einzelnen Gruppen aus der angegebenen Gruppe.
+ * 
+ * @param {IXConnection} connection Offene server Verbindung
+ * @param {Number} fromGroup Id der Ausgangsgruppe
+ * @param {Number} toGroup1 ID der ersten Zielgruppe
+ * @param {Number} toGroup2 ID der zweiten Zielgruppe
+ */
+ELOAclUtils.prototype.aclsSplitGroup = function (connection, fromGroup, toGroup1, toGroup2) {
+    this.processAcls(connection, 1, fromGroup, toGroup1, toGroup2, 31, 31);
+}
+
+<span id='aclu-method-aclsMergeGroups'>/**
+</span> * @method aclsMergeGroups
+ * Fügt die einzelnen Gruppen in die angegebene Zielgruppe ein.
+ * 
+ * @param {IXConnection} connection Index Server Verbindung
+ * @param {Number} mergeGroup1 Erste Gruppe
+ * @param {Number} mergeGroup2 Zweite Gruppe
+ * @param {Number} toGroup Zielgruppe
+ */
+ELOAclUtils.prototype.aclsMergeGroups = function (connection, mergeGroup1, mergeGroup2, toGroup) {
+    this.processAcls(connection, 2, mergeGroup1, mergeGroup2, toGroup, 0, 0);
+}
+
+<span id='aclu-method-aclsRemoveGroup'>/**
+</span> * @method aclsRemoveGroup
+ * Entfernt die angegebene Gruppe aus den Berechtigungen.
+ * 
+ * @param {IXConnection} connection Index Server Verbindung
+ * @param {AclItem} group Gruppe
+ */
+ELOAclUtils.prototype.aclsRemoveGroup = function (connection, group) {
+    this.processAcls(connection, 3, group, 0, 0, 0, 0);
+}
+
+<span id='aclu-method-processAcls'>/**
+</span> * @method processAcls
+ * Bearbeitet die angegebenen Berechtigungsgruppen anhand des angegebenen Modus.
+ * 
+ * @param {IXConnection} connection Index Server Verbindung
+ * @param {Number} mode Modus
+ * @param {Number} group1 Erste Gruppe
+ * @param {Number} group2 Zweite Gruppe
+ * @param {Number} group3 Dritte Gruppe
+ * @param {Number} access2 Zweite Berechtigungsflags
+ * @param {Number} access3 Dritte Berechtigungsflags
+ */
+ELOAclUtils.prototype.processAcls = function (connection, mode, group1, group2, group3, access2, access3) {
+    db.init(connection);
+    var dbcn = EM_connections[connection].dbcn;
+    var stmt = dbcn.createStatement();
+
+    var fromGroup = 0;
+    var toGroup1 = 3;
+    var toGroup2 = 12;
+
+    var cmd;
+    var sGroup1 = aclu.encode20Bit(group1);
+    var sGroup2 = aclu.encode20Bit(group2);
+
+    switch (mode) {
+        case 1:
+            // Eine Gruppe in zwei Gruppen aufsplitten
+            cmd = &quot;select distinct objacl from thiele.dbo.objekte where objacl like '%7_&quot; + sGroup1 + &quot;%'&quot;;
+            break;
+
+        case 2:
+            // Zwei Gruppen in eine Gruppe zusammenfügen
+            cmd = &quot;select distinct objacl from thiele.dbo.objekte where objacl like '%7_&quot; + sGroup1 + &quot;%' and objacl like '%7_&quot; + sGroup2 + &quot;%'&quot;;
+            break;
+
+        case 3:
+            // Anwender/ Gruppe löschen
+            cmd = &quot;select distinct objacl from thiele.dbo.objekte where objacl like '%7_&quot; + sGroup1 + &quot;%'&quot;;
+            break;
+    }
+
+    var result = stmt.executeQuery(cmd);
+    var modifications = new Array();
+    log.debug(&quot;Collect Change List&quot;);
+
+    while (result.next()) {
+        var acl = result.getString(1)
+        log.debug(&quot;ACL: &quot; + acl);
+        var items = this.splitAcl(acl);
+        var newItems;
+
+        switch (mode) {
+            case 1:
+                newItems = this.splitGroup(items, group1, group2, access2, group3, access3);
+                break;
+
+            case 2:
+                newItems = this.mergeGroups(items, group1, group2, group3, 10);
+                break;
+
+            case 3:
+                newItems = this.removeGroup(items, group1);
+                break;
+        }
+
+        var newAcl = aclu.joinAcl(newItems);
+
+        var job = new Object();
+        job.oldAcl = acl;
+        job.newAcl = newAcl;
+        modifications.push(job);
+
+        log.debug(&quot;NEW: &quot; + newAcl);
+    }
+
+    result.close();
+
+    log.debug(&quot;Update DB ACLs&quot;);
+    for (var i = 0; i &lt; modifications.length; i++) {
+        var job = modifications[i];
+        var ucmd = &quot;update thiele.dbo.objekte set objacl = '&quot; + job.newAcl +
+                &quot;' where objacl = '&quot; + job.oldAcl + &quot;'&quot;;
+        log.info(&quot;CMD: &quot; + ucmd);
+        stmt.executeUpdate(ucmd);
+    }
+
+    stmt.close();
+}
+
+<span id='aclu-method-encodeDigit'>/**
+</span> * @method encodeDigit
+ * Liefert ein Zeichen aus dem angegebenen 5 Bit Wert zurück.
+ * 
+ * @param {Number} value 5 bit Wert
+ * @return {String} Zeichen
+ */
+ELOAclUtils.prototype.encodeDigit = function (value) {
+    if (value &gt; 25) {
+        return String.fromCharCode(value + 22);
+    } else {
+        return String.fromCharCode(value + 65);
+    }
+}
+
+<span id='aclu-method-decodeDigit'>/**
+</span> * @method decodeDigit
+ * Liefert ein 5 bit Wert aus dem angegebenen Zeichen zurück.
+ * 
+ * @param {Number} valueString Zeichen
+ * @param {Number} position Position
+ * @return {Number} 5 bit Wert
+ */
+ELOAclUtils.prototype.decodeDigit = function (valueString, position) {
+    var val = valueString.charCodeAt(position);
+    if (val &gt; 64) {
+        return val - 65;
+    } else {
+        return val - 22;
+    }
+}
+
+<span id='aclu-method-encode20Bit'>/**
+</span> * @method encode20Bit
+ * Liefert 4 Zeichen aus dem angegebenen 20 bit Wert zurück.
+ * 
+ * @param {Number} value 20 bit Wert
+ * @return {String} Zeichen
+ */
+ELOAclUtils.prototype.encode20Bit = function (value) {
+    var res = &quot;&quot;;
+
+    for (var i = 0; i &lt; 4; i++) {
+        var part = value &amp; 31;
+        res += this.encodeDigit(part);
+
+        value = value / 32;
+    }
+
+    return res;
+}
+
+<span id='aclu-method-decode20Bit'>/**
+</span> * @method decode20Bit
+ * Liefert einen 20 Bit Wert aus den angegebenen 4 Zeichen zurück.
+ * 
+ * @param {String} value 4 Zeichen
+ * @return {Number} 20 Bit Wert
+ */
+ELOAclUtils.prototype.decode20Bit = function (value) {
+    value = String(value);
+
+    var res = 0;
+    for (var i = value.length - 1; i &gt;= 0; i--) {
+        res = (res * 32) + this.decodeDigit(value, i);
+    }
+
+    return res;
+}
+
+<span id='aclu-method-getAcl'>/**
+</span> * @method getAcl
+ * Liefert einen 6 Zeichen acl String aus der Anwender oder Gruppennummer,
+ * den Zugriffsrechten und dem Typ (6: Schlüssel, 7: User/Group) zurück.
+ * 
+ * @param {Number} userOrGroupId
+ * @param {Number} accessMask
+ * @param {Number} aclType
+ * @return {String} Acl String
+ */
+ELOAclUtils.prototype.getAcl = function (userOrGroupId, accessMask, aclType) {
+    var res = &quot;7&quot;;
+
+    if (aclType != undefined) {
+        res = aclType;
+    }
+
+    res += this.encodeDigit(accessMask);
+    res += this.encode20Bit(userOrGroupId);
+
+    return res;
+}
+
+<span id='aclu-method-splitAcl'>/**
+</span> * @method splitAcl
+ * Liefert eine Liste mit Berechtigungen aus dem angegebenen Berechtigungsstring zurück.
+ * 
+ * @param {String} aclString Berechtigungsstring
+ * @return {Array} Liste mit Berechtigungen
+ */
+ELOAclUtils.prototype.splitAcl = function (aclString) {
+    aclString = String(aclString);
+    var res = new Array();
+    var len = aclString.length;
+
+    var andGroupCounter = 0;
+    var isInAndGroup = false;
+    var lastItem;
+
+    for (var i = 0; i &lt; len; i += 6) {
+        var item = new Object();
+        item.id = this.decode20Bit(aclString.substring(i + 2, i + 6));
+        item.access = this.decodeDigit(aclString, i + 1);
+        item.type = aclString.substring(i, i + 1);
+
+        if (item.access == 0) {
+            if (!isInAndGroup) {
+                andGroupCounter++;
+                lastItem.andGroupId = andGroupCounter;
+                isInAndGroup = true;
+            }
+
+            item.andGroupId = andGroupCounter;
+        } else {
+            isInAndGroup = false;
+            item.andGroupId = 0;
+        }
+
+        res.push(item);
+        lastItem = item;
+    }
+
+    return res;
+}
+
+<span id='aclu-method-joinAcl'>/**
+</span> * @method joinAcl
+ * Fügt die angegeben ACL Items Liste zu einem acl String zusammen.
+ * 
+ * @param {Array} aclItemList Liste mit Berechtigungen
+ * @return {String} acl String
+ */
+ELOAclUtils.prototype.joinAcl = function (aclItemList) {
+    var res = &quot;&quot;;
+
+    for (var i = 0; i &lt; aclItemList.length; i++) {
+        if (aclItemList[i].type == &quot;*&quot;) {
+            continue;
+        }
+
+        res += this.getAcl(aclItemList[i].id, aclItemList[i].access, aclItemList[i].type);
+    }
+
+    return res;
+}
+
+<span id='aclu-method-removeGroup'>/**
+</span> * @method removeGroup
+ * Entfernt die Gruppe aus der angegebenen Berechtigungsliste.
+ * 
+ * @param {Array} aclItemList Liste mit Berechtigungen
+ * @param {AclItem} searchGroup Zu entfernende Gruppe
+ * @return {ArrayList} Liste mit Berechtigungen
+ */
+ELOAclUtils.prototype.removeGroup = function (aclItemList, searchGroup) {
+    for (var i = 0; i &lt; aclItemList.length; i++) {
+        var item = aclItemList[i];
+        if ((item.id == searchGroup) &amp;&amp; (item.type == '7')) {
+            var oldaccess = item.access;
+            aclItemList.splice(i, 1);
+            if ((i &lt; aclItemList.length) &amp;&amp; (aclItemList[i].access == 0)) {
+                // entfernter Eintrag war Starteintrag einer UND Gruppe, 
+                // Berechtigungen auf neuen Starteintrag übertragen.
+                aclItemList[i].access = oldaccess;
+            }
+            i--;
+        }
+    }
+
+    return aclItemList;
+}
+
+<span id='aclu-method-mergeGroups'>/**
+</span> * @method mergeGroups
+ * Fügt zwei Gruppen zu einer Gruppe zusammen. Die beiden Gruppen dürfen nicht Mitglied
+ * unterschiedlicher UND Gruppen sein und sie dürfen jeweils nur einmal vorkommen.
+ * 
+ * @param {Array} aclItemList Liste mit Berechtigungen
+ * @param {AclItem} mergeGroup1 Erste Gruppe
+ * @param {AclItem} mergeGroup2 Zweite Gruppe
+ * @param {AclItem} destGroup Zielgruppe
+ * @param {type} mergeMode Einfügemodus
+ * @return {Array} Liste mit Berechtigungen
+ */
+ELOAclUtils.prototype.mergeGroups = function (aclItemList, mergeGroup1, mergeGroup2, destGroup, mergeMode) {
+    for (var g1 = 0; g1 &lt; aclItemList.length; g1++) {
+        var item1 = aclItemList[g1];
+        if ((item1.id == mergeGroup1) &amp;&amp; (item1.type == &quot;7&quot;)) {
+            var startg2 = 0;
+            var endg2 = aclItemList.length;
+
+            if (item1.andGroupId &gt; 0) {
+                // Nur diese UND Gruppe durchsuchen
+                startg2 = g1 + 1;
+                var actAG = item1.andGroupId;
+
+                for (var l = startg2; l &lt; aclItemList.length; l++) {
+                    var litem = aclItemList[l];
+                    if (litem.andGroupId != actAG) {
+                        endg2 = l;
+                        break;
+                    }
+                }
+            }
+
+            for (var g2 = 0; g2 &lt; aclItemList.length; g2++) {
+                var item2 = aclItemList[g2];
+                if ((item2.id == mergeGroup2) &amp;&amp; (item2.type == &quot;7&quot;)) {
+                    var acl1 = item1.access;
+                    var acl2 = item2.access;
+                    var acl = acl1;
+                    switch (mergeMode) {
+                        case 1:
+                            acl = acl1;
+                            break;
+                        case 2:
+                            acl = acl2;
+                            break;
+                        case 10:
+                            acl = acl1 | acl2;
+                            break;
+                        case 20:
+                            acl = acl2 &amp; acl2;
+                            break;
+                    }
+                    item1.id = destGroup;
+                    item1.access = acl;
+                    aclItemList.splice(g2, 1);
+                    break;
+                }
+            }
+
+            return aclItemList;
+        }
+    }
+
+    return aclItemList;
+}
+
+<span id='aclu-method-splitGroup'>/**
+</span> * @method splitGroup
+ * Teilt eine Gruppe in zwei Gruppen auf. Dabei kann eine BitMaske
+ * mit den maximalen Rechten bestimmt werden.
+ * 
+ * @param {Array} aclItemList Liste mit Berechtigungen
+ * @param {AclItem} searchGroup Gruppe, nach der aufgeteilt wird
+ * @param {AclItem} destGroup1 Erste Zielgruppe
+ * @param {Number} maxAccess1 Erste Bitmaske
+ * @param {AclItem} destGroup2 Zweite Zielgruppe
+ * @param {Number} maxAccess2 Zweite Bitmaske
+ * @return {Array} Liste mit Berechtigungen
+ */
+ELOAclUtils.prototype.splitGroup = function (aclItemList, searchGroup, destGroup1, maxAccess1, destGroup2, maxAccess2) {
+    for (var i = 0; i &lt; aclItemList.length; i++) {
+        var item = aclItemList[i];
+        if ((item.id == searchGroup) &amp;&amp; (item.type == '7')) {
+            var oldaccess = item.access;
+            var newaccess1 = oldaccess &amp; maxAccess1;
+            var newaccess2 = oldaccess &amp; maxAccess2;
+
+            var newItem1 = null;
+            var newItem2 = null;
+
+            if ((oldaccess == 0) || (newaccess1 &gt; 0)) {
+                newItem1 = new Object();
+                newItem1.id = destGroup1;
+                newItem1.access = newaccess1;
+                newItem1.type = item.type;
+                newItem1.andGroupId = item.andGroupId;
+            }
+
+            if ((oldaccess == 0) || (newaccess2 &gt; 0)) {
+                newItem2 = new Object();
+                newItem2.id = destGroup2;
+                newItem2.access = newaccess2;
+                newItem2.type = item.type;
+                newItem2.andGroupId = item.andGroupId;
+            }
+
+            if ((newItem1 == null) &amp;&amp; (newItem2 == null)) {
+                aclItemList.splice(i, 1);
+                if ((i &lt; aclItemList.length) &amp;&amp; (aclItemList[i].access == 0)) {
+                    // entfernter Eintrag war Starteintrag einer UND Gruppe, 
+                    // Berechtigungen auf neuen Starteintrag übertragen.
+                    aclItemList[i].access = oldaccess;
+                }
+                i--;
+            } else if ((newItem1 != null) &amp;&amp; (newItem2 == null)) {
+                aclItemList[i] = newItem1;
+            } else if ((newItem1 == null) &amp;&amp; (newItem2 != null)) {
+                aclItemList[i] = newItem2;
+            } else {
+                aclItemList[i] = newItem1;
+                aclItemList.splice(i + 1, 0, newItem2);
+            }
+        }
+    }
+
+    return aclItemList;
+}
+
+<span id='aclu-method-sanityze'>/**
+</span> * @method sanityze
+ * Entfernt redundante Einträge aus der angegebenen Berechtigungsliste.
+ * 
+ * @param {Array} aclItems Liste mit Berechtigungen
+ * @return {Array} Liste mit Berechtigungen
+ */
+ELOAclUtils.prototype.sanityze = function (aclItems) {
+    for (var i = 0; i &lt; aclItems.length; i++) {
+        var item = aclItems[i];
+        if (item.andGroupId == 0) {
+            for (var j = i + 1; j &lt; aclItems.length; j++) {
+                var item2 = aclItems[j];
+                if ((item2.andGroupId == 0) &amp;&amp; (item2.id == item.id) &amp;&amp; (item2.type == item.type)) {
+                    item.access = item.access | item2.access;
+                    aclItems.splice(j, 1);
+                    j--;
+                }
+            }
+        } else {
+            var agi = item.andGroupId;
+            for (var k = i + 1; k &lt; aclItems.length; k++) {
+                var item3 = aclItems[k];
+                if (item3.andGroupId != agi) {
+                    break;
+                }
+
+                if ((item3.id == item.id) &amp;&amp; (item3.type == item.type)) {
+                    aclItems.splice(k, 1);
+                    k--;
+                }
+            }
+        }
+    }
+
+    return aclItems;
+}
+
+<span id='aclu-method-toString'>/**
+</span> * @method toString
+ * Liefert eine String-Darstellung der angegebenen Berechtigungen zurück.
+ * 
+ * @param {Array} aclItems Liste mit Berechtigungen
+ * @return {String} String-Darstellung der Berechtigungen
+ */
+ELOAclUtils.prototype.toString = function (aclItems) {
+    var res = new Array();
+
+    for (var i = 0; i &lt; aclItems.length; i++) {
+        var item = aclItems[i];
+        res.push(&quot;Id: &quot; + item.id + &quot;, Ac: &quot; + item.access + &quot;, Ty: &quot; + item.type + &quot;, Gp: &quot; + item.andGroupId);
+    }
+
+    return res.join(&quot; ## &quot;);
+}
+</pre>
+</body>
+</html>

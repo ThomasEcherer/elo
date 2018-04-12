@@ -1,0 +1,167 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.WFCollectNode;
+import de.elo.ix.client.DocMask;
+import de.elo.ix.client.DocMaskLine;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ *
+ * This example shows how to utilise decision nodes and creates (using the WFHelper class) 
+ * a template with a decision node.
+ * The condition applies to the value entered in the "from" field in a sord with the email mask.
+ */
+public class CreateDecisionFromTemplate {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            createFromTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createFromTemplate() throws RemoteException{
+        
+        // Create workflow template
+        String templateName = "Decision Demo Template" + (new Date());
+        String conditionText = "From <> support@elo.com";
+        WFHelper.createDecisionTemplate(ix, templateName, conditionText);
+        System.out.println("Template created");
+        
+        // Create Sord object
+        // Prepare a folder object in archive top level based on the Email mask 
+        // - the folder will not be inserted into the archive at this point.
+        String parentId = "1";      // parentId = 1 is the top level in archive
+        String maskId = "Email";    // Mask name or identifier
+        EditInfo ed = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbAll());
+        Sord sord = ed.getSord();
+       
+        // Assign a name, "New Folder"
+        sord.setName("Decison Demo Folder " + (new Date()));
+        
+        // Assign index values to the sord object
+        DocMask docMask = ed.getMask();
+        for (int i = 0; i < docMask.getLines().length; i++){
+            
+            DocMaskLine dml = docMask.getLines()[i];
+            if (dml.getName().equals("From") ||
+                    dml.getKey().equals("ELOOUTL1")){
+                sord.getObjKeys()[i].setData(new String[] {"Mark_Miller@elo.com"});
+                
+            } else if (dml.getName().equals("To") ||
+                    dml.getKey().equals("ELOOUTL2")){
+                sord.getObjKeys()[i].setData(new String[] {"support@elo.com"}); 
+            }
+        }
+
+        // Checkin sord
+        int objId = ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO());
+        System.out.println("Sord created and checked in");
+       
+        // Start workflow - start and decision nodes will be automatically forwarded
+        String flowName = "Decision WF-" + (new Date());
+        int flowId = ix.ix().startWorkFlow(templateName, flowName, ed.getSord().getGuid());  
+        System.out.println("Started WF: sordName=" + ed.getSord().getName() + 
+                ", flowId=" + flowId + 
+                ", flowName=" + flowName);
+        
+        
+        // Search for active workflow node(s) with workflow name
+        WFCollectNode[] nodes = ix.ix().collectWorkFlowNodes(
+                                                           flowName,        // Name of workflow
+                                                           null,            // WF type - null = active
+                                                           null,            // Node name
+                                                           0,               // Node type - 0 = all nodes
+                                                           Integer.toString(objId), // objId for object
+                                                           null,            // Enter date
+                                                           null,            // Exit date
+                                                           null,            // User ids
+                                                           true,            // Only active nodes
+                                                           false);          // Only start nodes
+        
+        // List all found nodes - only one active node can be found
+        // Condition is true so true node should be found
+        for (int i = 0; i < nodes.length; i++){
+            
+            System.out.println("Node found: NodeName= " + nodes[i].getNodeName() +
+                               ", flowName= " + nodes[i].getFlowName() +
+                               ", userName= " + nodes[i].getUserName());
+        }
+
+        // Workflow can be viewed in the ELO client by setting a breakpoint here
+        
+        
+        // set true to terminate workflow and delete sord
+        boolean deleteAndTerminate = false;
+        if (deleteAndTerminate == true){
+            ix.ix().terminateWorkFlow(flowName, LOCK.getNO());
+            // Delete Sord
+            ix.ix().deleteSord(null, Integer.toString(objId), LOCK.getNO(), null);
+        }
+        
+    }
+    
+
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

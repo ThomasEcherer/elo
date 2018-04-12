@@ -1,0 +1,93 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für CheckinSordTypes.
+	/// </summary>
+  public class CheckinSordTypes
+  {
+    // URL to IndexServer
+    public String url;
+
+    // [X] Account to authenticate 
+    public String userName = "Administrator"; 
+    public String userPwd = "";					
+
+    public void run()
+    {
+      // IndexServer stub
+      IXClient ix = null;
+      try 
+      {
+        // Create IndexServer object
+        Logger.instance().log("create IX...");
+        ix = new IXClient(url);
+        Logger.instance().log("create IX OK");
+
+        // Prepare ClientInfo object with language and country
+        IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+        ci.language = "de";
+        ci.country = "DE";
+
+        // LOGIN
+        Logger.instance().log("login...");
+        IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+        ci = loginResult.clientInfo;
+        Logger.instance().log("login OK");
+
+        // get constants
+        IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+
+        // List current sord types
+        IndexServer.SordType[] sordTypes = ix.checkoutSordTypes(ci, null, CONST.SORD_TYPE.mbAllJPG, CONST.LOCK.NO);
+        dumpSordTypes(sordTypes);
+
+        // Add new sord type for documents with extensions ".ABC" and ".DEF"
+        Logger.instance().log("insert sord type...");
+        IndexServer.SordType sordTypeABC = new IndexServer.SordType();
+        sordTypeABC.id = sordTypes[sordTypes.Length-1].id + 1;
+        sordTypeABC.name = "ABC an DEF documents";
+        sordTypeABC.extensions = new String[] {"ABC", "DEF"};
+        ix.checkinSordTypes(ci, new IndexServer.SordType[] {sordTypeABC}, CONST.LOCK.NO);
+        Logger.instance().log("insert sord type OK, id=" + sordTypeABC.id);
+        
+        // List current sord types
+        sordTypes = ix.checkoutSordTypes(ci, null, CONST.SORD_TYPE.mbAllJPG, CONST.LOCK.NO);
+        dumpSordTypes(sordTypes);
+
+        // delete sord type
+        Logger.instance().log("delete sord type, id=" + sordTypeABC.id);
+        ix.deleteSordTypes(ci, new int[] {sordTypeABC.id}, CONST.LOCK.NO);
+        Logger.instance().log("delete sord type OK");
+
+        // List current sord types
+        sordTypes = ix.checkoutSordTypes(ci, null, CONST.SORD_TYPE.mbAllJPG, CONST.LOCK.NO);
+        dumpSordTypes(sordTypes);
+      }
+      catch (Exception e) 
+      {
+        throw e;
+      }
+      finally 
+      {
+        // Always release IXClient object to make sure 
+        // that all all open sessions are closed on exit
+        if (ix != null) 
+        {
+          Logger.instance().log("IX done...");
+          ix.done();
+          Logger.instance().log("IX done OK");
+        }
+      }
+    }
+
+    private void dumpSordTypes(IndexServer.SordType[] sordTypes) 
+    {
+      for (int i = 0; i < sordTypes.Length; i++) 
+      {
+        Logger.instance().log("sordTypes[" + i + "], id=" + sordTypes[i].id + ", name=" + sordTypes[i].name);
+      }
+    }
+  }
+}

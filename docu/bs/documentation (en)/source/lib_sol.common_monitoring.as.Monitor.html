@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-Monitor'>/**
+</span> * Main class of the monitoring module.
+ *
+ * A monitor instance can be reused, but should be disposed via `close` method after last use.
+ *
+ * The monitor needs three components to perform the different tasks.
+ * All components can define an optional &#39;dispose&#39; function (with no parameter and no return value), which will be used by the monitor to clean up after the run.
+ *
+ * # Collector
+ * Responsible for collecting the working set
+ * ## Interface
+ *
+ * - hasMoreResults () : Boolean
+ * - getResults () : de.elo.ix.client.Sord[]
+ * - postProcess (de.elo.ix.client.Sord sord, Object[] results, Object ctx)
+ * - getContext () : Object (optional, can return a prefilled context, if not implemented, the analyzers start with an empty context object)
+ *
+ * # Analyzer
+ *
+ * ## Interface
+ * Responsible for performing the analysis and determining the necessary actions.
+ *
+ * - analyze (de.elo.ix.client.Sord sord, Object ctx) : Object[]
+ *
+ * # Executor
+ * Responsible for executing the actions.
+ *
+ * ## Interface
+ *
+ * - execute (de.elo.ix.client.Sord sord, Object[] results, Object ctx)
+ *
+ * # Inter module dependencies
+ * The object array returned by the analyzer modules `analyze` method will be handed over to the executor modules `execute` method and should therefor contain the needed properties.
+ * The same objects will after execution be handed over to the collector modules `postProcess` method. The executor can enhance the result data further if needed.
+ *
+ * Each module is responsible for ensuring the consistency of the data it gets, because the monitor has no way of knowing, which modules play well together.
+ *
+ * # Module orchestration
+ *
+ * 1. Use `collector.getResults` to collect the first batch of Sord objects
+ * 2. Iterate over batch
+ *   1. Use `analyzer.analyze()` to check each Sord
+ *   2. Use `executor.execute()` to execute potential actions
+ *   3. Use `collector.postProcess()` to perform potential post processing
+ * 3. Repeat from beginning until there are no results left
+ * 4. Cleanup modules via `dispose()`
+ *
+ * # Usage:
+ *
+ *     var nextRunCollector = sol.create(&quot;sol.common_monitoring.as.collectors.NextRunCollector&quot;, { ... });
+ *     var retentionAnalyzer = sol.create(&quot;sol.common_monitoring.as.analyzers.RetentionAnalyzer&quot;, { ... });
+ *     var simpleExecutor = sol.create(&quot;sol.common_monitoring.as.executors.SimpleExecutor&quot;, { ... });
+ *
+ *     var monitor = sol.create(&quot;sol.common_monitoring.as.Monitor&quot;, {
+ *       collector: nextRunCollector,
+ *       analyzer: retentionAnalyzer,
+ *       executor: simpleExecutor
+ *     });
+ *     monitor.run();
+ *     monitor.close();
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.000
+ *
+ * @eloas
+ * @requires sol.commom.DateUtils
+ * @requires sol.common.ObjectUtils
+ */
+sol.define(&quot;sol.common_monitoring.as.Monitor&quot;, {
+
+<span id='sol-common_monitoring-as-Monitor-cfg-requiredConfig'>  requiredConfig: [&quot;collector&quot;, &quot;analyzer&quot;, &quot;executor&quot;],
+</span>
+<span id='sol-common_monitoring-as-Monitor-cfg-collector'>  /**
+</span>   * @cfg {Object} collector The component responsible for collecting the working set
+   */
+
+<span id='sol-common_monitoring-as-Monitor-cfg-analyzer'>  /**
+</span>   * @cfg {Object} analyzer The component responsible for performing the analysis and determining the necessary actions
+   */
+
+<span id='sol-common_monitoring-as-Monitor-cfg-executor'>  /**
+</span>   * @cfg {String} executor The component responsible for executing the actions
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+
+    me.logger.info(&quot;initialize monitor&quot;);
+
+    me.todayIso = sol.common.DateUtils.dateToIso(new Date());
+    me.checkComponents();
+  },
+
+<span id='sol-common_monitoring-as-Monitor-method-checkComponents'>  /**
+</span>   * @private
+   * Checks all components if they implement the correct interface.
+   * @throws InitializationException
+   */
+  checkComponents: function () {
+    var me = this;
+
+    me.logger.debug(&quot;initialize monitor: check component interfaces&quot;);
+
+    me.checkInterface(me.collector, &quot;collector&quot;, [&quot;hasMoreResults&quot;, &quot;getResults&quot;, &quot;postProcess&quot;]);
+    me.checkInterface(me.analyzer, &quot;analyzer&quot;, [&quot;analyze&quot;]);
+    me.checkInterface(me.executor, &quot;executor&quot;, [&quot;execute&quot;]);
+  },
+
+<span id='sol-common_monitoring-as-Monitor-method-checkInterface'>  /**
+</span>   * @private
+   * Checks a component if it implements the correct interface.
+   * @param {Array} component Component
+   * @param {String} name Name
+   * @param {Array} functions Functions
+   * @throws InitializationException
+   */
+  checkInterface: function (component, name, functions) {
+    if (!component) {
+      throw &quot;InitializationException: no &#39;&quot; + name + &quot;&#39; defined&quot;;
+    }
+    if (functions &amp;&amp; (functions.length &gt; 0)) {
+      functions.forEach(function (f) {
+        if (!component[f] || !sol.common.ObjectUtils.isFunction(component[f])) {
+          throw &quot;InitializationException: &#39;&quot; + name + &quot;&#39; has to define a function &#39;&quot; + f + &quot;&#39;&quot;;
+        }
+      });
+    }
+  },
+
+<span id='sol-common_monitoring-as-Monitor-method-disposeComponent'>  /**
+</span>   * @private
+   * Cleans up a component if it defines a `dispose` function.
+   * @param {Object} component The component
+   * @param {String} name The name of the component
+   */
+  disposeComponent: function (component, name) {
+    var me = this;
+    me.logger.debug(&quot;cleanup &quot; + name);
+    if (!component.dispose || !sol.common.ObjectUtils.isFunction(component.dispose)) {
+      me.logger.debug([&quot;component &#39;{0}&#39; does not define a &#39;dispose&#39; function&quot;, name]);
+      return;
+    }
+    try {
+      component.dispose();
+    } catch (ex) {
+      me.logger.error([&quot;error cleaning up &#39;{0}&#39; module&quot;, name], ex);
+    }
+  },
+
+<span id='sol-common_monitoring-as-Monitor-method-run'>  /**
+</span>   * Main method execute the monitor.
+   */
+  run: function () {
+    var me = this,
+        ctx, workingSet, i, max, currentSord, results;
+
+    me.logger.enter(&quot;run&quot;);
+    me.logger.info([&quot;processing start: {0}&quot;, me.todayIso]);
+
+    while (me.collector.hasMoreResults()) {
+      workingSet = me.collector.getResults();
+      me.logger.info([&quot;processing batch: found {0} entries&quot;, workingSet.length]);
+      for (i = 0, max = workingSet.length; i &lt; max; i++) {
+        try {
+          ctx = (sol.common.ObjectUtils.isFunction(me.collector.getContext)) ? me.collector.getContext() : {};
+          currentSord = workingSet[i];
+          me.logger.info([&quot;process sord: objId={0}; name={1}&quot;, currentSord.id, currentSord.name]);
+
+          results = me.analyzer.analyze(currentSord, ctx);
+          me.executor.execute(currentSord, results, ctx);
+          me.collector.postProcess(currentSord, results, ctx);
+        } catch (ex) {
+          me.logger.error([&quot;an error occured while processing sord: objId={0}; name={1}&quot;, currentSord.id, currentSord.name], ex);
+        }
+      }
+    }
+
+    me.logger.exit(&quot;run&quot;);
+  },
+
+<span id='sol-common_monitoring-as-Monitor-method-close'>  /**
+</span>   * This function should be used, to cleanup after using the monitor.
+   */
+  close: function () {
+    var me = this;
+
+    me.disposeComponent(me.collector, &quot;collector&quot;);
+    me.disposeComponent(me.analyzer, &quot;analyzer&quot;);
+    me.disposeComponent(me.executor, &quot;executor&quot;);
+  }
+
+});
+</pre>
+</body>
+</html>

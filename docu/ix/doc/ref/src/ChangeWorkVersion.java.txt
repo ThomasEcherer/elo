@@ -1,0 +1,164 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This example shows how to change the work version for an existing document
+ * 
+ * Checkout document
+ * Checkin document with a new work version
+ *
+ * To reduce the amount of code here this example uses the document created in 
+ * the example Checkin Many Document Versions. The id for this document can be  
+ * obtained from the keywording dialogue in the ELO client, otherwise the document 
+ * can be generated as shown in the previously mentioned example.
+ */
+public class ChangeWorkVersion {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Change the work version 
+            changeActiveVersion();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Change a document objects work version
+    public static void changeActiveVersion() throws RemoteException {
+        
+       // Checkout the document and associated versions
+       // The document used here is the document created in the example: Checkin Many Document Versions
+       // The id can be obtained for the document from the ELO Client
+       // The appropriate id should be entered in the second parameter field
+       EditInfo ed = ix.ix().checkoutDoc("138", "-1", EDIT_INFO.getMbSordDocAtt(), 
+                                        LOCK.getYES());
+       Sord sord = ed.getSord();
+       Document doc = ed.getDocument();
+       System.out.println("Checked out sord with Id: " + sord.getId() + 
+                          " and name: " + sord.getName());
+       // Get document versions
+       DocVersion[] dvAll = doc.getDocs();
+       
+       // Display existing versions
+       int noOfVersions = dvAll.length;
+       int workVersion = displayVersions(dvAll);
+       
+       // Set previous version as work version
+       int newWorkVersion = 0;
+       if (noOfVersions > 1){
+            
+            if (workVersion == (dvAll.length -1)){
+                newWorkVersion = 0;
+            } else {
+                newWorkVersion = (workVersion + 1);
+            }
+            
+       } else {
+            System.out.println("Work version cannot be changed!");
+            newWorkVersion = workVersion;
+       }
+       
+       // Set new work version true and previous work version must be set to false
+       dvAll[newWorkVersion].setWorkVersion(true);
+       dvAll[workVersion].setWorkVersion(false);
+       doc.setDocs(dvAll);
+       
+       // Commit document with checkinDocEnd method.
+       doc = ix.ix().checkinDocEnd(null, null, doc, LOCK.getYES());
+       DocVersion[] dvNew = doc.getDocs();
+       
+       // Display current document versions
+       displayVersions(dvNew);
+      
+       // Delete sord if no longer required
+       // To delete set delete = true
+       boolean delete = false;
+       if (delete == true){
+           
+           DeleteOptions delOpts = new DeleteOptions();
+           delOpts.setDeleteFinally(true);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+           System.out.println("Sord with Id: " + sord.getGuid() + " has been deleted!");
+       }
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Display existing and work versions
+    public static int displayVersions(DocVersion[] dv){
+        int noOfVers = dv.length;
+        int workVersion = 0;
+        for (int i = 0; i < noOfVers; i++){
+           System.out.println("Doc version " + (i + 1) + ", comment = " + dv[i].getComment());
+           if (dv[i].isWorkVersion()){
+               System.out.println("Doc version " + (i + 1) + " is the current work version!");
+               workVersion = i;
+           }
+           
+       } 
+       System.out.println(" ");
+       return workVersion;
+    }
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

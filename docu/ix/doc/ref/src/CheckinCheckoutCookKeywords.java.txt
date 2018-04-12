@@ -1,0 +1,245 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Keyword;
+import de.elo.ix.client.KeywordC;
+import de.elo.ix.client.CounterInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to checkin a new keyword list.
+ * The following keyword tree will be inserted
+ * 
+ * Keyword Tree Example Folder
+ * |
+ * +---Simple Folder
+ * |     +----------------Simple Text 1
+ * |     +----------------Simple Text 2   
+ * +---Special Folder
+ * |     +----------------User name = \"{username}\"
+ * |     +----------------Date = {date}
+ * |
+ * +---Counter = {counterName} = {counter-value}
+ */
+
+public class CheckinCheckoutCookKeywords {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    private static KeywordC KEYWORD;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            checkinCheckoutCook();  
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    public static void checkinCheckoutCook() throws RemoteException {
+        
+        // Specify a counter name to create a keyword that contains a counter value
+        // Note: counters cannot be deleted later on!
+        String counterName = "excnt";
+        
+        String keywordListId = "ELOOUTL1";
+        boolean deleteOnExit = false;
+        
+        // Lock keyword database to avoid concurrent modifications
+        ix.ix().checkoutKeywords(null, KEYWORD.getMbEdit(), -1, LOCK.getYES());
+        System.out.println("Keywords locked");
+        
+        // Create counter if it does not already exist
+        if (counterName.length() > 0){
+            CounterInfo[] counters = ix.ix().checkoutCounters(null, false, LOCK.getNO());
+            boolean found = false;
+            for (int i = 0; i < counters.length && !found; i++){
+                found = counters[i].getName().equals(counterName);
+            }
+            if (!found){
+                CounterInfo counterInfo = new CounterInfo();
+                counterInfo.setName(counterName);
+                counterInfo.setValue(123);
+                ix.ix().checkinCounters(new CounterInfo[] {counterInfo}, LOCK.getNO());
+            }
+        }
+        
+        // Build keyword tree
+        
+        // root keyword
+        Keyword kwRoot = new Keyword();
+        // Set keyword id
+        // NOTE: the maximum length of the id is KEYWORD.getLnRoot()
+        // The id must not contain "."
+        kwRoot.setId(keywordListId);
+        kwRoot.setText("Keyword Tree Example Folder");
+        kwRoot.setChildren(new Keyword[(counterName.length() > 0) ? 3 : 2]);
+        
+        // Simple folder
+        Keyword kwSimpleFolder = kwRoot.getChildren()[0] = new Keyword(); 
+        kwSimpleFolder.setText("Simple Folder");
+        kwSimpleFolder.setChildren(new Keyword[2]);
+        
+        // Simple Text 1
+        kwSimpleFolder.getChildren()[0] = new Keyword();
+        kwSimpleFolder.getChildren()[0].setEnabled(true);
+        kwSimpleFolder.getChildren()[0].setText("Simple Text 1");
+        
+        // Simple Text 2
+        kwSimpleFolder.getChildren()[1] = new Keyword();
+        kwSimpleFolder.getChildren()[1].setEnabled(true);
+        kwSimpleFolder.getChildren()[1].setText("Simple Text 2");
+        
+        // Special Folder
+        Keyword kwSpecialFolder = kwRoot.getChildren()[1] = new Keyword();
+        kwSpecialFolder.setText("Special Folder");
+        kwSpecialFolder.setChildren(new Keyword[2]);
+        
+        // User name
+        kwSpecialFolder.getChildren()[0] = new Keyword();
+        kwSpecialFolder.getChildren()[0].setEnabled(true);
+        kwSpecialFolder.getChildren()[0].setText("User Name = \"" + KEYWORD.getPLACEHOLDER_USER_NAME() + "\"");
+
+        // Date
+        kwSpecialFolder.getChildren()[1] = new Keyword();
+        kwSpecialFolder.getChildren()[1].setEnabled(true);
+        kwSpecialFolder.getChildren()[1].setText("Date = " + KEYWORD.getPLACEHOLDER_DATE());
+
+        // Counter
+        if (counterName.length() > 0){
+            Keyword kwCounter  = kwRoot.getChildren()[2]= new Keyword();
+            kwCounter.setText(counterName + " = " + 
+                              KEYWORD.getPLACEHOLDER_COUNTER_BEGIN() + 
+                              counterName + 
+                              KEYWORD.getPLACEHOLDER_COUNTER_END());
+            kwCounter.setEnabled(true);
+        }
+        
+        // Checkin new keyword list
+        ix.ix().checkinKeywords(new Keyword[] {kwRoot}, LOCK.getNO());
+        
+        // Checkout for editing - placeholders are not substituted
+        // This call could be used to fill a dialogue to edit keywords
+        Keyword kwRootEdit = ix.ix().checkoutKeywords(new String[] {kwRoot.getId()}, KEYWORD.getMbEdit(), -1, LOCK.getNO())[0];
+        System.out.println("Keyword tree for editing:");
+        displayKeywords(kwRootEdit, "    ");
+        
+        // Checkout for to select a keyword - placeholders are substituted - except counter
+        // This call could be used to fill a dialogue to show keywords
+        Keyword kwRootView = ix.ix().checkoutKeywords(new String[] {kwRoot.getId()}, KEYWORD.getMbView(), -1, LOCK.getNO())[0];
+        System.out.println("Keyword tree to select:");
+        displayKeywords(kwRootView, "    ");
+        
+        // If the user selects a keyword for an index value call cookKeyword 
+        // with the keyword id if the keyword is "raw" 
+        // This function substitutes all placeholders and concatinates the 
+        // upper nodes that have specified the "add" option
+        selectKeyword(ix, kwRootView.getChildren()[1].getChildren()[0]);
+        
+        // Select counter keyword five times - counter is being incremented
+        for (int i = 0; i < 5; i++){
+            selectKeyword(ix, kwRootView.getChildren()[2]);
+        }
+        
+        if (deleteOnExit){
+            //Delete keywords and unlock
+            ix.ix().deleteKeywords(new String[] {kwRoot.getId()}, LOCK.getYES());
+        }
+        else {
+            // Unlock
+            ix.ix().checkinKeywords(null, LOCK.getYES());
+        }
+
+    }
+    
+    // Display information for keyword
+    public static void displayKeywords(Keyword kw, String indent){
+        System.out.println(indent + "kw.id = " + kw.getId());
+        System.out.println(indent + "text = " + kw.getText());
+        System.out.println(indent + "add = " + kw.isAdd());
+        System.out.println(indent + "enabled = " + kw.isEnabled());
+        System.out.println(indent + "raw = " + kw.isRaw());
+        System.out.println(indent + "has children = " + (kw.getChildren() != null) + 
+                                    ", #children = " + ((kw.getChildren() != null) ? kw.getChildren().length : 0));
+        
+        if (kw.getChildren() != null){
+            for ( int i = 0; i < kw.getChildren().length; i++){
+                displayKeywords(kw.getChildren()[i], indent + "    ");
+            }
+        }
+    }
+    
+    // This method calls cookKeyword to evaluate the resulting keyword text with 
+    // substituted placeholders and concatinated upper nodes
+    public static String selectKeyword(IXConnection ix, Keyword kw){
+        
+        String keywordText = "";
+        
+        // CookKeyword throws an exception if the keyword is not enabled
+        if (kw.isEnabled()){
+            // cookKeyword only needs to be called for raw keywords
+            if (kw.isRaw()){
+                try{
+                    keywordText = ix.ix().cookKeyword(kw.getId());
+                } catch (RemoteException re){
+                    // ignored
+                } 
+                    
+            } else {
+                keywordText = kw.getText();
+            }
+            System.out.println("Cooked keyword: id = " + kw.getId() + 
+                               ", raw text = " + kw.getText() + 
+                               ", cooked text = " + keywordText);
+        } else {
+            System.out.println("Cannot delete disabled keyword: " + kw.getId());
+        }
+        return keywordText;
+    }
+    
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        LOCK = CONS.getLOCK();
+        KEYWORD = CONS.getKEYWORD();
+
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

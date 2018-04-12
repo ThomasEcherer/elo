@@ -1,0 +1,141 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für LinkSord.
+	/// </summary>
+	public class LinkSord
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// create Sord s1
+				IndexServer.Sord s1 = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+				s1.name = "s1 C# Example LinkSord";
+				s1.id = ix.checkinSord(ci, s1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("s1.id=" + s1.id);
+
+				// create Sord o1
+				IndexServer.Sord o1 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o1.name = "o1";
+				o1.id = ix.checkinSord(ci, o1, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o1.id=" + o1.id);
+
+				// create Sord o2
+				IndexServer.Sord o2 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o2.name = "o2";
+				o2.id = ix.checkinSord(ci, o2, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o2.id=" + o2.id);
+
+				// create Sord o3
+				IndexServer.Sord o3 = ix.createSord(ci, s1.guid, null, CONST.EDIT_INFO.mbSord).sord;
+				o3.name = "o3";
+				o3.id = ix.checkinSord(ci, o3, CONST.SORD.mbAll, CONST.LOCK.NO);
+				Logger.instance().log("o3.id=" + o3.id);
+
+				// Link o1 to o2 and o3 
+				Logger.instance().log("link Sords...");
+				ix.linkSords(ci, o1.guid, new String[] {o2.guid, o3.guid}, CONST.LINK_SORD.NOTHING);
+				Logger.instance().log("link Sords OK");
+
+				// Dump links
+				internalDumpLinks(ix, CONST, ci, o1.guid);
+				internalDumpLinks(ix, CONST, ci, o2.guid);
+				internalDumpLinks(ix, CONST, ci, o3.guid);
+
+				// Delete link o1 -> o2
+				Logger.instance().log("unlink Sords...");
+				ix.unlinkSords(ci, o1.guid, new String[] {o2.guid}, CONST.LINK_SORD.NOTHING);
+				Logger.instance().log("unlink Sords OK");
+
+				// Dump links
+				internalDumpLinks(ix, CONST, ci, o1.guid);
+				internalDumpLinks(ix, CONST, ci, o2.guid);
+				internalDumpLinks(ix, CONST, ci, o3.guid);
+
+				// Delete Sords
+				Logger.instance().log("delete Sords...");
+        IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+        delOpts.deleteFinally = true;
+        ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, null);
+        ix.deleteSord(ci, null, s1.guid, CONST.LOCK.NO, delOpts);
+				Logger.instance().log("delete Sords OK");
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private void internalDumpLinks(IndexServer.IndexServer ix, IndexServer.IXServicePortC CONST, 
+			IndexServer.ClientInfo ci, String guid) 
+		{
+			// Checkout sord to get the new links
+			IndexServer.Sord sord = ix.checkoutSord(ci, guid, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+
+			Logger.instance().log("links of " + sord.name + " {");
+			for (int i = 0; i < sord.linksGoOut.Length; i++) 
+			{
+				IndexServer.Sord linkToSord = ix.checkoutSord(ci, sord.linksGoOut[i].id, 
+					CONST.EDIT_INFO.mbSordLean, CONST.LOCK.NO).sord;
+
+				Logger.instance().log("    ->" + linkToSord.name); // + ", guid=" + sord.linksGoOut[i].id + ", linkId=" + sord.linksGoOut[i].linkId);
+			}
+			for (int i = 0; i < sord.linksComeIn.Length; i++) 
+			{
+				IndexServer.Sord linkFromSord = ix.checkoutSord(ci, sord.linksComeIn[i].id, 
+					CONST.EDIT_INFO.mbSordLean, CONST.LOCK.NO).sord;
+
+				Logger.instance().log("    <-" + linkFromSord.name); // + ", guid=" + sord.linksComeIn[i].id + ", linkId=" + sord.linksComeIn[i].linkId);
+			}
+			Logger.instance().log("}");
+		}
+	}
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+<span id='sol-common-as-ActionBase'>/**
+</span> * @abstract
+ *
+ * Base class for AS actions.
+ *
+ * # Implementation example
+ *
+ * Actions must be provided as DIRECT rules.
+ *
+ *     sol.define(&quot;sol.my.as.actions.MyAction&quot;, {
+ *       extend: &quot;sol.common.as.ActionBase&quot;,
+ *
+ *       requiredConfig: [&quot;objId&quot;],
+ *
+ *       initialize: function (config) {
+ *         var me = this;
+ *         me.$super(&quot;sol.common.ix.ActionBase&quot;, &quot;initialize&quot;, [config]);
+ *         // some other initialization
+ *       },
+ *
+ *       getName: function () {
+ *         return &quot;MyAction&quot;;
+ *       },
+ *
+ *       process: function () {
+ *         // do your stuff
+ *         // add some events / data
+ *       }
+ *     });
+ *
+ *     &lt;ruleset&gt;
+ *       &lt;base&gt;
+ *         ...
+ *       &lt;/base&gt;
+ *       &lt;rule&gt;
+ *         &lt;name&gt;Regel1&lt;/name&gt;
+ *         &lt;condition&gt;&lt;/condition&gt;
+ *         &lt;script&gt;
+ *           sol.common.as.Utils.requiresUserSession(this);
+ *           var myAction = sol.create(&quot;sol.my.MyAction&quot;, {objId: &quot;4711&quot;});
+ *           ruleset.setStatusMessage(myAction.execute());
+ *           sol.common.as.Utils.cleanupUserSession(this);
+ *         &lt;/script&gt;
+ *       &lt;/rule&gt;
+ *     &lt;/ruleset&gt;
+ *
+ * # Executing AS actions from clients
+ *
+ * Actions can be executed thanks to handler implementations in the Java Client and Web Client. Refer to
+ * sol.common.jc.ActionHandler#execute and sol.common.web.ActionHandler#execute for more information.
+ *
+ *     sol.common.jc.ActionHandler.executeAS(&quot;sol.pubsec.as.actions.PrepareDocument&quot;, { ...ELOas config... }, &quot;&quot;, params);
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloas
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.WfUtils
+ */
+sol.define(&quot;sol.common.as.ActionBase&quot;, {
+  extend: &quot;sol.common.ActionBase&quot;,
+
+<span id='sol-common-as-ActionBase-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    if (me.$className === &quot;sol.common.as.ActionBase&quot;) {
+      throw &quot;can not create instance of abstract class &#39;sol.common.as.ActionBase&#39;&quot;;
+    }
+
+    me.$super(&quot;sol.common.ActionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-as-ActionBase-method-getName'>  /**
+</span>   * @abstract
+   * Name of the action. Has to be implemented by subclass.
+   */
+  getName: function () {
+    throw &quot;cannot call &#39;name&#39; of abstract class &#39;sol.common.as.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-as-ActionBase-method-process'>  /**
+</span>   * @abstract
+   * Implementation of the action. Has to be implemented by subclass.
+   */
+  process: function () {
+    throw &quot;cannot call &#39;process&#39; of abstract class &#39;sol.common.as.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-as-ActionBase-method-addActionEvent'>  /**
+</span>   * @protected
+   * @inheritdoc sol.common.ActionBase#addActionEvent
+   */
+  addActionEvent: function (directRule, params, on) {
+    var me = this,
+        eventCfg = { directRule: directRule, params: params, solution: me.solution };
+
+    me._registeredEvents.push(me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.ACTION, eventCfg, on));
+  },
+
+<span id='sol-common-as-ActionBase-method-createEvent'>  /**
+</span>   * @private
+   * @inheritdoc sol.common.ActionBase#createEvent
+   */
+  createEvent: function (type, params, on) {
+    var event = { ID: type, COMPONENT: sol.common.IxUtils.CONST.COMPONENTS.AS, obj: {} },
+        param;
+
+    if (on) {
+      event.ON = on;
+    }
+
+    for (param in params) {
+      if (params.hasOwnProperty(param)) {
+        event.obj[param] = params[param];
+      }
+    }
+
+    return event;
+  }
+
+});
+</pre>
+</body>
+</html>

@@ -1,0 +1,111 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.ReportOptions;
+import de.elo.ix.client.ReportModeC;
+import de.elo.ix.client.ReportErpCode;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how the report options can be viewed
+ * 
+ */
+
+public class ViewReportOptions {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    private static ReportModeC REPORT_MODE;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            viewReportOptions();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void viewReportOptions() throws RemoteException {
+        
+        // Checkout report options
+        ReportOptions reportOptions = ix.ix().checkoutReportOptions(LOCK.getYES());
+        System.out.println("Checked out report options");
+        
+        // Display report mode
+        String strMode = "";
+        if (reportOptions.getMode().getBset() == REPORT_MODE.getNO().getBset()){
+            strMode = "NO";
+        }
+        else if (reportOptions.getMode().getBset() == REPORT_MODE.getLIMITED().getBset()){
+            strMode = "LIMITED";
+        }
+        else if (reportOptions.getMode().getBset() == REPORT_MODE.getVERBOSE().getBset()){
+            strMode = "VERBOSE";
+        }
+        else if (reportOptions.getMode().getBset() == REPORT_MODE.getFULL().getBset()){
+            strMode = "FULL";
+        }
+        // Display mode
+        System.out.println("Mode = " + strMode);
+        
+        // List
+        System.out.println("Report actions:");
+        for (int i = 0; i < reportOptions.getErpCodes().length; i++){
+            ReportErpCode erp = reportOptions.getErpCodes()[i];
+            System.out.println("   id = " + erp.getId() + ", name = " + erp.getName() +
+                               ", verbose = " + erp.isVerbose()+ ", limited = " + erp.isLimited());
+        }
+        
+        // Unlock report data
+        ix.ix().checkinReportOptions(null, LOCK.getYES());
+        System.out.println("Unlocked OK");
+        
+    }
+
+ 
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        LOCK = CONS.getLOCK();
+        REPORT_MODE = CONS.getREPORT_MODE();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

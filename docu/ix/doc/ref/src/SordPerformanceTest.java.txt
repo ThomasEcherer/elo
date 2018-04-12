@@ -1,0 +1,209 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.io.File;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates the performance when creating and reading sords.
+ * 
+ * 100 sords are created in a root folder.
+ * The sords are read
+ * The root folder is locically deleted
+ * The root folder is physically deleted
+ * 
+ */
+
+
+public class SordPerformanceTest {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    private static int noOfSords = 100;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            testPerformance();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } catch (Exception e) {
+            System.out.println(e.toString());
+            
+        }finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static void testPerformance() throws RemoteException, Exception {
+        
+        // Create a root folder
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        sord.setName("Sord Performance Test");
+        sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Sord created with Id: " + sord.getId() + 
+                           " and name: " + sord.getName());
+        
+        // Create 100 Sords
+        String[] guids = new String[noOfSords]; 
+        long startTime = 0;
+        long endTime = 0;
+        long diffMilliSecsCreate = 0;
+        long diffMilliSecsCheckin = 0;
+        
+        startTime = System.currentTimeMillis();
+        for (int i = 0; i < noOfSords; i++){
+            
+            // Initialise an EditInfo object
+            long t1 = System.currentTimeMillis();
+            ed = ix.ix().createDoc(sord.getGuid(), "Email", null, EDIT_INFO.getMbSord());
+            long t2 = System.currentTimeMillis();
+            diffMilliSecsCreate += (t2 - t1);
+            
+            // Add index attributes
+            Sord sordE1 = ed.getSord();
+            sordE1.setName("SordE1." + i);
+            
+            for (int idx = 0; idx < sordE1.getObjKeys().length; idx++){
+                sordE1.getObjKeys()[idx].setData(new String[] {sordE1.getName() + ".idx" + idx});
+            }
+            
+            
+            t1 = System.currentTimeMillis();
+            sordE1.setId(ix.ix().checkinSord(sordE1, SORD.getMbAll(), LOCK.getNO()));
+            t2 = System.currentTimeMillis();
+            diffMilliSecsCheckin += (t2 - t1);
+            
+            guids[i] = sordE1.getGuid();
+            if ((i+1) % 20 ==0){
+                
+                System.out.println("Created " + (i+1) + " from " + noOfSords + " sords");
+            }
+            
+        }
+        
+        endTime = System.currentTimeMillis();
+        
+        // Logger time values
+        logTimeValues("createSord()", diffMilliSecsCreate, noOfSords);
+        logTimeValues("checkinSord()", diffMilliSecsCheckin, noOfSords);
+        logTimeValues("create", (endTime - startTime), noOfSords);
+        
+        // Read 100 Sords
+        startTime = System.currentTimeMillis();
+        for (int i = 0; i < noOfSords; i++){
+            
+            // Read doc
+            
+            ed = ix.ix().checkoutSord(guids[i],  EDIT_INFO.getMbSord(), LOCK.getNO());
+            
+            if ((i+1) % 20 ==0){
+                
+                System.out.println("Read " + (i+1) + " from " + noOfSords + " sords");
+            }
+            
+        }
+        endTime = System.currentTimeMillis();
+        
+        // Logger time values
+        logTimeValues("Read", (endTime - startTime), noOfSords);
+       
+        boolean delete = false;
+        if (delete == true){
+            // Delete root folder logically  - all 100 sords will be deleted
+            System.out.println("Deleting logically!");
+        
+            startTime = System.currentTimeMillis();           
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+            endTime = System.currentTimeMillis();  
+            logTimeValues("logical delete", (endTime - startTime), noOfSords);
+           
+            // Delete root folder physically  - all 100 sords will be deleted  
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            startTime = System.currentTimeMillis();
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+            endTime = System.currentTimeMillis();
+            logTimeValues("physical delete", (endTime - startTime), noOfSords);
+        }
+        
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+   
+   
+    // Make file name and create temp file
+    public static File internalMakeDownloadFile() throws IOException {
+        
+        String tempFile = "Eloix Download";
+        File f = File.createTempFile(tempFile, ".txt");
+        return f;
+    }
+    
+    public static void logTimeValues(String actionName, long diffMilliSecs, int n){
+        
+        double ns100 = 1000L * 1000L * 10;
+        double dDMS = diffMilliSecs;
+        dDMS /= ns100;
+        double secondsPerAction = dDMS /(double)n;
+        double actionsPerSecond = 1.0 / secondsPerAction;
+        System.out.println("Action= " + actionName + ": dt = " + dDMS + " ms");
+        System.out.println("Seconds per action= " + secondsPerAction);
+        System.out.println("Actions per second= " + actionsPerSecond);
+        
+        
+    }    
+        
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

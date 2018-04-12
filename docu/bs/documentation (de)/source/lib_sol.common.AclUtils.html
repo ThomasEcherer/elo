@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// Java includes
+importPackage(Packages.de.elo.ix.client);
+
+// JavaScript includes
+//@include lib_Class.js
+
+<span id='sol-common-AclUtils'>/**
+</span> * Utility functions for ACL processing.
+ *
+ * The functions `addRights` and `removeRights` apply changes to an objects ACL items.
+ * The `restore` function can restore the original rights if needed, and if there was a call to one of the before mentioned functions with a store command.
+ *
+ * ## Function parameters
+ * For examples see {@link sol.common.AclUtils#addRights addRights} and {@link sol.common.AclUtils#removeRights removeRights}
+ *
+ * ### objId
+ * ObjId of the Object which should be edited. If there is a `recursive` command (see config parameter) this is the starting point from which all sub-elements will ne processed.
+ *
+ * ### users (only `addRights` and `removeRights`)
+ * This is an Array with user names or user objects (or a mix of both).
+ * If there are valid usernames specified, only those users ACL items will be altered.
+ * If this contains objects they need to have a `name` property and may have an additional `rights` object. E.g.:
+ *
+ *     {
+ *       users: [
+ *         { name: &quot;AMustermann&quot;, rights: { r: true, w: true } },
+ *         { name: &quot;BMustermann&quot;, rights: { r: true, w: true, d: true } },
+ *         { name: &quot;CMustermann&quot; },   // will get the fallback access rights
+ *         &quot;DMustermann&quot;              // will get the fallback access rights
+ *       ]
+ *     }
+ *
+ * If this parameter is undefined or an empty Array, all existing ACL items will be adjusted.
+ *
+ * ### rights (only `addRights` and `removeRights`)
+ * This Object specifies, which rights should be added/removed.
+ * Both following forms are valid:
+ *
+ *     { r: true, w: true, d: false, e: false, l: false}
+ *     { read: false, write: true, del: true, edit: true, list: true}
+ *
+ * The `addRights` function will add all right, flaged with `true`, while `removeRights` will remove all rights flaged with `true`.
+ *
+ * ### config
+ * This Object contains additional processing information.
+ * Currently the following parameters are supported:
+ *
+ * - recursive: if `true`, all sub-elements will be processed
+ * - storeAcl: Object which defines the store path: `{ type: &quot;MAP&quot;, key: &quot;OLD_ACL&quot; }`. Currently only map fields are supported.
+ * - asAdmin: if `true`, the rights will be altered in admin context.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.UserUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common.AclUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-AclUtils-property-sordZ'>  /**
+</span>   * @private
+   * @property
+   */
+  sordZ: SordC.mbMin,
+
+<span id='sol-common-AclUtils-method-addRights'>  /**
+</span>   * Adds rights to an archive entry/entries.
+   *
+   * The following example grants read and write rights to the users &quot;baum&quot; and &quot;renz&quot; on exactly one object
+   *
+   *     sol.common.AclUtils.addRights(
+   *       &quot;4711&quot;,
+   *       [&quot;baum&quot;, &quot;renz&quot;],
+   *       { r: true, w: true, d: false, e: false, l: false},
+   *       { }
+   *     );
+   *
+   * @param {String} objId The object which should be edited (if config has a `recursive` flag set to `true`, this object will be the starting point)
+   * @param {String[]|Object[]} users If this contains strings, they serve as user names. If it contains objects, they have to contain a `name` property and an `rights` object. If empty, all existing ACL entries will be edited.
+   * @param {Object} rights Object with flags for each right that should be added
+   * @param {Object} config (optional) Additional configuration parameters
+   * @param {Boolean} config.recursive (optional) Process children or not
+   * @param {Object} config.storeAcl (optional) See example
+   * @param {Boolean} config.asAdmin (optional) If `true` and admin context is available it will be used to perform the task
+   */
+  addRights: function (objId, users, rights, config) {
+    var me = this;
+
+    me.logger.enter(&quot;addRights&quot;, arguments);
+    me.editRights(objId, users, rights, config, me.addSordRights);
+    me.logger.exit(&quot;addRights&quot;);
+  },
+
+<span id='sol-common-AclUtils-method-removeRights'>  /**
+</span>   * Removes rights from an archive entry/entries.
+   *
+   * The following example will remove all rights (exept for read) for all users, having access to the object (and all sub-objects)
+   * and store the original right to an map field (OLC_ACL) for a later restore.
+   *
+   *     sol.common.AclUtils.removeRights(
+   *       &quot;4711&quot;,
+   *       [],
+   *       { read: false, write: true, del: true, edit: true, list: true},
+   *       { recursive: true, storeAcl: { type: &quot;MAP&quot;, key: &quot;OLD_ACL&quot; } }
+   *     );
+   *
+   * @param {String} objId The object which should be edited (if config has a `recursive` flag set to `true`, this object will be the starting point)
+   * @param {String[]|Object[]} users If this contains strings, they serve as user names. If it contains objects, they have to contain a `name` property and an `rights` object. If empty, all existing ACL entries will be edited.
+   * @param {Object} rights Object with flags for each right that should be removed
+   * @param {Object} config (optional) Additional configuration parameters
+   * @param {Boolean} config.recursive (optional) Process children or not
+   * @param {Object} config.storeAcl (optional) See example
+   * @param {Boolean} config.asAdmin (optional) If `true` and admin context is available it will be used to perform the task
+   */
+  removeRights: function (objId, users, rights, config) {
+    var me = this;
+
+    me.logger.enter(&quot;removeRights&quot;, arguments);
+    me.editRights(objId, users, rights, config, me.removeSordRights);
+    me.logger.exit(&quot;removeRights&quot;);
+  },
+
+<span id='sol-common-AclUtils-method-restoreRights'>  /**
+</span>   * Restores (saved) rights for an archive entry/entries.
+   *
+   * The following example will restore all rights which where stored to the specified map field.
+   *
+   *     sol.common.AclUtils.restoreRights(
+   *       &quot;4711&quot;,
+   *       { recursive: true, storeAcl: { type: &quot;MAP&quot;, key: &quot;OLD_ACL&quot; } }
+   *     );
+   *
+   * @param {String} objId The object which should be edited (if config has a `recursive` flag set to `true`, this object will be the starting point)
+   * @param {Object} config (optional) Additional configuration parameters
+   * @param {Boolean} config.recursive (optional) Process children or not
+   * @param {Object} config.storeAcl (optional) See example
+   * @param {Boolean} config.asAdmin (optional) If `true` and admin context is available it will be used to perform the task
+   */
+  restoreRights: function (objId, config) {
+    var me = this,
+        elements;
+    me.logger.enter(&quot;restoreRights&quot;, arguments);
+
+    if (config &amp;&amp; config.storeAcl) {
+      elements = me.retrieveElements(objId, config.recursive, config.asAdmin);
+
+      elements.forEach(function (sord) {
+        me.restoreSordRights(sord, config);
+      });
+    }
+    me.logger.exit(&quot;restoreRights&quot;);
+  },
+
+<span id='sol-common-AclUtils-method-editRights'>  /**
+</span>   * @private
+   * @param {String} objId
+   * @param {Array} users
+   * @param {Object} rights
+   * @param {Object} config
+   * @param {Function} combineAclFunction
+   */
+  editRights: function (objId, users, rights, config, combineAclFunction) {
+    var me = this,
+        accessCode, asAdmin, recursive, storeAcl, userAcl, elements;
+
+    accessCode = me.createAccessCode(rights);
+    asAdmin = (config &amp;&amp; config.asAdmin === true) ? true : false;
+    recursive = (config &amp;&amp; config.recursive === true) ? true : false;
+    storeAcl = (config &amp;&amp; config.storeAcl) ? config.storeAcl : null;
+    userAcl = me.retrieveUserAcl(users, accessCode, asAdmin);
+    elements = me.retrieveElements(objId, recursive, asAdmin);
+
+    elements.forEach(function (sord) {
+      me.editSordRights(sord, { combineAclFunction: combineAclFunction, newAclList: userAcl, accessCode: accessCode, storeAcl: storeAcl, asAdmin: asAdmin });
+    });
+  },
+
+<span id='sol-common-AclUtils-method-retrieveUserAcl'>  /**
+</span>   * @private
+   * @param {String[]|Object[]} users If this contains strings, they serve as user names. If it contains objects, they have to contain a `name` property and an `rights` object
+   * @param {Number} accessCode
+   * @param {Boolean} asAdmin
+   * @return {de.elo.ix.client.AclItem[]}
+   */
+  retrieveUserAcl: function (users, accessCode, asAdmin) {
+    var me = this,
+        connection, tmpAccessCode, userNames, userAcl, userInfos, userInfo, i, max;
+
+    connection = ((asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+    tmpAccessCode = null;
+
+    if (users &amp;&amp; users.length &gt; 0) {
+      userAcl = [];
+      userNames = users.map(function (user) {
+        return (user &amp;&amp; user.hasOwnProperty &amp;&amp; user.hasOwnProperty(&quot;name&quot;)) ? user.name : user;
+      });
+
+      userInfos = connection.ix().checkoutUsers(userNames, CheckoutUsersC.BY_IDS, LockC.NO);
+
+      for (i = 0, max = userInfos.length; i &lt; max; i++) {
+        userInfo = userInfos[i];
+        if (users[i] &amp;&amp; users[i].hasOwnProperty &amp;&amp; users[i].hasOwnProperty(&quot;rights&quot;)) {
+          tmpAccessCode = me.createAccessCode(users[i].rights);
+        }
+        userAcl.push(me.createAclItemFromUserInfo(userInfo, tmpAccessCode || accessCode));
+        tmpAccessCode = null;
+      }
+      return userAcl;
+    }
+    return null;
+  },
+
+<span id='sol-common-AclUtils-method-retrieveAndGroupAcl'>  /**
+</span>   * @private
+   * @param {Object} andGroup An and-group definition (see {@link #changeRightsInBackground})
+   * @param {Number} defaultAccessCode
+   * @param {Boolean} asAdmin
+   * @return {de.elo.ix.client.AclItem}
+   */
+  retrieveAndGroupAcl: function (andGroup, defaultAccessCode, asAdmin) {
+    var me = this,
+        connection, groupsAccessCode, groupNames, groupInfos, userInfo, i, max,
+        aclGroupsItem, idNameItem, idNames;
+
+    connection = ((asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+
+    if (andGroup.groups &amp;&amp; (andGroup.groups.length &gt; 1)) {
+      groupNames = andGroup.groups.map(function (group) {
+        return (group &amp;&amp; group.hasOwnProperty &amp;&amp; group.hasOwnProperty(&quot;name&quot;)) ? group.name : group;
+      });
+
+      groupInfos = connection.ix().checkoutUsers(groupNames, CheckoutUsersC.BY_IDS, LockC.NO);
+      if (andGroup.rights) {
+        groupsAccessCode = me.createAccessCode(andGroup.rights);
+      }
+
+      aclGroupsItem = new AclItem();
+      aclGroupsItem.id = groupInfos[0].id;
+      aclGroupsItem.type = AclItemC.TYPE_GROUP;
+      aclGroupsItem.access = groupsAccessCode || defaultAccessCode;
+      idNames = [];
+      for (i = 1, max = groupInfos.length; i &lt; max; i++) {
+        userInfo = groupInfos[i];
+        idNameItem = new IdName();
+        idNameItem.name = String(userInfo.name);
+        idNameItem.guid = String(userInfo.guid);
+        idNameItem.id = String(userInfo.id);
+        idNames.push(idNameItem);
+      }
+      aclGroupsItem.andGroups = idNames;
+      return aclGroupsItem;
+    }
+    return null;
+  },
+
+<span id='sol-common-AclUtils-method-retrieveSordAcl'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Number} accessCode
+   * @return {de.elo.ix.client.AclItem[]}
+   */
+  retrieveSordAcl: function (sord, accessCode) {
+    var me = this,
+        sordAcl, i, aclItem;
+    me.logger.enter(&quot;retrieveSordAcl&quot;, arguments);
+    sordAcl = [];
+
+    if (sord &amp;&amp; (sord instanceof Sord)) {
+      for (i = 0; i &lt; sord.aclItems.length; i++) {
+        aclItem = sord.aclItems[i];
+        sordAcl.push(me.createAclItemFromAcl(aclItem, accessCode));
+      }
+    }
+    me.logger.exit(&quot;retrieveSordAcl&quot;, sordAcl);
+    return sordAcl;
+  },
+
+<span id='sol-common-AclUtils-method-retrieveElements'>  /**
+</span>   * @private
+   * @param {String} objId
+   * @param {Boolean} recursive
+   * @param {Boolean} asAdmin
+   * @return {de.elo.ix.client.Sord[]}
+   */
+  retrieveElements: function (objId, recursive, asAdmin) {
+    var me = this,
+        connection, elements, children, i, max;
+    connection = ((asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+    elements = [];
+
+    elements.push(connection.ix().checkoutSord(objId, me.sordZ, LockC.NO));
+
+    if (recursive === true) {
+      children = sol.common.RepoUtils.findChildren(objId, {
+        includeFolders: true,
+        includeDocuments: true,
+        sordZ: me.sordZ,
+        recursive: true,
+        level: -1
+      }, connection);
+      if (children &amp;&amp; children.length &gt; 0) {
+        for (i = 0, max = children.length; i &lt; max; i++) {
+          elements.push(children[i]);
+        }
+      }
+    }
+    return elements;
+  },
+
+<span id='sol-common-AclUtils-method-addSordRights'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.AclItem[]} oldAclList
+   * @param {de.elo.ix.client.AclItem[]} newAclList
+   * @param {Boolean} asAdmin
+   * @return {de.elo.ix.client.AclItem[]}
+   */
+  addSordRights: function (oldAclList, newAclList, asAdmin) {
+    var connection, _result;
+
+    connection = ((asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+    _result = connection.ix().combineAcl(oldAclList, newAclList, null).sum;
+    return _result;
+  },
+
+<span id='sol-common-AclUtils-method-removeSordRights'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.AclItem[]} oldAclList
+   * @param {de.elo.ix.client.AclItem[]} newAclList
+   * @param {Boolean} asAdmin
+   * @return {de.elo.ix.client.AclItem[]}
+   */
+  removeSordRights: function (oldAclList, newAclList, asAdmin) {
+    var connection, _result;
+
+    connection = ((asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+    _result = connection.ix().combineAcl(oldAclList, newAclList, null).difference;
+    return _result;
+  },
+
+<span id='sol-common-AclUtils-method-editSordRights'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord[]} sord
+   * @param {Object} params
+   */
+  editSordRights: function (sord, params) {
+    var me = this,
+        connection, oldAclList, oldAclString;
+
+    connection = ((params.asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+    oldAclList = sord.aclItems;
+    oldAclString = sord.acl;
+
+    if (params.storeAcl) {
+      switch (params.storeAcl.type) {
+        case &quot;MAP&quot;:
+          connection.ix().checkinMap(MapDomainC.DOMAIN_SORD, sord.id, sord.id, [new KeyValue(params.storeAcl.key, oldAclString)], LockC.NO);
+          break;
+        case &quot;GRP&quot;:
+          throw &quot;store ACL to group is not implemented yet&quot;;
+        default:
+          throw &quot;unkown field type&quot;;
+      }
+    }
+
+    if (!params.newAclList) {
+      params.newAclList = me.retrieveSordAcl(sord, params.accessCode);
+    }
+
+    sord.aclItems = params.combineAclFunction(oldAclList, params.newAclList, params.asAdmin);
+
+    connection.ix().checkinSord(sord, me.sordZ, LockC.NO);
+  },
+
+<span id='sol-common-AclUtils-method-restoreSordRights'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} params
+   */
+  restoreSordRights: function (sord, params) {
+    var me = this,
+        connection, mapItems;
+
+    connection = ((params.asAdmin === true) &amp;&amp; (typeof ixConnectAdmin !== &quot;undefined&quot;)) ? ixConnectAdmin : ixConnect;
+
+    if (params.storeAcl.type === &quot;MAP&quot;) {
+      mapItems = connection.ix().checkoutMap(MapDomainC.DOMAIN_SORD, sord.id, [params.storeAcl.key], LockC.NO).items;
+      if (mapItems &amp;&amp; mapItems.length === 1) {
+        sord.acl = mapItems[0].value;
+        sord.aclItems = null;
+        connection.ix().checkinSord(sord, me.sordZ, LockC.NO);
+        connection.ix().deleteMap(MapDomainC.DOMAIN_SORD, sord.id, [params.storeAcl.key], LockC.NO);
+      }
+    }
+  },
+
+<span id='sol-common-AclUtils-method-createAclItemFromUserInfo'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.UserInfo} userInfo
+   * @param {Number} accessCode
+   * @return {de.elo.ix.client.AclItem}
+   */
+  createAclItemFromUserInfo: function (userInfo, accessCode) {
+    var aclItem;
+
+    aclItem = new AclItem();
+    aclItem.id = userInfo.id;
+    aclItem.type = (userInfo.type == UserInfoC.TYPE_GROUP) ? AclItemC.TYPE_GROUP : AclItemC.TYPE_USER;
+    aclItem.access = accessCode;
+    return aclItem;
+  },
+
+<span id='sol-common-AclUtils-method-createAclItemFromAcl'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.AclItem} aclItem
+   * @param {Number} accessCode
+   * @return {de.elo.ix.client.AclItem}
+   */
+  createAclItemFromAcl: function (aclItem, accessCode) {
+    var me = this,
+        newAclItem;
+    me.logger.enter(&quot;createAclItemFromAcl&quot;, arguments);
+
+    newAclItem = new AclItem();
+    newAclItem.id = aclItem.id;
+    newAclItem.type = aclItem.type;
+    newAclItem.access = accessCode;
+    me.logger.exit(&quot;createAclItemFromAcl&quot;, newAclItem);
+    return newAclItem;
+  },
+
+<span id='sol-common-AclUtils-method-createAccessCode'>  /**
+</span>   * @private
+   * @param {Object} rights
+   * @return {Number}
+   */
+  createAccessCode: function (rights) {
+    var code;
+
+    code = 0;
+    if (!rights) {
+      throw &quot;Rights are empty&quot;;
+    }
+
+    if ((rights.read === true) || (rights.r === true)) {
+      code |= AccessC.LUR_READ;
+    }
+    if ((rights.write === true) || (rights.w === true)) {
+      code |= AccessC.LUR_WRITE;
+    }
+    if ((rights.del === true) || (rights.d === true)) {
+      code |= AccessC.LUR_DELETE;
+    }
+    if ((rights.edit === true) || (rights.e === true)) {
+      code |= AccessC.LUR_EDIT;
+    }
+    if ((rights.list === true) || (rights.l === true)) {
+      code |= AccessC.LUR_LIST;
+    }
+    return code;
+  },
+
+<span id='sol-common-AclUtils-method-changeRightsInBackground'>  /**
+</span>   * Sets or adds the rights by a background IX thread.
+   *
+   * Examples:
+   *
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, { inherit: true, users: [&quot;weiler&quot;, {name: &quot;zipfel&quot;, rights:{r: true, w: true}}], rights: { r: true } });
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, { mode: &quot;SET&quot;, users: [&quot;zipfel&quot;], rights: { r: true } });
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, { mode: &quot;SET&quot;, users: [&quot;weiler&quot;, { name: &quot;zipfel&quot;, rights:{ r: true, w: true } }], rights: { r: true }, andGroups: { groups: [&quot;Pubsec.Registratur&quot;, { name: &quot;Pubsec.Sachbearbeiter&quot; }], rights: { d: true } } });
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, { mode: &quot;ADD&quot;, users: [{ &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;CONTRACT_RESPONSIBLE&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: true, &quot;d&quot;: false, &quot;e&quot;: false, &quot;l&quot;: false } }] });
+   *
+   * Example with and-groups
+   * (sets an and-group with the groups &#39;GroupA&#39;, &#39;GroupB&#39; and the group from the CONTRACT_RESPONSIBLE field with read only,
+   * as well as an and-group with the groups &#39;GroupX&#39; and &#39;GroupY&#39; with write access):
+   *
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, {
+   *       mode: &quot;SET&quot;,
+   *       andGroups: [
+   *         { groups: [&quot;GroupA&quot;, &quot;GroupB&quot;, { type: &quot;GRP&quot;, key: &quot;CONTRACT_RESPONSIBLE&quot; }] },
+   *         { groups: [&quot;GroupX&quot;, &quot;GroupY&quot;], rights: { r: true, w: true } }
+   *       ],
+   *       rights: { r: true } // default rights
+   *     });
+   *
+   * User or group names can be created using handlbars syntax (if the value will be read from an indexfield, that value could also contain handlebars syntax):
+   *
+   *     var jobState = sol.common.AclUtils.changeRightsInBackground(&quot;ARCPATH:/AclTest/Acl1&quot;, {
+   *       mode: &quot;ADD&quot;,
+   *       users: [
+   *         &quot;LEGAL_DEP_{{sord.objKeys.CONTRACT_DEPARTMENT}}&quot;,
+   *         { name: &quot;CONTROLLING_{{sord.objKeys.CONTRACT_DEPARTMENT}}&quot;, rights: { r: true, w: true } }
+   *       ],
+   *       rights: { r: true } // default rights
+   *     });
+   *
+   * @param {String|String[]} objId Object ID of the object which will be changed or an array with start ids where each will be prosessed. If an array of ids is used, the parameter `config.srcObjId` is mandatory.
+   * @param {Object} config Configuration
+   * @param {String} [config.mode=&quot;ADD&quot;] &quot;ADD&quot;, &quot;SET&quot; or &quot;REMOVE&quot; rights
+   * @param {Object} config.inherit Inheritance configuration
+   * @param {Boolean} config.inherit.fromDirectParent Inherit the ACL from the direct parent (default)
+   * @param {Boolean} config.inherit.aclSrcObjId Source object ID for the ACL inheritance
+   * @param {String[]} config.inherit.solutionObjectTypes Solution object types to find the ACL source object in the hierachy
+   * @param {String[]|Object[]} config.users If this contains strings, they serve as user names. If it contains objects, they have to contain a `name` property and an `rights` object
+   * @param {Object[]} config.andGroups An array with and-group definitions
+   * @param {String[]|Object[]} config.andGroups.groups The groups contained in an and-group. Defined in the same way as `config.users` (but without the `rights` property).
+   * If the `groups` array contains less than two entries the that and-group definition will be ignored.
+   * @param {Object[]} config.andGroups.rights The rights of an and-group if deviant from fallback (`config.rights`)
+   * @param {String} config.srcObjId If set, the user configurations will be read from this object instead of `objId`. Only mandatory if `objId` is an array.
+   * @param {Object} config.rights Additional rights, e.g. { read: false, write: true, del: true, edit: true, list: true }
+   * @param {Boolean} [config.recursive=true] If true the ACL of the children will also be changed. Default is true.
+   * @param {Boolean} [config.dontWait=false] Don&#39;t wait for the background process. Default is false (synchronous).
+   * @return {de.elo.ix.client.JobState}
+   */
+  changeRightsInBackground: function (objId, config) {
+    var me = this,
+        logObj = { objId: String(objId), config: config },
+        newAclItems = [],
+        conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect,
+        processObjIds, metadataObjId, defaultAccessCode, jobState;
+
+    me.logger.enter(&quot;changeRightsInBackground&quot;, logObj);
+
+    config = config || {};
+
+    me.checkPreconditions(objId, config);
+
+    processObjIds = (sol.common.ObjectUtils.isArray(objId)) ? objId : [objId];
+    metadataObjId = config.srcObjId || objId;
+
+    me.initializeRights(newAclItems, metadataObjId, config, conn);
+
+    defaultAccessCode = me.createAccessCode(config.rights);
+
+    me.appendInheritedAcl(newAclItems, metadataObjId, config, conn);
+    me.appendUserAcl(newAclItems, metadataObjId, config, defaultAccessCode);
+    me.appendAndGroupAcl(newAclItems, metadataObjId, config, defaultAccessCode);
+
+    if (me.canExecute(config.mode, newAclItems)) {
+      jobState = me.executeBackgroundAclJob(conn, processObjIds, config, newAclItems);
+    } else {
+      jobState = null;
+      me.logger.warn(&quot;no acl items to set/add/remove -&gt; skip processing&quot;);
+    }
+
+    me.logger.exit(&quot;changeRightsInBackground&quot;, jobState);
+
+    return jobState;
+  },
+
+<span id='sol-common-AclUtils-method-checkPreconditions'>  /**
+</span>   * @private
+   * Checks the preconditions and throws an exception if they are not meet.
+   * @param {String|String[]} objId
+   * @param {Object} config
+   */
+  checkPreconditions: function (objId, config) {
+    if (!objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    if (sol.common.ObjectUtils.isArray(objId) &amp;&amp; !config.srcObjId) {
+      throw &quot;If &#39;objId&#39; is configured as array, the config paramater &#39;srcObjId&#39; is mandatory.&quot;;
+    }
+  },
+
+<span id='sol-common-AclUtils-method-initializeRights'>  /**
+</span>   * @private
+   * Checks and nitializes the rights config.
+   * @param {de.elo.ix.client.AclItem[]} newAclItems
+   * @param {String} objId
+   * @param {Object} config
+   * @param {de.elo.ix.client.IXConnection} conn
+   */
+  initializeRights: function (newAclItems, objId, config, conn) {
+    var sord;
+    if (config.mode == &quot;REMOVE&quot;) {
+      config.rights = config.rights || { read: false, write: true, del: true, edit: true, list: true };
+      if (!config.users) {
+        sord = conn.ix().checkoutSord(objId, new SordZ(SordC.mbAclItems), LockC.NO);
+        newAclItems = sord.aclItems;
+      }
+    } else {
+      config.rights = config.rights || { read: true, write: true, del: true, edit: true, list: true };
+      if (!config.users &amp;&amp; !config.andGroups &amp;&amp; !config.inherit) {
+        throw &quot;Users, andGroups or inheritance must be set&quot;;
+      }
+    }
+  },
+
+<span id='sol-common-AclUtils-method-appendInheritedAcl'>  /**
+</span>   * @private
+   * Appends the inherited ACL items to the `newAclItems` array as configured.
+   * @param {de.elo.ix.client.AclItem[]} newAclItems
+   * @param {String} objId
+   * @param {Object} config
+   * @param {de.elo.ix.client.IXConnection} conn
+   */
+  appendInheritedAcl: function (newAclItems, objId, config, conn) {
+    var aclSrcSord, sord, i, aclItem;
+    if (config.inherit) {
+      if (config.inherit.aclSrcObjId) {
+        aclSrcSord = conn.ix().checkoutSord(config.inherit.aclSrcObjId, new SordZ(SordC.mbAclItems), LockC.NO);
+      } else if (config.inherit.solutionObjectTypes) {
+        aclSrcSord = sol.common.RepoUtils.findObjectTypeInHierarchy(objId, config.inherit.solutionObjectTypes, { connection: conn });
+      } else {
+        sord = conn.ix().checkoutSord(objId, SordC.mbMin, LockC.NO);
+        aclSrcSord = conn.ix().checkoutSord(sord.parentId, new SordZ(SordC.mbAclItems), LockC.NO);
+      }
+
+      for (i = 0; i &lt; aclSrcSord.aclItems.length; i++) {
+        aclItem = aclSrcSord.aclItems[i];
+        newAclItems.push(aclItem);
+      }
+    }
+  },
+
+<span id='sol-common-AclUtils-method-appendUserAcl'>  /**
+</span>   * @private
+   * Appends the user ACL items to the `newAclItems` array as configured.
+   * @param {de.elo.ix.client.AclItem[]} newAclItems
+   * @param {String} objId
+   * @param {Object} config
+   * @param {Number} defaultAccessCode
+   */
+  appendUserAcl: function (newAclItems, objId, config, defaultAccessCode) {
+    var me = this,
+        users, userAcls;
+    users = me.preprocessUsers(objId, config.users);
+    userAcls = me.retrieveUserAcl(users, defaultAccessCode);
+    if (userAcls) {
+      userAcls.forEach(function (userAcl) {
+        newAclItems.push(userAcl);
+      });
+    }
+  },
+
+<span id='sol-common-AclUtils-method-appendAndGroupAcl'>  /**
+</span>   * @private
+   * Appends the and-group ACL items to the `newAclItems` array as configured.
+   * @param {de.elo.ix.client.AclItem[]} newAclItems
+   * @param {String} objId
+   * @param {Object} config
+   * @param {Number} defaultAccessCode
+   */
+  appendAndGroupAcl: function (newAclItems, objId, config, defaultAccessCode) {
+    var me = this;
+    if (config.andGroups &amp;&amp; (config.andGroups.length &gt; 0)) {
+      config.andGroups.forEach(function (andGroup) {
+        var andGroupAcl;
+        andGroup.groups = me.preprocessUsers(objId, andGroup.groups);
+        andGroupAcl = me.retrieveAndGroupAcl(andGroup, defaultAccessCode);
+        if (andGroupAcl) {
+          newAclItems.push(andGroupAcl);
+        }
+      });
+    }
+  },
+
+<span id='sol-common-AclUtils-method-canExecute'>  /**
+</span>   * @private
+   * Checks, if the background processing should be executed.
+   *
+   * If mode is `SET` or `REPLACE` this always returns `true`, else it checks if there are acl items.
+   * @param {String} mode
+   * @param {Object[]} aclItems
+   * @return {Boolean}
+   */
+  canExecute: function (mode, aclItems) {
+    if ((mode == &quot;SET&quot;) || (mode == &quot;REPLACE&quot;)) {
+      return true;
+    }
+
+    return aclItems &amp;&amp; (aclItems.length &gt; 0);
+  },
+
+<span id='sol-common-AclUtils-method-executeBackgroundAclJob'>  /**
+</span>   * @private
+   * Executes the background processing of the rights.
+   * @param {de.elo.ix.client.IXConnection} conn
+   * @param {String[]} startIds
+   * @param {Object} config
+   * @param {de.elo.ix.client.AclItem[]} newAclItems
+   * @return {de.elo.ix.client.JobState}
+   */
+  executeBackgroundAclJob: function (conn, startIds, config, newAclItems) {
+    var me = this,
+        procInfo, navInfo, jobState;
+
+    me.logger.enter(&quot;executeBackgroundAclJob&quot;);
+
+    procInfo = new ProcessInfo();
+    procInfo.desc = (config.mode || &quot;ADD&quot;) + &quot; ACL&quot;;
+    procInfo.errorMode = ProcessInfoC.ERRORMODE_SKIP_PROCINFO;
+    procInfo.procAcl = new ProcessAcl();
+
+    if ((config.mode == &quot;SET&quot;) || (config.mode == &quot;REPLACE&quot;)) {
+      procInfo.procAcl.setAclItems = newAclItems;
+    } else if (config.mode == &quot;REMOVE&quot;) {
+      procInfo.procAcl.subAclItems = newAclItems;
+    } else {
+      procInfo.procAcl.addAclItems = newAclItems;
+    }
+
+    navInfo = new NavigationInfo();
+    navInfo.startIDs = startIds;
+    navInfo.maxDepth = (config.recursive === false) ? 1 : 0;
+
+    jobState = conn.ix().processTrees(navInfo, procInfo);
+
+    if (!config.dontWait) {
+      jobState = sol.common.AsyncUtils.waitForJob(jobState.jobGuid, { connection: conn });
+    }
+
+    me.logger.exit(&quot;executeBackgroundAclJob&quot;, jobState);
+
+    return jobState;
+  },
+
+<span id='sol-common-AclUtils-method-preprocessUsers'>  /**
+</span>   * Preprocesses users.
+   * Retrieves user names from index fields.
+   * If a user name or the retrieved value contains handlebars syntax, the sord will be applied to that string.
+   * @param {String} objId Object ID
+   * @param {String[]|Number[]|Object[]} users Array of user defintions. all Types can be mixed.
+   * @return {Object[]}
+   *
+   * # Example of the parameter &#39;users&#39;:
+   *     [
+   *       &quot;mustermannm&quot;,
+   *       23,
+   *       { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;CONTRACT_RESPONSIBLE&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: true, &quot;d&quot;: false, &quot;e&quot;: false, &quot;l&quot;: false } },
+   *       { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;CONTRACT_DEPARTMENT&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: true, &quot;d&quot;: false, &quot;e&quot;: false, &quot;l&quot;: false } },
+   *       { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;CONTRACT_PROCUREMENT&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: true, &quot;d&quot;: false, &quot;e&quot;: false, &quot;l&quot;: false } },
+   *       { &quot;name&quot;: &quot;LEGAL_DEP_{{sord.objKeys.CONTRACT_DEPARTMENT}}&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: false, &quot;d&quot;: false, &quot;e&quot;: false, &quot;l&quot;: false } }
+   *     ]
+   */
+  preprocessUsers: function (objId, users) {
+    var me = this,
+        ctxSord = { objId: objId },
+        conn, userCfgs;
+
+    conn = (typeof ixConnectAdmin !== &quot;undefined&quot;) ? ixConnectAdmin : ixConnect;
+
+    userCfgs = [];
+    if (users &amp;&amp; (users.length &gt; 0)) {
+      users = JSON.parse(sol.common.JsonUtils.stringifyAll(users));
+      users.forEach(function (user) {
+        var userNames, userInfos, sord;
+        if (sol.common.ObjectUtils.isString(user) || sol.common.ObjectUtils.isNumber(user)) {
+          user = me.replaceUserNamePlaceholders(String(user), ctxSord, conn);
+          userCfgs.push(user);
+        } else if (!user.name &amp;&amp; user.type &amp;&amp; user.key) {
+          try {
+            sord = me.enrichContextSord(ctxSord, false, conn).sord;
+            userNames = sol.common.SordUtils.getValues(sord, user);
+            userInfos = ixConnect.ix().checkoutUsers(userNames, CheckoutUsersC.BY_IDS, LockC.NO);
+
+            if (userInfos &amp;&amp; (userInfos.length &gt; 0)) {
+              userInfos.forEach(function (userInfo) {
+                var tmpUser = JSON.parse(sol.common.JsonUtils.stringifyAll(user)); // copy current user configuration for each user in the list
+                tmpUser.name = me.replaceUserNamePlaceholders(userInfo.name, ctxSord, conn);
+                userCfgs.push(tmpUser);
+              });
+            }
+          } catch (ignore) {
+            me.logger.debug(&quot;error determining user(s)&quot;, ignore);
+          }
+        } else {
+          user.name = me.replaceUserNamePlaceholders(user.name, ctxSord, conn);
+          userCfgs.push(user);
+        }
+      });
+      return userCfgs;
+    }
+  },
+
+<span id='sol-common-AclUtils-method-replaceUserNamePlaceholders'>  /**
+</span>   * @private
+   * Replace user name place holders:
+   *
+   * - If `userName` equals &#39;$CURRENTUSER&#39; the current session user will be used.
+   * - If `username` contains handlebars syntax, the sord will be applied to it
+   *
+   * @param {String} userName
+   * @param {Object} ctxSord (optional) only used if `userName` contains handlebars syntax
+   * @param {de.elo.ix.client.IXConnection} conn (optional) only used if `userName` contains handlebars syntax
+   * @return {String} Username
+   */
+  replaceUserNamePlaceholders: function (userName, ctxSord, conn) {
+    var me = this,
+        tplSord;
+    if (userName == &quot;$CURRENTUSER&quot;) {
+      return String(ixConnect.loginResult.user.name);
+    }
+    if (userName.indexOf(&quot;{{&quot;) &gt; -1) {
+      tplSord = me.enrichContextSord(ctxSord, true, conn).tplSord;
+      return sol.create(&quot;sol.common.Template&quot;, { source: userName }).apply(tplSord);
+    }
+    return userName;
+  },
+
+<span id='sol-common-AclUtils-method-enrichContextSord'>  /**
+</span>   * @private
+   * Prefills the context object with sord and if requested with a template sord.
+   * @param {Object} ctxSord
+   * @param {Boolean} inclTplSord
+   * @param {de.elo.ix.client.IXConnection} conn
+   * @return {Object} The ctxSord itself after enrichment
+   */
+  enrichContextSord: function (ctxSord, inclTplSord, conn) {
+    if (!ctxSord.sord) {
+      if (!ctxSord.objId) {
+        throw &quot;Object ID is empty&quot;;
+      }
+      ctxSord.sord = conn.ix().checkoutSord(ctxSord.objId, SordC.mbAllIndex, LockC.NO);
+    }
+    if (inclTplSord &amp;&amp; !ctxSord.tplSord) {
+      ctxSord.tplSord = sol.common.SordUtils.getTemplateSord(ctxSord.sord);
+    }
+    return ctxSord;
+  },
+
+<span id='sol-common-AclUtils-method-containsSessionUserAndhasEffectiveRights'>  /**
+</span>   * Checks wether the users object contains the session user und the session user has already the effective rights
+   * @param {Object} rightsConfig Rights configuration
+   * @param {String} rightsConfig.objId Object ID
+   * @param {Object} rightsConfig.rights Rights
+   * @return {Boolean}
+   */
+  containsSessionUserAndhasEffectiveRights: function (rightsConfig) {
+    var me = this,
+        currUserName, effectiveRights;
+
+    if (rightsConfig &amp;&amp; rightsConfig.objId &amp;&amp; rightsConfig.rights &amp;&amp; rightsConfig.users &amp;&amp; (rightsConfig.users.length == 1) &amp;&amp; sol.common.ObjectUtils.isString(rightsConfig.users[0])) {
+      currUserName = ixConnect.loginResult.user.name;
+      if (rightsConfig.users[0] == currUserName) {
+        effectiveRights = me.hasEffectiveRights(rightsConfig.objId, rightsConfig.rights);
+        return effectiveRights;
+      }
+    }
+
+    return false;
+  },
+
+<span id='sol-common-AclUtils-method-hasEffectiveRights'>  /**
+</span>   * Checks wether the current user has effective rights
+   * @param {String|de.elo.ix.client.Sord} sord Object ID or Sord
+   * @param {Object} params Parameters
+   * @param {Object} params.rights Rights
+   * @return {Boolean}
+   */
+  hasEffectiveRights: function (sord, params) {
+    var me = this,
+        hasRights = false,
+        aclAccessInfo, aclAccessResult, accessCode;
+
+    if (!sord) {
+      throw &quot;Object ID is empty&quot;;
+    }
+
+    params = params || {};
+    params.rights = params.rights || { r: true, w: true, d: true, e: true, l: true };
+
+    try {
+      if (!(sord instanceof Sord) || !sord.aclItems) {
+        sord = ixConnect.ix().checkoutSord(sord, new SordZ(SordC.mbAclItems), LockC.NO);
+      }
+
+      aclAccessInfo = new AclAccessInfo();
+      aclAccessInfo.aclItems = sord.aclItems;
+
+      aclAccessResult = ixConnect.ix().getAclAccess(aclAccessInfo);
+      accessCode = aclAccessResult.access;
+
+      hasRights = me.containsRights(accessCode, params.rights);
+    } catch (ignore) {
+      // ignore
+    }
+
+    return hasRights;
+  },
+
+<span id='sol-common-AclUtils-property-accessCodes'>  accessCodes: {
+</span>    r: AccessC.LUR_READ,
+    read: AccessC.LUR_READ,
+    w: AccessC.LUR_WRITE,
+    write: AccessC.LUR_WRITE,
+    d: AccessC.LUR_DELETE,
+    del: AccessC.LUR_DELETE,
+    e: AccessC.LUR_EDIT,
+    edit: AccessC.LUR_EDIT,
+    l: AccessC.LUR_LIST,
+    list: AccessC.LUR_LIST
+  },
+
+<span id='sol-common-AclUtils-method-containsRights'>  /**
+</span>   * Checks wether the access code contains the requested rights
+   * @param {Number} accessCode Access code
+   * @param {Object} rights Rights
+   * @return {Boolean}
+   */
+  containsRights: function (accessCode, rights) {
+    var me = this,
+        rightKey, accessFlag;
+
+    if (!accessCode || !rights) {
+      return true;
+    }
+
+    for (rightKey in rights) {
+      if (rights.hasOwnProperty(rightKey)) {
+        accessFlag = me.accessCodes[rightKey];
+        if (accessFlag &amp;&amp; ((accessCode &amp; accessFlag) == 0)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+});
+</pre>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.Blackening&quot; });
+
+<span id='sol-common-ix-functions-Blackening'>/**
+</span> * Imprints annotated areas for blackening into a document.
+ *
+ * &lt;b&gt;Please note&lt;/b&gt; that if blackening should be done irreversible &lt;b&gt;version control must be disabled&lt;/b&gt;.
+ *
+ * If a user is set in the configuration, this user will be used to determine which blackening annotations should be imprinted;
+ * If no user is defined, all ACL will be removed from the blackening annotations, which lead to the result that all blackening annotations will be imprinted.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;user&quot;: &quot;blacky&quot;,
+ *       &quot;force&quot;: true
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_ix_Blackening&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       user: &quot;blacky&quot;,
+ *       force: true
+ *     });
+ *
+ * # Prerequisites
+ *
+ * Blackening only supports documents. If function is called from a workflow which is based on a document, nothing can be blacked.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.Blackening&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-Blackening-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-Blackening-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   */
+
+<span id='sol-common-ix-functions-Blackening-cfg-user'>  /** @cfg {string} user
+</span>   * if a user is set, this user will be used, to determine, which blackening annotations should be imprinted;
+   * if no user is defined, all ACL will be removed from the blackening annotations -&gt; all annotations will be imprinted
+   */
+  user: undefined,
+
+<span id='sol-common-ix-functions-Blackening-cfg-force'>  /** @cfg {Boolean} [force=false]
+</span>   * if true, the imprint will be forced, even if the object is locked
+   */
+  force: false,
+
+<span id='sol-common-ix-functions-Blackening-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-Blackening-method-process'>  /**
+</span>   * Imprint the blackening annotations
+   */
+  process: function () {
+    var me = this,
+        lockZ, ed, blackeningConn, inputStream, data;
+
+    lockZ = me.force ? LockC.FORCE : LockC.NO;
+
+    if (me.user) {
+      blackeningConn = ixConnectAdmin.createConnectionForUser(me.user);
+    } else {
+      me.removeBlackeningNoteAcl(me.objId);
+      blackeningConn = ixConnectAdmin;
+    }
+
+    ed = blackeningConn.ix().checkoutDoc(me.objId, null, EditInfoC.mbSordDoc, lockZ);
+
+    if (!me.isDocument(ed.sord)) {
+      me.logger.warn(&quot;blackening can only be used on documents&quot;);
+      return;
+    }
+
+    inputStream = blackeningConn.download(ed.document.docs[0].url, 0, -1);
+    data = me.byteArrayFromStream(inputStream);
+
+    ed.document = blackeningConn.ix().checkinDocBegin(ed.document);
+    ed.document.docs[0].uploadResult = blackeningConn.upload(ed.document.docs[0].url, new ByteArrayInputStream(data), data.length, ed.document.docs[0].contentType);
+    ed.document = blackeningConn.ix().checkinDocEnd(ed.sord, SordC.mbAll, ed.document, lockZ);
+
+    inputStream.close();
+  },
+
+<span id='sol-common-ix-functions-Blackening-method-isDocument'>  isDocument: function (sord) {
+</span>    return sord &amp;&amp; (sord.type &gt;= SordC.LBT_DOCUMENT) &amp;&amp; (sord.type &lt;= SordC.LBT_DOCUMENT_MAX);
+  },
+
+<span id='sol-common-ix-functions-Blackening-method-byteArrayFromStream'>  byteArrayFromStream: function (inputStream) {
+</span>    var baos = new ByteArrayOutputStream(),
+        reads = inputStream.read(),
+        data;
+
+    while (reads != -1) {
+      baos.write(reads);
+      reads = inputStream.read();
+    }
+
+    data = baos.toByteArray();
+
+    baos.close();
+
+    return data;
+  },
+
+<span id='sol-common-ix-functions-Blackening-method-removeBlackeningNoteAcl'>  removeBlackeningNoteAcl: function (objId) {
+</span>    var notes = ixConnectAdmin.ix().checkoutNotes(objId, null, NoteC.mbAll, LockC.NO),
+        changed = [];
+
+    notes.forEach(function (note) {
+      if (note.type == NoteC.TYPE_ANNOTATION_MARKER) {
+        note.aclItems = [];
+        changed.push(note);
+      }
+    });
+
+    if (changed.length &gt; 0) {
+      ixConnectAdmin.ix().checkinNotes(objId, changed, NoteC.mbAll, LockC.NO);
+    }
+  }
+});
+
+
+<span id='sol-common-ix-functions-Blackening-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.Blackening
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_Blackening&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.Blackening&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Blackening&quot;);
+}
+
+
+<span id='sol-common-ix-functions-Blackening-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.Blackening
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_Blackening&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.Blackening&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_Blackening&quot;);
+}
+
+
+<span id='sol-common-ix-functions-Blackening-static-method-RF_sol_function_Blackening'>/**
+</span> * @member sol.common.ix.functions.Blackening
+ * @method RF_sol_function_Blackening
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_Blackening(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_function_Blackening&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.Blackening&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_Blackening&quot;);
+}
+</pre>
+</body>
+</html>

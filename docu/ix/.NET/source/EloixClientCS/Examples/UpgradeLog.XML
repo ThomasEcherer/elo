@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="Examples">
+</Property><Property Name="Solution File" Value="D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Examples.sln">
+</Property><Property Name="User Options File" Value="D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Examples.suo">
+</Property><Property Name="Date" Value="Freitag, 10. Februar 2006">
+</Property><Property Name="Time" Value="15:02">
+</Property></Properties><Event ErrorLevel="0" Project="" Source="Examples.sln" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Examples.sln">
+</Event><Event ErrorLevel="0" Project="" Source="Examples.suo" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Examples.suo">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Examples.csproj" Description="Project file successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Examples.csproj">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Examples.csproj.user" Description="Project user file successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Examples.csproj.user">
+</Event><Event ErrorLevel="0" Project="Examples" Source="AssemblyInfo.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\AssemblyInfo.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ChangeSordMask.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ChangeSordMask.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinAttachment.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinAttachment.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinKeywords.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinKeywords.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinManyDocVersions.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinManyDocVersions.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinNewDocAndSig.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinNewDocAndSig.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinNewDocument.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinNewDocument.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinNewDocVersion.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinNewDocVersion.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinOutSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinOutSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckinSordTypes.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckinSordTypes.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckoutAndUnlock.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckoutAndUnlock.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckoutByArcPath.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckoutByArcPath.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CheckoutByIndex.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CheckoutByIndex.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CopySord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CopySord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CreateDeleteKeys.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CreateDeleteKeys.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CreateDeleteUser.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CreateDeleteUser.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CreateSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CreateSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="CreateStorageMask.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\CreateStorageMask.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="DeleteSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\DeleteSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="DocPerformance.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\DocPerformance.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="DocPerformance2.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\DocPerformance2.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="DocPerformanceSmall.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\DocPerformanceSmall.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindAll.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindAll.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindByIndexRange.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindByIndexRange.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindByIndexValues.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindByIndexValues.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindChildren.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindChildren.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindFirstFindNext.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindFirstFindNext.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="FindReport.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\FindReport.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Form1.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Form1.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="IXClient.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\IXClient.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="LinkSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\LinkSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ListBasicData.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ListBasicData.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ListUserNames.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ListUserNames.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ListWorkFlowNodes.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ListWorkFlowNodes.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ListWorkFlows.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ListWorkFlows.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="LockArchive.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\LockArchive.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Logger.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Logger.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="MoveSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\MoveSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ReportOptions.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ReportOptions.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SelectKeyword.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SelectKeyword.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SelectKeywordDlg.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SelectKeywordDlg.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SingleSignOnLogin.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SingleSignOnLogin.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SordACL.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SordACL.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SordPerformance.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SordPerformance.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="StandardLogin.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\StandardLogin.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="StartAdhocWorkFlow.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\StartAdhocWorkFlow.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ViewAndEditSord.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ViewAndEditSord.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ViewAndEditSordDlg.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ViewAndEditSordDlg.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ViewUserRights.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ViewUserRights.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Web References\IndexServer\Reference.cs" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Web References\IndexServer\Reference.cs">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Web References\IndexServer\IndexServer.wsdl" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Web References\IndexServer\IndexServer.wsdl">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Web References\IndexServer\Reference.map" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Web References\IndexServer\Reference.map">
+</Event><Event ErrorLevel="0" Project="Examples" Source="App.ico" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\App.ico">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Form1.resx" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\Form1.resx">
+</Event><Event ErrorLevel="0" Project="Examples" Source="SelectKeywordDlg.resx" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\SelectKeywordDlg.resx">
+</Event><Event ErrorLevel="0" Project="Examples" Source="ViewAndEditSordDlg.resx" Description="File successfully backed up as D:\java\projekt\IndexServer\Eloix-C#-Examples\Examples\Backup\ViewAndEditSordDlg.resx">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Examples.csproj" Description="Project converted successfully">
+</Event><Event ErrorLevel="3" Project="Examples" Source="Examples.csproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="" Source="Examples.sln" Description="Solution converted successfully">
+</Event><Event ErrorLevel="3" Project="" Source="Examples.sln" Description="Converted">
+</Event><Event ErrorLevel="0" Project="Examples" Source="Examples.csproj" Description="Scan complete: Upgrade not required for project files.">
+</Event></UpgradeLog>

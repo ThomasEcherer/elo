@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-ix-DynKwlUtils'>/**
+</span> * Helper function for dynamic keyword lists
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ */
+sol.define(&quot;sol.common.ix.DynKwlUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-ix-DynKwlUtils-method-fillSord'>  /**
+</span>   * Fills the object keys of an ELO object by a dynamic keyword list
+   * @param {de.elo.ix.client.Sord} sord ELO object
+   * @param {String} focusedFieldName Field name of the queried field
+   * @param {Object} params (optional)
+   * @param {Boolean} [params.ignoreMissingFields=false] (optional) If `true` missing fields on the mask will be ignored (therefore no exception will be thrown)
+   * @return {Boolean} True if the sord has been changed
+   */
+  fillSord: function (sord, focusedFieldName, params) {
+    var sordChanged = false,
+        keywordsDynamicInfo = new KeywordsDynamicInfo(),
+        keywordsDynamicResult, keyIterator, valueIterator, key, value;
+    keywordsDynamicInfo.sord = sord;
+    keywordsDynamicInfo.maskLineFocus = sol.common.SordUtils.getDocMaskLine(sord.maskName, focusedFieldName);
+    keywordsDynamicResult = ixConnect.ix().checkoutKeywordsDynamic(keywordsDynamicInfo);
+    if (keywordsDynamicResult.table.size() != 1) {
+      return;
+    }
+    keyIterator = keywordsDynamicResult.keyNames.iterator();
+    valueIterator = keywordsDynamicResult.table.iterator().next().iterator();
+    while (keyIterator.hasNext()) {
+      key = keyIterator.next();
+      value = valueIterator.next();
+      if (key &amp;&amp; (key.indexOf(&quot;$&quot;) !== 0)) {
+        try {
+          sol.common.SordUtils.setObjKeyValue(sord, key, value);
+          sordChanged = true;
+        } catch (ex) {
+          if (!params || !params.ignoreMissingFields) {
+            throw ex;
+          }
+        }
+
+      }
+    }
+    return sordChanged;
+  },
+
+<span id='sol-common-ix-DynKwlUtils-method-fillMap'>  /**
+</span>   * Fills the map fields and object keys of an ELO object by a dynamic keyword list
+   * @param {Object} map Input data
+   * @param {de.elo.ix.client.Sord} sord ELO object
+   * @param {String} focusedFieldName Field name of the queried field
+   * @param {String} scriptName Name of the dynamic keyword list script
+   * @param {Object} params Parameters
+   * @param {Boolean} [params.append=false] Append lines
+   */
+  fillMap: function (map, sord, focusedFieldName, scriptName, params) {
+    var mapKeys = [],
+        keywordsDynamicInfo, keywordsDynamicResult, keyValues, linesIterator, keyIterator, valueIterator, key, i, value,
+        sordMap, sordMapTable;
+
+    keywordsDynamicInfo = new KeywordsDynamicInfo();
+
+    params = params || {};
+    map = map || {};
+
+    if (sord) {
+      sol.common.ObjectUtils.forEach(sord.objKeys, function (objKey) {
+        map[objKey.name] = (objKey.data &amp;&amp; (objKey.data.length &gt; 0)) ? objKey.data[0] : &quot;&quot;;
+      }, this);
+    }
+    keywordsDynamicInfo.mapData = map;
+    keywordsDynamicInfo.mapLineFocus = focusedFieldName;
+    keywordsDynamicInfo.mapScriptName = scriptName;
+    keywordsDynamicResult = ixConnect.ix().checkoutKeywordsDynamic(keywordsDynamicInfo);
+    keyValues = [];
+    linesIterator = keywordsDynamicResult.table.iterator();
+
+    if (params.append) {
+      keyIterator = keywordsDynamicResult.keyNames.iterator();
+      while (keyIterator.hasNext()) {
+        key = keyIterator.next() + &quot;&quot;;
+        if ((key.indexOf(&quot;IX_MAP_&quot;) == 0) || (key.indexOf(&quot;IX_GRP_&quot;) == 0)) {
+          key = key.substring(7);
+        }
+        key = key.replace(&quot;{i}&quot;, &quot;&quot;);
+        mapKeys.push(key);
+      }
+      sordMap = sol.create(&quot;sol.common.SordMap&quot;, { objId: sord.id });
+      sordMapTable = sol.create(&quot;sol.common.MapTable&quot;, { map: sordMap, columnNames: mapKeys });
+      i = sordMapTable.getLength();
+    } else {
+      i = 0;
+    }
+
+    while (linesIterator.hasNext()) {
+      i++;
+      keyIterator = keywordsDynamicResult.keyNames.iterator();
+      valueIterator = linesIterator.next().iterator();
+      while (keyIterator.hasNext()) {
+        key = keyIterator.next();
+        value = valueIterator.next();
+        if (key.startsWith(&quot;IX_MAP_&quot;)) {
+          key = key.substring(7);
+          key = key.replace(&quot;{i}&quot;, String(i));
+          keyValues.push(new KeyValue(key, value));
+        } else {
+          if (key.startsWith(&quot;IX_GRP_&quot;)) {
+            key = key.substring(7);
+          }
+          sol.common.SordUtils.setObjKeyValue(sord, key, value);
+        }
+      }
+    }
+    if (keyValues.length &gt; 0) {
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, sord.id, sord.id, keyValues, LockC.NO);
+    }
+  }
+});
+
+
+<span id='sol-common-ix-DynKwlMixin'>/**
+</span> * Helper functions for the dynamic keywordlist iterators.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ */
+sol.define(&quot;sol.common.ix.DynKwlMixin&quot;, {
+<span id='sol-common-ix-DynKwlMixin-property-mixin'>  mixin: true,
+</span>
+<span id='sol-common-ix-DynKwlMixin-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.tableKeyNames_default = config.tableKeyNames_default || me.tableKeyNames_default;
+    me.tableKeyNames_configOverride = config.tableKeyNames_configOverride || me.tableKeyNames_configOverride;
+
+    me.formatting = config.formatting || me.formatting;
+  },
+
+<span id='sol-common-ix-DynKwlMixin-method-getTableKeyNames'>  /**
+</span>   * @protected
+   * Determines the table keys for the output of the dynamic kwl.
+   * @param {String} focusFieldName
+   * @return {String[]}
+   */
+  getTableKeyNames: function (focusFieldName) {
+    var me = this,
+        tableKeyNames;
+
+    if (typeof me.tableKeyNames === &quot;function&quot;) {
+      me.log.debug([&quot;Determine table key names by function. FucusFieldName=&#39;{0}&#39;, DefaultConfig=&#39;{1}&#39; OverrideConfig=&#39;{2}&#39;&quot;, focusFieldName, JSON.stringify(me.tableKeyNames_default), JSON.stringify(me.tableKeyNames_configOverride)]);
+      tableKeyNames = me.tableKeyNames.call(me, focusFieldName, (me.tableKeyNames_default || &quot;No default configuration&quot;), (me.tableKeyNames_configOverride || {}));
+    } else {
+      tableKeyNames = me.tableKeyNames;
+    }
+
+    if (!tableKeyNames) {
+      me.log.warn([&quot;Can not determine &#39;tableKeyNames&#39; in class &#39;{0}&#39;&quot;, me.$className]);
+    }
+
+    me.log.debug([&quot;tableKeyNames=&#39;{0}&#39;&quot;, JSON.stringify(tableKeyNames)]);
+    return tableKeyNames;
+  },
+
+<span id='sol-common-ix-DynKwlMixin-method-formatRow'>  /**
+</span>   * @protected
+   * Uses `this.formatting` to apply formatting to a table row.
+   *
+   * # Format decimal
+   * See also {@link sol.common.Locale#formatDecimal}.
+   *
+   *     formatting = [
+   *       { columnNames: [&quot;MY_OUTPUT_COLUMN1&quot;], minimumFractionDigits: 0, maximumFractionDigits: 2 },
+   *       { columnNames: [&quot;MY_OUTPUT_COLUMN2&quot;, &quot;ANOTHER_OUTPUT_COLUMN&quot;], maximumFractionDigits: 4 }
+   *     ];
+   *
+   * @param {String[]} row
+   */
+  formatRow: function (row) {
+    var me = this,
+        i, def, iteratorArray, containsIdx, j, columnIndex, value, formatedValue;
+
+    if (me.formatting &amp;&amp; (typeof me.tableKeyNames === &quot;function&quot;)) {
+      throw &quot;Formating can not be used when &#39;tableKeyNames&#39; is a function&quot;;
+    }
+
+    if (me.formatting &amp;&amp; (me.formatting.length &gt; 0)) {
+      for (i = 0; i &lt; me.formatting.length; i++) {
+        def = me.formatting[i];
+
+        iteratorArray = def.columnNames || def.columnIndexes || [];
+        containsIdx = !!def.columnIndexes;
+
+        for (j = 0; j &lt; iteratorArray.length; j++) {
+          columnIndex = (containsIdx) ? iteratorArray[j] : me.tableKeyNames.indexOf(iteratorArray[j]);
+          if (columnIndex &gt; -1) {
+            value = String(row[columnIndex]);
+
+            switch (def.type) {
+              case &quot;NUMBER&quot;:
+                formatedValue = me.formatNumber(value, def);
+                break;
+              default:
+                throw &quot;Unsupported format type&quot;;
+            }
+            row[columnIndex] = formatedValue;
+          }
+        }
+      }
+    }
+  },
+
+<span id='sol-common-ix-DynKwlMixin-method-formatNumber'>  /**
+</span>   * @private
+   * Formats decimal numbers using {@link sol.common.Locale#formatDecimal}.
+   * @param {String} value
+   * @param {Object} params
+   * @return {String}
+   */
+  formatNumber: function (value, params) {
+    var me = this;
+
+    if (!value || value == &quot;null&quot;) {
+      value == &quot;&quot;;
+    } else {
+      if (!me.$locale) {
+        me.$locale = sol.create(&quot;sol.common.Locale&quot;, { ec: me.ec });
+        me.$locale.read();
+      }
+      value = me.$locale.formatDecimal(value, params);
+    }
+    return value;
+  }
+
+});
+</pre>
+</body>
+</html>

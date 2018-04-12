@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace ix
+importPackage(Packages.de.elo.ix.client.feed);
+  
+<span id='ix'>/**
+</span> * @class ix
+ * @singleton
+ */
+var ix = new Object();
+ix = {
+  docTypeCache: {},
+   
+<span id='ix-method-addAttachment'> /**
+</span>  * Fügt an das angegebene Archivdokument eine neue
+  * Dateianbindung (Attachment) hinzu.
+  *
+  * @param {String} objId ObjektId des Zieldokuments
+  * @param {File} file Datei mit dem neuen Anhang
+  */
+  addAttachment: function(objId, file) {
+    var editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDocAtt, LockC.NO);
+    var doc = editInfo.document;
+    var ext = fu.getExt(file.name);
+    
+    var atts = new Array();
+    atts.push(new DocVersion());
+    
+    doc.atts = atts
+    doc.atts[0].ext = ext;
+    doc = ixConnect.ix().checkinDocBegin(doc);
+    
+    var url = doc.atts[0].url;
+    var uploadResult = ixConnect.upload(url, file);
+    
+    doc.atts[0].uploadResult = uploadResult;
+    doc = ixConnect.ix().checkinDocEnd(null, null, doc, LockC.NO);
+  },
+  
+<span id='ix-method-addDocument'> /**
+</span>  * Fügt an das übergebene Verschlagwortungsobjekt
+  * eine neue Dateiversion an. Der Aufrufer muss
+  * sicherstellen, dass es sich um ein ELO Dokument
+  * und nicht um einen Ordner handelt.
+  *
+  * @param {Sord} sord Verschlagwortung des Zieldokuments
+  * @param {File} file Datei mit der neuen Dokumentenversion
+  */
+  addDocument: function(sord, file) {
+    var ext = fu.getExt(file.name);
+    var actDoc = new DocVersion();
+    actDoc.ext = ext;
+    
+    var docs = new Array();
+    docs.push(actDoc);
+    
+    var document = new Document();
+    if (sord.objId) {
+      document.objId = sord.objId;
+    }
+    document.docs = docs;
+    
+    document = ixConnect.ix().checkinDocBegin(document);
+    var result = ixConnect.upload(document.docs[0].url, file);
+    document.docs[0].setUploadResult(result);
+    
+    document = ixConnect.ix().checkinDocEnd(sord, SordC.mbAll, document, LockC.YES);
+  },
+  
+<span id='ix-method-moveToPath'> /**
+</span>  * Verschiebt alle Dateien der Dokumenten-Untereinträge
+  * eines ELO Ordners in einen anderen Speicherpfad.
+  *
+  * @param {String} sordId ELO ObjektId des Startordners
+  * @param {Number} newPathId ELO Pfadnummer für die verschobenen Dateien
+  */
+  moveToPath: function(sordId, newPathId) {
+    var navInfo = new NavigationInfo();
+    navInfo.startIDs = [sordId];
+    
+    var procInfo = new ProcessInfo();
+    procInfo.procMoveDocumentsToStoragePath = new ProcessMoveDocumentsToStoragePath();
+    procInfo.procMoveDocumentsToStoragePath.pathId = newPathId;
+    
+    this.backgroundJobLoop(navInfo, procInfo);
+  },
+  
+<span id='ix-method-backgroundJobLoop'>  /**
+</span>   * Startet einen Hintergrundprozess mit den angegebenen Daten und 
+   * wartet auf die Prozessbeendung.
+   * 
+   * @param {NavigationInfo} navInfo Navigationsinformation
+   * @param {ProcessInfo} procInfo Prozessinformation
+   */
+  backgroundJobLoop: function(navInfo, procInfo) {
+    var jobState = ixConnect.ix().processTrees(navInfo, procInfo);
+    while (jobState &amp;&amp; jobState.jobRunning) {
+      Thread.currentThread().sleep(1000);
+      jobState = ixConnect.ix().queryJobState(jobState.jobGuid, true, true, true);
+    }
+  },
+  
+<span id='ix-method-getIndexValueByName'>  /**
+</span>  * Liest aus einem ELO Sord Objekt den Inhalt einer
+  * Indexzeile mit dem angegebenen Namen
+  *
+  * @param {Sord} sord ELO Verschlagwortungsobjekt
+  * @param {String} name Gruppenname der Indexzeile
+  */
+  getIndexValueByName: function(sord, name) {
+    var objKeys = sord.objKeys;
+    for (var i = 0; i &lt; objKeys.length; i++) {
+      var key = objKeys[i];
+      if (key.name == name) {
+        if (key.data.length &gt; 0) {
+          return String(key.data[0]);
+        } else {
+          return &quot;&quot;;
+        }
+      }
+    }
+
+    return &quot;&quot;;
+  },
+
+<span id='ix-method-getKeyByName'>  /**
+</span>  * Liest aus einem ELO Sord Objekt das ObjKey-Objekt einer
+  * Indexzeile mit dem angegebenen Namen.
+  *
+  * @param {Sord} sord ELO Verschlagwortungsobjekt
+  * @param {String} name Gruppenname der Indexzeile
+  */
+  getKeyByName: function(sord, name) {
+    var objKeys = sord.objKeys;
+    log.debug(&quot;keys: &quot; + objKeys.length + &quot; : &quot; + name);
+    for (var i = 0; i &lt; objKeys.length; i++) {
+      var key = objKeys[i];
+      log.debug(&quot;key &quot; + key.id + &quot; name : &quot; + key.name);
+      if (key.name == name) {
+        log.debug(&quot;key found&quot;);
+        return key;
+      }
+    }
+
+    log.debug(&quot;no key found: &quot; + name);
+    return null;
+  },
+
+<span id='ix-method-setIndexValueByName'>  /**
+</span>  * Sucht in einem Sord Objekt nach einer Indexzeile
+  * mit dem angegebenen Namen und füllt das Data Feld
+  * mit dem angegebenen Wert.
+  *
+  * @param {Sord} sord Verschlagwortungsobjekt - Indexserver Sord Objekt
+  * @param {String} name Gruppenname der Indexzeile
+  * @param {String} value Einzutragender Wert
+  */
+  setIndexValueByName: function(sord, name, value) {
+    var objKeys = sord.objKeys;
+    for (var i = 0; i &lt; objKeys.length; i++) {
+      var key = objKeys[i];
+      if (key.name == name) {
+        key.data = [value];
+      }
+    }
+  },
+  
+<span id='ix-method-lookupDocType'> /**
+</span>  * Ermittelt den ELO DocType aus der Datei-Extension
+  * aus der ELO Konfiguration.
+  *
+  * @param {String} filename Dateiname aus der den Dateityp gelesen wird.
+  * @return {DocType} Dateityp
+  */
+  lookupDocType: function(filename) {
+    var now = new Date();
+    if (!this.docTypeCache.createTime || (now.getTime() - this.docTypeCache.createTime.getTime()) &gt; 100000) {
+      log.debug(&quot;Reload docType Cache.&quot;);
+      this.docTypeCache.sordTypes = ixConnect.ix().checkoutSordTypes(null, SordTypeC.mbNoIcons, LockC.NO);
+      this.docTypeCache.createTime = now;
+    }
+    
+    var extensionStart = filename.lastIndexOf(&quot;.&quot;);
+    if ((extensionStart &lt; 0) || (extensionStart == (filename.length - 1))) {
+      throw &quot;No file extension found&quot;;
+    }
+    
+    var fileExt = filename.substring(extensionStart + 1);
+    for (var i = 0; i &lt; this.docTypeCache.sordTypes.length; i++) {
+      var extensions = this.docTypeCache.sordTypes[i].extensions;
+      
+      if (extensions) {
+        for (var ext = 0; ext &lt; extensions.length; ext++) {
+          if (extensions[ext].equalsIgnoreCase(fileExt)) {
+            return this.docTypeCache.sordTypes[i].id;
+          }
+        }
+      }
+    }
+    
+    return -1;
+  },
+  
+<span id='ix-method-collectChildren'>  /**
+</span>  * Lädt die maximal ersten 1000 Nachfolgereinträge
+  * eines ELO Ordners.
+  *
+  * @param {String} parentId ELO ObjektId der Ordners
+  * @param {Boolean} withRefs Lädt nur Haupteinträge oder auch Referenzen
+  */
+  collectChildren: function(parentId, withRefs) {
+    var findInfo = new FindInfo();
+    var findChildren = new FindChildren();
+    findChildren.parentId = parentId;
+    findChildren.mainParent = !withRefs;
+    findInfo.findChildren = findChildren;
+
+    var findResult = ixConnect.ix().findFirstSords(findInfo, 1000, SordC.mbAll);
+    ixConnect.ix().findClose(findResult.searchId);
+
+    return findResult.sords;
+  },
+
+<span id='ix-method-deleteSord'> /**
+</span>  * Löscht einen Eintrag oder eine Referenz.
+  *
+  * @param {String} parentId ID des Vorgängerknotens
+  * @param {String} objId Zielknoten
+  * @return {Boolean} Löschen erfolgreich
+  */
+  deleteSord: function (parentId, objId) {
+    log.info(&quot;Delete SORD: ParentId = &quot; + parentId + &quot;,  ObjectId = &quot; + objId);
+    return ixConnect.ix().deleteSord(parentId, objId, LockC.NO, null);
+  },
+
+<span id='ix-method-lookupIndex'>  /**
+</span>   * Liefert die ID des Archiveintrags mit dem angegebenen Pfades zurück.
+   * 
+   * @param {String} archivePath Pfad des Archiveintrags
+   * @return {Number} ID des Archiveintrags
+   */
+  lookupIndex: function (archivePath) {
+    log.info(&quot;Lookup Index: &quot; + archivePath);
+    var editInfo = ixConnect.ix().checkoutSord(&quot;ARCPATH:&quot; + archivePath, EditInfoC.mbOnlyId, LockC.NO);
+    if (editInfo) {
+      return editInfo.getSord().getId();
+    } else {
+      return 0;
+    }
+  },
+
+<span id='ix-method-lookupIndexByLine'>  /**
+</span>  * Ermittelt die ELO ObjektId zu einem gesuchten Eintrag aus Maskennummer
+  * und Indexzeile
+  *
+  * @param {String} maskId gesuchte Maske
+  * @param {String} groupName Name der Indexzeile
+  * @param {String} value Inhalt der Indexzeile
+  * @return {Number} ID des Archiveintrags
+  */
+  lookupIndexByLine: function (maskId, groupName, value) {
+    var findInfo = new FindInfo();
+    var findByIndex = new FindByIndex();
+    if (maskId != &quot;&quot;) {
+      findByIndex.maskId = maskId;
+    }
+
+    var objKey = new ObjKey();
+    var keyData = new Array(1);
+    keyData[0] = value;
+    objKey.setName(groupName);
+    objKey.setData(keyData);
+
+    var objKeys = new Array(1);
+    objKeys[0] = objKey;
+
+    findByIndex.setObjKeys(objKeys);
+    findInfo.setFindByIndex(findByIndex);
+
+    var findResult = ixConnect.ix().findFirstSords(findInfo, 1, SordC.mbMin);
+    ixConnect.ix().findClose(findResult.getSearchId());
+
+    if (findResult.sords.length == 0) {
+      return 0;
+    }
+
+    return findResult.sords[0].id;
+  },
+
+<span id='ix-method-lookupIndexByLine2'>  /**
+</span>  * Ermittelt die ELO ObjektId zu einem gesuchten Eintrag aus Maskennummer
+  * und zwei Indexzeilen.
+  *
+  * @param {String} maskId gesuchte Maske
+  * @param {String} groupName1 Name der ersten Indexzeile
+  * @param {String} groupName2 Name der zweiten Indexzeile
+  * @param {String} value1 Inhalt der ersten Indexzeile
+  * @param {String} value2 Inhalt der zweiten Indexzeile
+  * @return {Number} ID des Archiveintrags
+  */
+  lookupIndexByLine2: function (maskId, groupName1, groupName2, value1, value2) {
+
+    var findInfo = new FindInfo();
+    var findByIndex = new FindByIndex();
+    if (maskId != &quot;&quot;) {
+      findByIndex.maskId = maskId;
+    }
+
+
+    var objKey1 = new ObjKey();
+    var keyData1 = new Array(1);
+    keyData1[0] = value1;
+    objKey1.setName(groupName1);
+    objKey1.setData(keyData1);
+
+    var objKey2 = new ObjKey();
+    var keyData2 = new Array(1);
+    keyData2[0] = value2;
+    objKey2.setName(groupName2);
+    objKey2.setData(keyData2);
+
+    var objKeys = new Array(2);
+    objKeys[0] = objKey1;
+    objKeys[1] = objKey2;
+
+    findByIndex.setObjKeys(objKeys);
+    findInfo.setFindByIndex(findByIndex);
+
+    var findResult = ixConnect.ix().findFirstSords(findInfo, 1, SordC.mbMin);
+    ixConnect.ix().findClose(findResult.getSearchId());
+
+    if (findResult.sords.length == 0) {
+      return 0;
+    }
+
+    return findResult.sords[0].id;
+  },
+
+<span id='ix-method-findEntry'> /**
+</span>  * Sucht einen Eintrag mit der angegebenen Maskennummer
+  * und Indexzeileninhalt.
+  *
+  * @param {String} maskNo gesuchte Maske
+  * @param {String} groupName Name der zu durchsuchenden Indexzeile
+  * @param {String} value Gesuchter Indexwert
+  */
+  findEntry: function (maskNo, groupName, value) {
+    ruleset.setStatusMessage(&quot;Searching...&quot;);
+    var findInfo = new FindInfo();
+    var findByIndex = new FindByIndex();
+
+    var objKey = new ObjKey();
+    var keyData = new Array(1);
+    keyData[0] = value;
+    objKey.setName(groupName);
+    objKey.setData(keyData);
+
+    var objKeys = new Array(1);
+    objKeys[0] = objKey;
+
+    findByIndex.setObjKeys(objKeys);
+    if (maskNo != &quot;&quot;) {
+      findByIndex.maskId = maskNo;
+    }
+    findInfo.setFindByIndex(findByIndex);
+
+    var findResult = ixConnect.ix().findFirstSords(findInfo, 1, SordC.mbAll);
+    var sords = findResult.getSords();
+    ixConnect.ix().findClose(findResult.getSearchId());
+
+    if (sords &amp;&amp; sords.length &gt; 0) {
+      return sords[0];
+    } else {
+      return new Sord();
+    }
+  },
+
+<span id='ix-method-createSubPath'>  /**
+</span>  * Erzeugt, beginnend mit einem Startordner, den angegebenen
+  * Unterpfad mit der angegebenen Maske.
+  *
+  * @param {String} startId ID des Startordners
+  * @param {String} destPath Unterpfad, beginnend ab dem Startordner
+  * @param {String} folderMask Maske für neu anzulegende Ordner
+  * @return {Number} ID des neuen Pfades
+  */
+  createSubPath: function (startId, destPath, folderMask) {
+    log.debug(&quot;createPath: &quot; + destPath);
+
+    try {
+      var editInfo = ixConnect.ix().checkoutSord(&quot;ARCPATH[&quot; + startId + &quot;]:&quot; + destPath, EditInfoC.mbOnlyId, LockC.NO);
+      log.debug(&quot;Path found, GUID: &quot; + editInfo.getSord().getGuid() + &quot;   ID: &quot; + editInfo.getSord().getId());
+      return editInfo.getSord().getId();;
+    } catch (e) {
+      log.debug(&quot;Path not found, create new: &quot; + destPath + &quot;, use foldermask: &quot; + folderMask);
+    }
+
+    items = destPath.split(&quot;¶&quot;);
+    var sordList = new Array(items.length - 1);
+    for (var i = 1; i &lt; items.length; i++) {
+      log.debug(&quot;Split &quot; + i + &quot; : &quot; + items[i]);
+      var sord = new Sord();
+      sord.setMask(folderMask);
+      sord.setName(items[i]);
+
+      sordList[i - 1] = sord;
+    }
+
+    log.debug(&quot;now checkinSordPath&quot;);
+    var ids = ixConnect.ix().checkinSordPath(startId, sordList, new SordZ(SordC.mbName | SordC.mbMask));
+    log.debug(&quot;checkin done: id: &quot; + ids[ids.length - 1]);
+
+    return ids[ids.length - 1];
+  },
+
+<span id='ix-method-getFulltext'>  /**
+</span>  * Gibt den Volltext eines ELO Dokuments in einem String zurück.
+  *
+  * @param {String} objId ELO Dokument zu dem der Volltext gelesen werden soll
+  * @return {String} Volltextinhalt
+  */
+  getFulltext: function (objId) {
+    var editInfo = ixConnect.ix().checkoutDoc(objId, null, EditInfoC.mbSordDoc, LockC.NO);
+    var url = editInfo.document.docs[0].fulltextContent.url;
+    var ext = &quot;.&quot; + editInfo.document.docs[0].fulltextContent.ext;
+    var name = fu.clearSpecialChars(editInfo.sord.name);
+
+    var temp = File.createTempFile(name, ext);
+    log.debug(&quot;Temp file: &quot; + temp.getAbsolutePath());
+
+    ixConnect.download(url, temp);
+    var text = FileUtils.readFileToString(temp, &quot;UTF-8&quot;);
+    temp[&quot;delete&quot;]();
+
+    return text;
+  },
+
+<span id='ix-method-downloadDocument'>  /**
+</span>  * Lädt die Arbeitsversion eines ELO Dokuments in eine lokale Datei.
+  *
+  * @param {String} pathAndFileName vollständiger lokaler Pfad für die zu lesende Datei
+  * @param {String} sord ELO Verschlagwortungsobjekt
+  */
+  downloadDocument: function (pathAndFileName, sord) {
+    var url = sord.docVersion.url;
+    var ext = &quot;.&quot; + sord.docVersion.ext;
+    var file = new File(pathAndFileName + ext);
+
+    ixConnect.download(url, file);
+
+    return file.path;
+  },
+
+<span id='ix-method-downloadAsString'>  /**
+</span>  * Lädt die Arbeitsversion eines ELO Dokuments und gibt den Inhalt als String zurück.
+  *
+  * @param {String} sord ELO Verschlagwortungsobjekt
+  */
+  downloadAsString: function (sord) {
+    var url = sord.docVersion.url;
+    var ext = &quot;.&quot; + sord.docVersion.ext;
+
+    var temp = File.createTempFile(&quot;ELOasDownloadAsString&quot;, ext);
+    log.debug(&quot;Temp file: &quot; + temp.getAbsolutePath());
+
+    ixConnect.download(url, temp);
+    var text = FileUtils.readFileToString(temp, &quot;UTF-8&quot;);
+    temp[&quot;delete&quot;]();
+
+    return text;
+  },
+  
+<span id='ix-method-deleteOldDocs'>  /**
+</span>  * Löscht alle Dokumente mit überschrittenen Verfallsdatum.
+  * 
+  * @param {Boolean} deleteFinally Dauerhaft entfernen
+  */
+  deleteOldDocs: function (deleteFinally) {
+    var delOpts = new DeleteOptions();
+    delOpts.setDeleteExpiredOnly(true);
+    delOpts.setDeleteFinally(false);
+    log.info(&quot;Start logically delete Objects&quot;);
+    ixConnect.ix().cleanupStart(delOpts);
+
+    if (deleteFinally) {
+      log.debug(&quot;Wait for end of deletion process&quot;);
+      for (;;) {
+        var jobState = ixConnect.ix().cleanupState();
+        if (!jobState.jobRunning) {
+          break;
+        }
+        log.debug(&quot;still running&quot;);
+        Thread.sleep(10000);
+      }
+
+      delOpts.setDeleteFinally(true);
+      log.info(&quot;Start delete Objects (finally: &quot; + deleteFinally + &quot;)&quot;);
+      ixConnect.ix().cleanupStart(delOpts);
+    }
+  },
+
+  totalCount : 0,
+  hourCount : 0,
+  dayCount : 0,
+  
+<span id='ix-method-getLoginCount'>  /**
+</span>  * Ermittelt die Anzahl der aktuell angemeldeten Anwender sowie
+  * der in der letzten Stunde und des laufenden Tags maximal 
+  * angemeldeten Anwender.
+  *
+  * Diese Funktion muss regelmäßig aufgerufen werden wenn die
+  * Stunden und Tageswerte benötigt werden (z.B. alle 5 Minuten).
+  * 
+  * @return {Number} Anzahl der aktuell angemeldeten Anwender
+  */
+  getLoginCount: function () {
+    var values = ixConnect.ix().checkoutUsers( null, CheckoutUsersC.SESSION_USERS_RAW, LockC.NO );
+    
+    if (log.isDebugEnabled()) {
+      for (var i = 0; i &lt; values.length; i++) {
+        log.debug(&quot;- &quot; + i + &quot; : &quot; + values[i].id + &quot; : &quot; + values[i].name);
+      }
+    }
+    
+    var actCount = values.length;
+    
+    if (actCount &gt; this.hourCount) {
+      this.hourCount = actCount;
+    }
+    
+    if (actCount &gt; this.dayCount) {
+      this.dayCount = actCount;
+    }
+    
+    if (actCount &gt; this.totalCount) {
+      this.totalCount = actCount;
+    }
+    
+    var result = { nowCount: actCount, hourCount : this.hourCount, dayCount : this.dayCount, totalCount : this.totalCount, hourChanged : false, dayChanged : false };
+    
+    var now = new Date();
+    var day = now.getDate();
+    if (day != this.day) {
+      this.day = day;
+      this.dayCount = 0;
+      result.dayChanged = true;
+    }
+    
+    var hour = now.getHours();
+    if (hour != this.hour) {
+      this.hour = hour;
+      this.hourCount = 0;
+      result.hourChanged = true;
+    }
+    
+    return result;
+  },
+  
+<span id='ix-method-addFeedComment'>  /**
+</span>  * Fügt einen Skript-Kommentar im Feed eines Ordners oder Dokuments
+  * hinzu.
+  *
+  * @param {String} eloObjectGuid ELO Objekt GUID (nicht die objid) des Eintrags
+  * @param {String} user ELO Anwender
+  * @param {String} comment Text der in den Feed eingetragen werden soll, kein HTML Text
+  */
+  addFeedComment: function(eloObjectGuid, user, comment) {
+    var feed = ixConnect.getFeedService();
+    
+    var action = feed.createAction(EActionType.AutoComment, eloObjectGuid);
+    action.setText(comment);
+    feed.checkinAction(action, ActionC.mbAll);
+  }
+  
+}
+// end of namespace ix</pre>
+</body>
+</html>

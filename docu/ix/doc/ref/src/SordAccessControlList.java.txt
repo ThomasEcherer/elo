@@ -1,0 +1,216 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.UserInfo;
+import de.elo.ix.client.UserInfoC;
+import de.elo.ix.client.CheckoutUsersC;
+import de.elo.ix.client.CheckinUsersC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.AclItem;
+import de.elo.ix.client.AccessC;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This class demonstrates the ACL function.
+ * 
+ * A new sord object is created
+ * A test user called Bloggs is created
+ * Read access for Bloggs is assigned to the sord
+ * The user Bloggs will login
+ * Bloggs tries to write, lock and delete(exception expected)
+ * 
+ */
+public class SordAccessControlList {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static UserInfoC USER_INFO;
+    private static AccessC ACCESS;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static CheckoutUsersC CHECKOUT_USERS;    
+    private static CheckinUsersC CHECKIN_USERS;
+    private static UserInfo ui;
+    private static UserInfo uiBloggs;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            try {createLockWriteDelete();
+            
+        } catch (Exception e){
+            System.out.println(e.toString());
+        }     
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void createLockWriteDelete() throws RemoteException, Exception {
+        
+        // Create a sord and a test user 
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord = ed.getSord();
+         sord.setName("ACL Test Sord");
+         sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + sord.getId());
+         
+        
+        //Create the new user (with admin rights!)
+        uiBloggs = ix.ix().createUser("0");
+        uiBloggs.setType(USER_INFO.getTYPE_USER());
+        uiBloggs.setName("Bloggs");
+        uiBloggs.setPwd("elo");
+        uiBloggs.setFlags(ACCESS.getFLAG_EDITSTRUCTURE());
+        int[] id = ix.ix().checkinUsers(
+                                      new UserInfo[] {uiBloggs}, 
+                                      CHECKIN_USERS.getPASSWORD(), 
+                                      LOCK.getNO());
+        uiBloggs.setId(id[0]);
+        System.out.println("User created Id = " + uiBloggs.getId() +
+                           " name = " + uiBloggs.getName());
+        
+        // Assign read access only to sord for user Bloggs
+        AclItem aclItemBloggs = new AclItem();
+        aclItemBloggs.setName(uiBloggs.getName());
+        // Alternative:
+        // aclItemBloggs.setId(uiBloggs.getId());
+        aclItemBloggs.setAccess(ACCESS.getLUR_READ());
+        
+        // Assign all access for current user
+        AclItem aclItemCU = new AclItem();
+        aclItemCU.setName("Administrator");
+        aclItemCU.setAccess(ACCESS.getLUR_ALL());
+        
+        // Checkin
+        sord.setAclItems(new AclItem[] {aclItemBloggs, aclItemCU});
+        sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Created sord with read access for Bloggs. Sord id = " + sord.getId());
+        
+        //Re-connect to Index Server using Bloggs user
+        ClientInfo ciBloggs = new ClientInfo();
+        ciBloggs.setLanguage("en");
+        ciBloggs.setCountry("DE");
+        ciBloggs.setTimeZone("Europe/Berlin"); // "GMT+01:00"
+        IXConnection connBloggs = connFact.create(ciBloggs, "Bloggs",
+                                           "elo", "IX-Bloggs",
+                                           null);
+        ciBloggs = connBloggs.getLogin().ci();
+        uiBloggs = connBloggs.getLogin().lr().getUser();
+        System.out.println("Logged on with user Id = " + uiBloggs.getId() + 
+                           "  & name = " + uiBloggs.getName());
+        
+               
+        // Read sord
+        Sord sordBloggs = connBloggs.ix().checkoutSord(sord.getGuid(), EDIT_INFO.getMbSord(), LOCK.getNO()).getSord();
+        System.out.println(uiBloggs.getName() + " read sord successfully");
+        
+        // Try to lock, write and delete sord as 'Bloggs' 
+        
+        try {
+            // Lock Sord
+            connBloggs.ix().checkoutSord(sord.getGuid(), EDIT_INFO.getMbSord(), LOCK.getYES());
+            System.out.println("ERROR: The user " + uiBloggs.getName() + " should not be able to checkout sord");
+            
+        } catch (Exception e) {
+            
+            System.out.println("OK: The user " + uiBloggs.getName() + " is not allowed to lock sord, exception = " + e.toString());
+        }
+        
+         
+        try {
+            // Write to sord
+            sord = connBloggs.ix().checkoutSord(sord.getGuid(), EDIT_INFO.getMbSord(), LOCK.getNO()).getSord();
+            sord.setDesc("Changed by Bloggs");
+            connBloggs.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO());
+            System.out.println("ERROR: The user " + uiBloggs.getName() + " should not be able to write to sord");
+            
+        } catch (Exception e) {
+            
+            System.out.println("OK: The user " + uiBloggs.getName() + " is not allowed to write to sord, exception = " + e.toString());
+        }
+        
+        try {
+            // Delete sord
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            connBloggs.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+            connBloggs.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("ERROR: The user " + uiBloggs.getName() + " should not be able to delete sord");
+            
+        } catch (Exception e) {
+            
+            System.out.println("OK: The user " + uiBloggs.getName() + " is not allowed to delete sord, exception = " + e.toString());
+        }
+        
+        // Logout as Bloggs
+        
+        connBloggs.logout();
+        ix.ix().deleteUsers(new String[] {uiBloggs.getName()}, LOCK.getNO());
+        
+        // Delete sord if required
+        boolean delete = false;
+        if (delete == true){
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+        }
+        
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        USER_INFO = CONS.getUSER_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        CHECKOUT_USERS = CONS.getCHECKOUT_USERS();
+        CHECKIN_USERS = CONS.getCHECKIN_USERS();
+        ACCESS = CONS.getACCESS();
+    }    
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

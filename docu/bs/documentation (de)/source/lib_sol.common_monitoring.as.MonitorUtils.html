@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common_monitoring-as-MonitorUtils'>/**
+</span> * Utility methods for the monitoring modul.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.000
+ *
+ * @eloas
+ * @requires moment
+ * @requires sol.commom.SordUtils
+ * @requires sol.common.DateUtils
+ */
+sol.define(&quot;sol.common_monitoring.as.MonitorUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common_monitoring-as-MonitorUtils-property-queueId'>  // config for `registerUpdate`
+</span>  // Is duplicated in {@link sol.common_monitoring.ix.MonitorUtils} due to compatibility reasons. All changes schould be reflected there.
+  queueId: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/_global/Job queue&quot;,
+<span id='sol-common_monitoring-as-MonitorUtils-property-timestampBufferValue'>  timestampBufferValue: -5,
+</span><span id='sol-common_monitoring-as-MonitorUtils-property-timestampBufferUnit'>  timestampBufferUnit: &quot;s&quot;,
+</span>
+<span id='sol-common_monitoring-as-MonitorUtils-method-evalDateUnitConfig'>  /**
+</span>   * Evaluates a Sord and a configuration to determine a value and a unit.
+   *
+   * If no value was found, it will be set so `0` as default.
+   * If no unit was found, it will be left blank.
+   *
+   *     { value: 10 }
+   *     { value: 10, unit: &quot;Y&quot; }
+   *     { value: 10, unit: { type: &quot;GRP&quot;, key: &quot;MY_UNIT&quot; } }
+   *     { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot; }
+   *     { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot;, unit: &quot;Y&quot; }
+   *     { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot;, unit: { type: &quot;GRP&quot;, key: &quot;MY_UNIT&quot; } }
+   *
+   * The followig call
+   *
+   *      sol.common_monitoring.as.MonitorUtils.evalDateUnitConfig(sord, { value: 10, unit: &quot;Y&quot; });
+   *
+   * would just return the two fix values
+   *
+   *      { value: 10, unit: &quot;Y&quot; }
+   *
+   * while this call
+   *
+   *     sol.common_monitoring.as.MonitorUtils.evalDateUnitConfig(sord, { type: &quot;GRP&quot;, key: &quot;MY_DATE&quot;, unit: { type: &quot;GRP&quot;, key: &quot;MY_UNIT&quot; } });
+   *
+   * would read the resulting `value` from the indexfield `MY_DATE` and the `unit` from the indexfield `MY_UNIT`.
+   *
+   * If the field holding the unit is filled by a localized keyword list, it will contain values like &#39;d - days&#39;.
+   * Therefor the function analyses the unit and if it contains any `-` the key (string befor the `-`) will be extracted and used.
+   *
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} config
+   * @return {Object} Returns an object with the two attributes: `value` and `unit`
+   */
+  evalDateUnitConfig: function (sord, config) {
+    var me = this,
+        result = {};
+
+    if (config.type &amp;&amp; config.key) {
+      result.value = sol.common.SordUtils.getValue(sord, config) + &quot;&quot;;
+    } else {
+      result.value = config.value;
+    }
+
+    if (!result.value) {
+      result.value = 0;
+    }
+
+    if (config.unit &amp;&amp; config.unit.type &amp;&amp; config.unit.key) {
+      result.unit = sol.common.SordUtils.getValue(sord, config.unit) + &quot;&quot;;
+      result.unit = me.getLocalizedKwlKey(result.unit);
+    } else {
+      result.unit = config.unit;
+    }
+
+    return result;
+  },
+
+<span id='sol-common_monitoring-as-MonitorUtils-method-getLocalizedKwlKey'>  /**
+</span>   * @private
+   * Extracts the unit, if the value was set from a localized keyword list.
+   * @param {String} str
+   * @return {String}
+   */
+  getLocalizedKwlKey: function (str) {
+    var separator = &quot;-&quot;,
+        part, separatorPos;
+    if (!str) {
+      part = &quot;&quot;;
+    } else {
+      separatorPos = str.indexOf(separator);
+      if (separatorPos &lt; 0) {
+        part = str;
+      } else {
+        part = str.substring(0, separatorPos).trim();
+      }
+    }
+    return part;
+  },
+
+<span id='sol-common_monitoring-as-MonitorUtils-method-registerUpdate'>  /**
+</span>   * Register object to be updated by the `JobQueue` rule.
+   * Registration will be skipped if element is in chaos cabinet.
+   *
+   * Is duplicated by {@link sol.common_monitoring.ix.MonitorUtils} due to compatibility reasons. All changes schould be reflected there.
+   * @param {String} objId
+   * @param {String} wfTemplate
+   */
+  registerUpdate: function (objId, wfTemplate) {
+    var me = this,
+        qId, updatedSord, now, utcDate, isoDate, mapKeys;
+
+    qId = ixConnect.ix().checkoutSord(me.queueId, SordC.mbOnlyId, LockC.NO).id;
+    updatedSord = ixConnect.ix().checkoutSord(objId, SordC.mbMin, LockC.NO);
+
+    if (updatedSord.parentId !== 0) {
+      now = new Date();
+      utcDate = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+      isoDate = sol.common.DateUtils.shift(utcDate, me.timestampBufferValue, { unit: me.timestampBufferUnit });
+
+      mapKeys = [
+        new KeyValue(&quot;SOL_UPDATE_WF_TEMPLATE.&quot; + objId, wfTemplate),
+        new KeyValue(&quot;SOL_UPDATE_TIMESTAMP.&quot; + objId, sol.common.DateUtils.dateToIso(isoDate))
+      ];
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, qId, qId, mapKeys, LockC.NO);
+
+      ixConnect.ix().refSord(null, qId, objId, -1);
+
+      me.logger.info([&quot;registered element for update (objId={0})&quot;, objId]);
+    } else {
+      me.logger.warn([&quot;element is in chaos cabinet; skip register element for update (objId={0})&quot;, objId]);
+    }
+
+  }
+
+});
+</pre>
+</body>
+</html>

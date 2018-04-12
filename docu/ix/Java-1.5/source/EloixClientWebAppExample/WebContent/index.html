@@ -1,0 +1,82 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+
+<!--  Forward to status page 
+<meta http-equiv="Refresh" content="1; URL=MyServlet?__cmd__=status">
+-->
+
+<script src="http://pcimigw-elo10:8084/ix-elo100/EloixClient.js"></script>
+
+<script>
+var conn = null;
+var CONST = null;
+var url = "http://pcimigw-elo10:8084/ix-elo100/ix";
+
+function doit() {
+	var IX = de.elo.ix.client;
+ 	var connFact = new IX.IXConnFactory(url, "cors", "1.0");
+
+ 	if (conn == null) {
+ 		connFact.create("Administrator", "elo", "cors", "", null, function(innerConn, ex) {
+ 			conn = innerConn;
+ 			CONST = conn.getCONST();
+ 			var msg = ex ? ex.toString() : "OK";
+ 			alert(msg);
+ 			callme();
+ 		});
+ 	}
+ 	else {
+ 		callme();
+ 	}
+
+	/*
+	var connFact = new IX.IXConnFactory(url, "cors", "1.0");
+	connFact.createSSO(null, function(innerConn, ex) {
+		conn = innerConn;
+		var msg = ex ? ex.toString() : "OK";
+		alert(msg);
+	});
+	*/
+}
+
+function callme() {
+	var fileData = 
+	conn.ix().writeBlob("myblob", fileData, function(ignored,ex) {
+		
+	});
+	
+}
+
+function onUpload() {
+	var uploadUrl = conn.makeUploadUrl();
+	var file = document.getElementById("edUpload").files[0];
+	
+	var xhr = new XMLHttpRequest();
+	xhr.withCredentials = true;
+	
+	xhr.open('POST', uploadUrl, true);
+
+	xhr.onreadystatechange = function() {
+		if (xhr.readyState != 4) return;
+		
+		if (xhr.status == 200) {
+		}
+		
+		var divResult = document.getElementById("divResult");
+		divResult.innerHTML = "HTTP " + xhr.status + ": " + xhr.responseText;
+	}
+
+	xhr.send(file);
+}
+</script>
+
+</head>
+<body>
+<input type="button" value="doit" onclick="doit()"/><br>
+Wählen Sie eine Textdatei (*.txt, *.html usw.) von Ihrem Rechner aus:<br> 
+<input id="edUpload" name="Datei" type="file" size="50" accept="text/*" onchange="onUpload()"> 
+<div id="divResult"></div> 
+</body>
+</html>

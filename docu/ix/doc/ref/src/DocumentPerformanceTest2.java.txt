@@ -1,0 +1,285 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.SordZ;
+import java.io.File;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates the performance when checking documents in.
+ * 
+ * Creates a root folder
+ * 100 documents, each with one version, are created but not checked in
+ * The file size is approx. 100KB. (see fileSize member)
+ * The documents are checked in
+ * The documents are read
+ * The root folder is physically deleted
+ * 
+ */
+
+
+public class DocumentPerformanceTest2 {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    private static int noOfDocs = 100;
+    private static int fileSize = 100* 1000;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            testPerformance();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } catch (Exception e) {
+            System.out.println(e.toString());
+            
+        }finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static void testPerformance() throws RemoteException, Exception {
+        
+        // Create a root folder
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        sord.setName("Folder1");
+        sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Sord created with Id: " + sord.getId() + 
+                           " and name: " + sord.getName());
+        
+        // Create 100 Sords but do not check them in
+        Sord[] docSords = new Sord[noOfDocs];
+        Document[] docDocs = new Document[noOfDocs];
+        File[] docFiles = new File[noOfDocs];
+        
+        long diffMilliSecs = 0;
+        for (int i = 0; i < noOfDocs; i++){
+            
+            // Initialise an EditInfo object
+            long t1 = System.currentTimeMillis();
+            ed = ix.ix().createDoc(sord.getGuid(), "Email", null, EDIT_INFO.getMbSordDocAtt());
+            long t2 = System.currentTimeMillis();
+            diffMilliSecs += (t2 - t1);
+            
+            // Add index attributes
+            Sord sordDoc = ed.getSord();
+            sordDoc.setName("SordDoc 2." + i);
+            
+            for (int idx = 0; idx < sordDoc.getObjKeys().length; idx++){
+                sordDoc.getObjKeys()[idx].setData(new String[] {sordDoc.getName() + ".idx" + idx});
+            }
+            
+            // Create a file
+            docFiles[i] = internalCreateTestFile("Doc Performance " + sordDoc.getName(), ".txt");
+            
+            // Supply the extension for the document
+            Document doc = ed.getDocument();
+            DocVersion dv = new DocVersion();
+            dv.setExt(ix.getFileExt(docFiles[i].getName()));
+            doc.setDocs(new DocVersion[] {dv});
+            
+            if ((i+1) % 20 == 0){
+                System.out.println("Created " + (i+1) + " from " + noOfDocs + " files");
+            }
+            
+            docSords[i] = sordDoc;
+            docDocs[i] = doc;
+        }
+        
+        
+        // Checkin 100 documents already created
+        System.out.println("Checking documents in...");
+        long t3 = System.currentTimeMillis();
+        docDocs = ix.ix().checkinDocsBegin(docDocs);
+        
+        // Upload all 100 files
+        System.out.println("Uploading " + noOfDocs + " files...");
+        for ( int i = 0; i < noOfDocs; i++){
+            docDocs[i].getDocs()[0].setUploadResult(ix.upload(docDocs[i].getDocs()[0].getUrl(), docFiles[i]));
+            if ((i+1) % 20 == 0){
+                System.out.println("Uploaded " + (i+1) + " from " + noOfDocs + " files");
+                //Delete the file
+                docFiles[i].delete();
+            }
+        }
+        System.out.println("Upload completed");
+        
+        //CheckinDocsEnd
+        docDocs = ix.ix().checkinDocsEnd(docSords, new SordZ[] {SORD.getMbAll()}, docDocs, LOCK.getNO());
+        long t4 = System.currentTimeMillis();
+        System.out.println("CheckinDocsEnd OK!");
+        diffMilliSecs = t4 - t3;
+        
+        // Logger time values
+        logTimeValues("Checkin", diffMilliSecs, noOfDocs);
+        
+        // Read 100 documents
+        diffMilliSecs = 0;
+        for (int i = 0; i < noOfDocs; i++){
+            
+            // Checkout doc
+            long t1 = System.currentTimeMillis();
+            ed = ix.ix().checkoutDoc(docSords[i].getGuid(), null, EDIT_INFO.getMbSordDocAtt(), LOCK.getNO());
+            Document doc = ed.getDocument();
+            File dFile = internalMakeDownloadFile();
+            ix.download(doc.getDocs()[0].getUrl(), dFile);
+            long t2 = System.currentTimeMillis();
+            diffMilliSecs += (t2 - t1);
+            
+            if (dFile.length() < fileSize){
+                
+                throw new Exception("download failed");
+            }
+            
+            if ((i+1) % 20 ==0){
+                
+                System.out.println("Read " + (i+1) + " from " + noOfDocs + " documents");
+            }
+            // Delete the file
+            dFile.delete(); 
+            
+        }
+        
+        // Logger time values
+        logTimeValues("Read", diffMilliSecs, noOfDocs);
+       
+        boolean delete = false;
+        if (delete == true){
+            // Delete root folder logically  - all 100 sords will be deleted
+            System.out.println("Deleting logically!");
+        
+            long startTime = System.currentTimeMillis();           
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+            long endTime = System.currentTimeMillis();  
+            logTimeValues("Logical delete", (endTime - startTime), noOfDocs);
+           
+            // Delete root folder physically  - all 100 sords will be deleted  
+            System.out.println("Physically deleting!");
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            startTime = System.currentTimeMillis();
+            ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+            endTime = System.currentTimeMillis();
+            logTimeValues("Physical delete", (endTime - startTime), noOfDocs);
+        }
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    // Write to temp file
+    public static File internalCreateTestFile(String text, String ext) {
+        File tempFile = null;
+        try{
+            tempFile = internalMakeTempFile(ext);
+            BufferedWriter out = new BufferedWriter(new FileWriter(tempFile));
+            // text cannot be an empty string - fill if necessary
+            if (text.isEmpty()){
+                text = "********";
+            }
+            int n = text.length();
+            int lineCount = fileSize / (n);
+            
+            // Ensure that the file is greater than 100KB
+            lineCount++;
+            
+            for (int i = 0; i < lineCount; i++){
+                out.write(text);
+            }
+            
+            out.close();
+            
+        } catch (IOException ioe){
+            System.out.println(ioe.toString());
+        }
+        
+        return tempFile;
+    }
+    
+    
+    // Make file name and create temp file
+    public static File internalMakeTempFile(String ext) throws IOException {
+        
+        String tempFile = "Eloix";
+        File f = File.createTempFile(tempFile, ext);
+        return f;
+    }
+    
+   
+    // Make file name and create temp file
+    public static File internalMakeDownloadFile() throws IOException {
+        
+        String tempFile = "Eloix Download";
+        File f = File.createTempFile(tempFile, ".txt");
+        return f;
+    }
+    
+    public static void logTimeValues(String actionName, long diffMilliSecs, int n){
+        
+        double ns100 = 1000L * 1000L * 10;
+        double dDMS = diffMilliSecs;
+        dDMS /= ns100;
+        double secondsPerAction = dDMS /(double)n;
+        double actionsPerSecond = 1.0 / secondsPerAction;
+        System.out.println("Action= " + actionName + ": dt = " + dDMS + " ms");
+        System.out.println("Seconds per action= " + secondsPerAction);
+        System.out.println("Actions per second= " + actionsPerSecond);
+        
+        
+    }    
+        
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

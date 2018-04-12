@@ -1,0 +1,113 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.WFDiagramC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFTypeC;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * 
+ * This example shows a how a template file can be imported.
+ * The template file must be exported into a file with an ELO client.
+ */
+
+public class ImportWorkflowTemplate {
+
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static LockC LOCK;
+    private static WFDiagramC WORKFLOW;
+    private static WFTypeC WORKFLOW_TYPE;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            importWFTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } catch (IOException e) {
+            System.out.println(e.toString());  
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+    public static void importWFTemplate() throws RemoteException, IOException{
+        
+        // checkin workflow script
+        File fileTemplate = new File("D:\\WorkflowTemplates\\TemplateFile.ewf");
+           
+        // Read file into memory (byte array)
+        byte[] data = new byte[(int)fileTemplate.length()];
+        FileInputStream fis = new FileInputStream(fileTemplate);
+        fis.read(data);
+
+        // Import workflow from file
+        int wfId = ix.ix().importWorkFlow("Import Demo Template 101", data);
+        
+        WFDiagram importedTemplate = ix.ix().checkoutWorkFlow(
+                                                            Integer.toString(wfId), 
+                                                            WORKFLOW_TYPE.getTEMPLATE(), 
+                                                            WORKFLOW.getMbAll(), 
+                                                            LOCK.getYES());
+        
+        System.out.println("Imported template called: " + importedTemplate.getName() +
+                           " with id: " + importedTemplate.getId()); 
+
+        ix.ix().checkinWorkFlow(
+                              importedTemplate, 
+                              WORKFLOW.getMbAll(),
+                              LOCK.getYES());
+        
+    }
+
+    
+    
+      //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        LOCK = CONS.getLOCK();
+        WORKFLOW = CONS.getWORKFLOW();
+        WORKFLOW_TYPE = CONS.getWORKFLOW_TYPE();
+    }
+    
+      // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-executors-SimpleExecutor'>/**
+</span> * This executor can be used to start simple tasks.
+ *
+ * That an action can be executed it has to define a type. Supported types are:
+ *
+ * - workflows: `type=&quot;WORKFLOW&quot;` (starts a workflow)
+ * - technical workflows: `type=&quot;TECHNICAL_WORKFLOW&quot;` (starts a workflow and deletes it after execution if the workflow is already finished, i.e. does not contain any user nodes)
+ * - reminder: `type=&quot;REMINDER&quot;` (creates a reminder)
+ * - function modules: `type=&quot;FUNCTION&quot;` (executes a function with the objId of the current object as only parameter)
+ *
+ * # Enhancement
+ * An analyzer can enhance a context object with additional information.
+ * Some properties in the action definition can use those information to dynamically change the configuration property.
+ *
+ * The following action properties can use those enhancement:
+ *
+ * - WORKFLOW / TECHNICAL_WORKFLOW : user
+ * - WORKFLOW / TECHNICAL_WORKFLOW : templateId
+ * - WORKFLOW / TECHNICAL_WORKFLOW : nameTemplate
+ * - REMINDER : user
+ * - REMINDER : nameTemplate
+ *
+ * # Configuration
+ * Depending on the type, the action needs additional information:
+ *
+ *     {
+ *       type: &quot;WORKFLOW&quot;,
+ *       user: &quot;Administrator&quot;, // optional, if none is defined, the during initialization set user will be user
+ *       templateId: &quot;NameOrIdOfTheWorkflowTemplate&quot;,
+ *       nameTemplate: &quot;{{translate &#39;wfPrefix&#39;}}: {{sord.name}}&quot; // optional, default is the name of the sord
+ *     }
+ *
+ *     {
+ *       type: &quot;TECHNICAL_WORKFLOW&quot;,
+ *       user: &quot;Administrator&quot;, // optional, if none is defined, the during initialization set user will be user
+ *       templateId: &quot;{{ctx.TemplateNameReadFromFieldByValueAnalyzer}}&quot;, // enhancement example
+ *       nameTemplate: &quot;{{translate &#39;wfPrefix&#39;}}: {{sord.name}}&quot; // optional, default is the name of the sord
+ *     }
+ *
+ *     {
+ *       type: &quot;REMINDER&quot;,
+ *       user: &quot;Administrator&quot;, // optional, if none is defined, the during initialization set user will be user
+ *       nameTemplate: &quot;Erinnerung: {{sord.objKeys.CONTRACT_NAME}}&quot; // optional, default is the name of the sord
+ *     }
+ *
+ *     {
+ *       type: &quot;FUNCTION&quot;,                        // only one of `module`, `direct` or `regfct` will be used, priority order is `regfct` -&gt; `direct` -&gt; `module`
+ *       module: &quot;my.namespace.MyFunctionModule&quot;  // tries to create a module with this name and calls its `process` function (module and its dependencies have to be included)
+ *       direct: &quot;my.direct.Rule&quot;                 // calls a direct function with this name
+ *       regfct: &quot;RF_my_Function&quot;                 // calls a registered function with this name
+ *     }
+ *
+ * # Initialization example:
+ *
+ *     var executor = sol.create(&quot;sol.common_monitoring.as.executors.SimpleExecutor&quot;, {
+ *       user: &quot;Administrator&quot; // The default user if an action specifies none
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.01.000
+ *
+ * @eloas
+ *
+ * @requires sol.common.IxUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.DateUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.common_monitoring.as.executors.SimpleExecutor&quot;, {
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-cfg-user'>  /**
+</span>   * @cfg {String} user (optional) If set, this user will be used for all actions (but will be overridden, if an action itself defines a user)
+   */
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-property-_todayIso'>  /**
+</span>   * @private
+   * @property {String} _todayIso The current date cached as ISO string
+   */
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-property-_userConnectionCache'>  /**
+</span>   * @private
+   * @property {Object} _userConnectionCache Caches user specific connections
+   */
+  _userConnectionCache: {},
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me._todayIso = sol.common.DateUtils.dateToIso(new Date());
+    me.getConnection(me.user); // initializes a user connection in the cache for later re-use (if there is a user configured)
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-execute'>  /**
+</span>   * Evaluates a result set and executes actions if the results contain any.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object[]} results
+   * @param {Object} ctx
+   */
+  execute: function (sord, results, ctx) {
+    var me = this;
+
+    me.logger.enter(&quot;execute&quot;, { objId: sord.id, name: String(sord.name) });
+
+    if (results &amp;&amp; (results.length &gt; 0)) {
+      results.forEach(function (r) {
+        if (r.action) {
+          me.executeAction(sord, r.action, ctx);
+        }
+      });
+    }
+
+    me.logger.exit(&quot;execute&quot;);
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-dispose'>  /**
+</span>   * Performes cleanup. Closes all opened user connections.
+   */
+  dispose: function () {
+    var me = this,
+        connection;
+    for (connection in me._userConnectionCache) {
+      if (me._userConnectionCache.hasOwnProperty(connection)) {
+        connection.close();
+      }
+    }
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-executeAction'>  /**
+</span>   * @private
+   * Executes an individual action.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} action
+   * @param {Object} ctx
+   */
+  executeAction: function (sord, action, ctx) {
+    var me = this,
+        fct = me.ACTIONS[action.type];
+
+    me.logger.debug(&quot;execute action&quot;, action);
+
+    if (fct &amp;&amp; sol.common.ObjectUtils.isFunction(fct)) {
+      fct.call(me, sord, action, ctx);
+    } else {
+      throw &quot;ActionExecutionFailed: unsupported action type: &quot; + action.type;
+    }
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-getConnection'>  /**
+</span>   * @private
+   * Retrieves a connection for a specific user, using an internal cache.
+   * If no user is defined, it returns the standard connection.
+   * @param {String} user
+   * @return {de.elo.ix.client.IXConnection}
+   */
+  getConnection: function (user) {
+    var me = this;
+
+    if (!user) {
+      return ixConnect;
+    }
+    if (!me._userConnectionCache[user]) {
+      me._userConnectionCache[user] = ixConnect.createConnectionForUser(user);
+    }
+    return me._userConnectionCache[user];
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-buildName'>  /**
+</span>   * @private
+   * Builds the name from a template using the sord data. Fallback is `sord.name`.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} ctx
+   * @param {String} nameTemplate (optional)
+   * @return {String}
+   */
+  buildName: function (sord, ctx, nameTemplate) {
+    var me = this,
+        name;
+    try {
+      if (nameTemplate) {
+        sord = sol.common.SordUtils.getTemplateSord(sord).sord;
+        name = sol.create(&quot;sol.common.Template&quot;, { source: nameTemplate }).apply({ sord: sord, ctx: ctx });
+      } else {
+        name = sord.name;
+      }
+    } catch (ex) {
+      name = sord.name;
+      me.logger.warn(&quot;error generating name, use &#39;sord.name&#39;&quot;, ex);
+    }
+    return name;
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-method-eveluateActionProperty'>  /**
+</span>   * @private
+   * Retrieves the value from a action using handlebars applying the sord and the context.
+   * @param {String} value
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} ctx
+   * @return {String}
+   */
+  eveluateActionProperty: function (value, sord, ctx) {
+    var me = this,
+        result = value;
+    if (value.indexOf(&quot;{{&quot;) &gt; -1) {
+      try {
+        sord = sol.common.SordUtils.getTemplateSord(sord).sord;
+        result = sol.create(&quot;sol.common.Template&quot;, { source: value }).apply({ sord: sord, ctx: ctx });
+      } catch (ignore) {
+        me.logger.debug(&quot;error evaluating handlebars action property&quot;, ignore);
+      }
+    }
+    return result;
+  },
+
+<span id='sol-common_monitoring-as-executors-SimpleExecutor-property-ACTIONS'>  /**
+</span>   * @private
+   * @property
+   * Lookup object for the different functions supported by this executor.
+   * All functions will be called with a `de.elo.ix.client.Sord` as first, an object (representing the action which should be executed) as second parameter and an context object possibly containing additional informations.
+   */
+  ACTIONS: {
+    WORKFLOW: function (sord, action, ctx) {
+      var me = this,
+          flowTemplate, flowName, flowUser, conn, flowId;
+
+      flowName = me.buildName(sord, ctx, action.nameTemplate);
+      flowTemplate = me.eveluateActionProperty(action.templateId, sord, ctx);
+      flowUser = (action.user) ? me.eveluateActionProperty(action.user, sord, ctx) : me.user;
+      conn = me.getConnection(flowUser);
+      flowId = conn.ix().startWorkFlow(flowTemplate, flowName, sord.id);
+      me.logger.info([&quot;workflow started: flowId={0}, flowName={1}, flowOwner={2}&quot;, flowId, flowName, flowUser]);
+    },
+    TECHNICAL_WORKFLOW: function (sord, action, ctx) {
+      var me = this,
+          flowTemplate, flowName, flowUser, conn, flowId, activeWorkflows, flowFinished;
+
+      flowName = me.buildName(sord, ctx, action.nameTemplate);
+      flowTemplate = me.eveluateActionProperty(action.templateId, sord, ctx);
+      flowUser = (action.user) ? me.eveluateActionProperty(action.user, sord, ctx) : me.user;
+      conn = me.getConnection(flowUser);
+      flowId = conn.ix().startWorkFlow(flowTemplate, flowName, sord.id);
+      me.logger.info([&quot;workflow started: flowId={0}, flowName={1}, flowOwner={2}&quot;, flowId, flowName, flowUser]);
+
+      activeWorkflows = sol.common.WfUtils.getActiveWorkflows(sord.id, { template: flowTemplate });
+      flowFinished = !activeWorkflows.some(function (wf) {
+        return wf.id === flowId;
+      });
+      if (flowFinished) {
+        me.logger.info([&quot;delete finished workflow: flowId={0}, flowName={1}, flowOwner={2}&quot;, flowId, flowName, flowUser]);
+        me.getConnection(flowUser).ix().deleteWorkFlow(flowId, WFTypeC.FINISHED, LockC.NO);
+      }
+
+    },
+    REMINDER: function (sord, action, ctx) {
+      var me = this,
+          user, reminder;
+
+      user = (action.user) ? me.eveluateActionProperty(action.user, sord, ctx) : me.user;
+
+      if (user) {
+        reminder = ixConnect.ix().createReminder(sord.id);
+        reminder.name = me.buildName(sord, ctx, action.nameTemplate);
+        reminder.promptDateIso = me._todayIso;
+        //reminder.prio = UserTaskPriorityC.HIGHEST;
+        //reminder.desc = &quot;...&quot;;
+        ixConnect.ix().checkinReminder(reminder, [user], false, LockC.NO);
+        me.logger.info([&quot;reminder created: objId={0}, user={1}&quot;, sord.id, user]);
+      }
+    },
+    FUNCTION: function (sord, action, ctx) {
+      // TODO: can this result in a new &quot;nextRun&quot;?  --&gt; see e.g. File
+      var me = this,
+          paramObj = { objId: sord.id };
+      if (action.regfct) {
+        sol.common.IxUtils.execute(action.regfct, paramObj);
+        me.logger.info([&quot;refistered function executed: {0}&quot;, action.regfct]);
+        return;
+      }
+      if (action.direct) {
+        if (ruleExecutor.hasDirectRule(action.direct)) {
+          ruleExecutor.runDirectRule(action.direct, sord.id, JSON.stringify(paramObj), &quot;&quot;);
+        } else {
+          me.logger.debug([&quot;Direct rule &#39;{0}&#39; not found.&quot;, action.direct]);
+        }
+        return;
+      }
+      if (action.module) {
+        sol.create(action.module, paramObj).process();
+        me.logger.info([&quot;function module executed: {0}&quot;, action.module]);
+      }
+    }
+  }
+
+});
+</pre>
+</body>
+</html>

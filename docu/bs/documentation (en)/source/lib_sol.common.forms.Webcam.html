@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+<span id='sol-common-forms-Webcam'>/** 
+</span> * @private
+ * Utility-Class that helps capture webcam images.
+ * 
+ * It&#39;s needed to declare a text with &#39;WEBCAM_INIT&#39; on the varname-field, to get the webcam container.
+ * It&#39;s also needed to declare two buttons with &#39;JS_WEBCAM_SNAP&#39; - (captures a preview).
+ * And &#39;JS_WEBCAM_RESET&#39; - (clears the freeze).
+ */
+sol.define(&quot;sol.common.forms.Webcam&quot;, {
+    
+<span id='sol-common-forms-Webcam-method-initialize'>  /**
+</span>   * Initialize the webcam
+   * @param {Object} config Configuration
+   */
+  initialize: function (config) {
+    
+    var me = this,
+        webcamContainer = $var(config.varNameContainer),
+        resetBtn = $var(config.varNameBtnReset),
+        snapBtn = $var(config.varNameBtnSnap),
+        sBrowser, 
+        sUsrAg = navigator.userAgent,
+        objectElements,
+        forceFlash = false;
+        
+    
+    me.captured = false;
+    me.varNameBtnSnap = config.varNameBtnSnap;
+    me.varNameBtnReset = config.varNameBtnReset;
+    me.varNameContainer = config.varNameContainer;
+    me.webcamContainer = webcamContainer;
+
+    sol.common.forms.Utils.initializeIxSession();
+    
+    if (resetBtn) {
+      resetBtn.disabled = true;
+    }
+    
+    if (snapBtn) {
+      snapBtn.disabled = false;
+    }
+    
+    if (sUsrAg.indexOf(&quot;Chrome/&quot;) &gt; -1) {
+      sBrowser = &quot;Google Chrome&quot;;
+    }
+    
+    // https?
+    if (window.location.protocol == &quot;http:&quot; &amp;&amp; sBrowser == &quot;Google Chrome&quot;) {
+      forceFlash = true;
+    }
+    
+    if (webcamContainer) {
+      
+      Webcam.set({
+        width: config.width,
+        height: config.height,
+        dest_width: config.dest_width,
+        dest_height: config.dest_height,
+        crop_width: config.crop_width,
+        crop_height: config.crop_height,
+        image_format: config.image_format,
+        jpeg_quality: config.jpeg_quality,
+        swfURL: config.swfURL,
+        force_flash: forceFlash,
+        fps: config.fps
+      });
+      
+      var webcamConnected = undefined;
+      Webcam.on(&quot;error&quot;, function (err) {
+        webcamConnected = false;
+      });
+
+      Webcam.attach(config.varNameContainer);
+
+      var container = document.getElementById(config.varNameContainer);
+      var childNodes = container &amp;&amp; Array.prototype.slice.call(container.childNodes);
+      var children = childNodes.length === 2 &amp;&amp; childNodes[1].children;
+      var swfObject = (children &amp;&amp; children.length &gt; 0 &amp;&amp; children[0].tagName === &quot;OBJECT&quot;) &amp;&amp; children[0];
+      swfObject &amp;&amp; childNodes[1].classList.add(&quot;sol-webcam&quot;);
+
+      objectElements = webcamContainer.getElementsByTagName(&quot;object&quot;);
+      if (objectElements &amp;&amp; (objectElements.length &gt; 0)) {
+        objectElements[0].value = &quot;&quot;;
+      }
+      me.intervalUntil(
+        function () {
+          return true;
+        },
+        function () { // until webcam is loaded or loading failed
+          return (Webcam.loaded || typeof webcamConnected !== &quot;undefined&quot;);
+        },
+        function () {
+          function removeSwf() {
+            if (!config.showIfNoCam) {
+              webcamContainer.style.display = &quot;none&quot;;
+              $hide(config.varNameContainer);
+            }
+            console.log(&quot;No webcam found&quot;);
+
+            $hide(config.varNameBtnSnap);
+            $hide(config.varNameBtnReset);
+            swfObject &amp;&amp; swfObject.parentElement.removeChild(swfObject);
+          }
+          (typeof webcamConnected !== &quot;undefined&quot;) &amp;&amp;
+            removeSwf();
+        },
+        50,
+        { name: &quot;loading webcam library&quot;, logging: true }
+      );
+    }
+  },
+<span id='sol-common-forms-Webcam-method-snap'>  /**
+</span>   * freeze camera, user get&#39;s a preview picture and swap the button sets.
+   */
+  snap: function () {
+    var me = this;
+    me.state = true;
+    Webcam.freeze();
+    me.toggle();
+  },
+<span id='sol-common-forms-Webcam-method-reset'>  /**
+</span>   * Cancel preview freeze and return to live camera feed and swap buttons back.
+   */
+  reset: function () {
+    var me = this;
+    me.state = false;
+    me.capture = false;
+    Webcam.unfreeze();
+    me.toggle();
+  },
+  
+<span id='sol-common-forms-Webcam-method-toggle'>  toggle: function () {
+</span>    var me = this;
+    $var(me.varNameBtnSnap).disabled = !$var(me.varNameBtnSnap).disabled;
+    $var(me.varNameBtnReset).disabled = !$var(me.varNameBtnReset).disabled;
+  },
+  
+<span id='sol-common-forms-Webcam-method-savePicture'>  /**
+</span>   * Saves the snapshot in the folder that was selected for this workflow.
+   * @param {Function} saveFunc Save Function
+   */
+  savePicture: function (saveFunc) {
+    var me = this;
+    
+    if (me.state &amp;&amp; !me.captured) {
+      Webcam.snap(function (data_uri) {
+        var image;
+              
+        ELOF.showLoadingDiv();
+        image = data_uri.replace(/^data:image\/(jpeg|png|gif|bmp);base64,/, &quot;&quot;);
+              
+        if (saveFunc(image)) {
+          console.info(&quot;Successful saved&quot;);
+          me.captured = true;
+        } else {
+          me.reset();
+        } 
+      });
+    }
+  },
+  //small wrapper around interval functions
+  //This function is 100% decoupled from any ELO-specifics and can be used in pure Javascript environments
+<span id='sol-common-forms-Webcam-method-intervalUntil'>  /*
+</span>    f: function to perform work
+    until: function to check if f should be run again or not
+    after: function to run after until conditions were met
+    intervalTime: time in ms (interval runs every x ms)
+    params: {
+      f: any            pass f any param you like
+      f_message:String  console.log before f is called 
+      until:any   pass any any param you like
+      until_message: String  console.log before until is called
+      conditionmet_message:String  console.log if contition is met
+      after:any   pass after any param you like
+      afterafter_message:String   console.log after after was called
+      logging: Boolean    enables logging if set to true
+      maxtries: Integer     how often the f function will be executed before the interval is stopped
+      name: String          name in logger
+    }
+    if the messages are defined as empty strings, no console-logging will be done.
+
+    Of course the execution time of f and until is synchronized. f always runs before until.
+    returns a function, which can later be used to stop the interval, if the until condition seems to never reach an end
+  */
+  intervalUntil: function (f, until, after, intervalTime, params) {
+    var intervals = [], parms = params || {}, maxTries = params.maxtries - 1, executed = 0, 
+        allowF = true, allowUntil = false; //for synchronizing f and until
+    function logIt(message, paramMsg) {
+      parms.logging &amp;&amp; paramMsg !== &quot;&quot; &amp;&amp; console.log(&quot;Interval &quot; + (parms.name ? &quot;&#39;&quot; + parms.name + &quot;&#39;&quot; : &quot;&quot;) + &quot;:&quot; + (paramMsg || message));
+    }
+
+    intervals.push(
+      setInterval(  //setInterval is a standard Javascript function
+        function () {
+          if (!allowF) {
+            return;
+          }
+          logIt(&quot;performing work&quot;, parms.f_message);
+          f &amp;&amp; f(parms.f);
+          executed++;
+          allowF = false;
+          allowUntil = true;
+        }, intervalTime
+      )
+    );
+    intervals.push(
+      setInterval(
+        function () {
+          if (!allowUntil) {
+            return;
+          }
+          logIt(&quot;until condition met?&quot;, parms.until_message);
+          if (parms.maxtries &amp;&amp; maxTries-- === 0 || until &amp;&amp; until(parms.until)) {
+            logIt(maxTries === 0 ? &quot;Tried too many times:&quot; + parms.maxTries : &quot;until condition met!&quot;, maxTries === 0 ? parms.maxTriesMessage : parms.conditionmet_message);
+            intervals.forEach(clearInterval);   //clearInterval is a standard Javascript function
+            after &amp;&amp; after(parms.after);
+            logIt(&quot;after callback executed. Interval finished &amp; closed after &quot; + executed + &quot; cycles!&quot;, parms.afterafter_message);
+          }
+          allowF = true;
+          allowUntil = false;
+        }, intervalTime
+      )
+    );
+    return function () {
+      intervals.forEach(clearInterval);
+      logIt(&quot;closed manually after &quot; + executed + &quot; cycles!&quot;, parms.clearedManually);
+    };
+  },
+});</pre>
+</body>
+</html>

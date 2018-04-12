@@ -1,0 +1,213 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.FindInfo;
+import de.elo.ix.client.FindChildren;
+import de.elo.ix.client.FindByIndex;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.SordZ;
+import de.elo.ix.client.ObjKey;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how to search for entries using a given index value range.
+ * 
+ * Create archive entries
+ *  s1
+ *   |_
+ *      d1, name = The Inner Circle       Author = T. Coraghessan Boyle     Price = 39 
+ *      d2, name = The Shifting Tide      Author = Anne Perry               Price = 37 
+ *      d1, name = Feel                   Author = Robbie Williams          Price = 42 
+ *      d4, name = The Da Vinci Code      Author = Dan Brown               Price = 32 
+ * 
+ * Find book by authors with names A to J
+ * 
+ * @author Shipton
+ */
+
+public class FindByIndexRange {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Create sord and check out using index attributes
+            findIndexRange();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void findIndexRange() throws RemoteException {
+        
+         // Create archive heirachy
+         // root folder
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord s1 = ed.getSord();
+         s1.setName("s1 FindByIndexRange Root Folder");
+         s1.setId(ix.ix().checkinSord(s1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + s1.getId() + " and name " + s1.getName());
+         
+         // Create sords
+         Sord d1 = internalCreateBook(ix, CONS, s1.getGuid(), "The Inner Circle", "T. Coraghessan Boyle", "039");
+         Sord d2 = internalCreateBook(ix, CONS, s1.getGuid(), "The ShiftingTide", "Anne Perry", "037");
+         Sord d3 = internalCreateBook(ix, CONS, s1.getGuid(), "Feel", "Robbie Williams", "042");
+         Sord d4 = internalCreateBook(ix, CONS, s1.getGuid(), "The Da Vinci Code", "Dan Brown", "032");
+         System.out.println("Created sords OK");
+         
+         // Find books from authors with names from A to J
+         internalFindBooks(ix, CONS, s1.getGuid(), "A*... J*", "");
+         // Should find The Da Vinci Code and The Shifting Tide
+         
+         // Find books from authors with names from J
+         internalFindBooks(ix, CONS, s1.getGuid(), "J*... *", "");
+         // Should find Feel and The Inner Circle
+         
+         // Find books from authors with names J with a price higher than 40
+         internalFindBooks(ix, CONS, s1.getGuid(), "J*...", "040...*");
+         // Should find Feel
+        
+         // Delete sord objects
+         Boolean delete = false;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+     
+     public static Sord internalCreateBook(IXConnection ix,IXServicePortC CONS, String parentId, String name, String author, String price) throws RemoteException{
+        
+         Sord d1 = ix.ix().createDoc(parentId, "0", null, CONS.getEDIT_INFO().getMbSord()).getSord();
+         d1.setName(name);
+         d1.setObjKeys(new ObjKey[2]);
+         d1.getObjKeys()[0] = new ObjKey();
+         d1.getObjKeys()[0].setId(0);
+         d1.getObjKeys()[0].setName("AUTHOR");
+         d1.getObjKeys()[0].setData(new String[] {author});
+
+         d1.getObjKeys()[1] = new ObjKey();
+         d1.getObjKeys()[1].setId(1);
+         d1.getObjKeys()[1].setName("PRICE");
+         d1.getObjKeys()[1].setData(new String[] {price});
+
+         d1.setId(ix.ix().checkinSord(d1, CONS.getSORD().getMbAll(), CONS.getLOCK().getNO()));
+         System.out.println("Created " + name + "with author " + author);
+         
+         return d1;
+     }
+     
+     public static void internalFindBooks(IXConnection ix, IXServicePortC CONS, String parentId, String author, String price) throws RemoteException{
+         
+         System.out.println("Finding author = " + author + ", price = " + price);
+         // Select names only
+         SordZ mbName = new SordZ();
+         mbName.setBset(CONS.getSORD().getMbName());
+         
+         // Find data
+         FindInfo findInfo = internalMakeFindInfo(parentId, author, price);
+         Sord[] sords = ix.ix().findFirstSords(findInfo, 1000, mbName).getSords();
+         String nameList = "";
+         for ( int i = 0; i < sords.length; i++){
+             if (i != 0) nameList += ", ";
+             nameList += sords[i].getName();
+         }
+         System.out.println("Find OK, sords = " + nameList);
+     }
+     
+     public static FindInfo internalMakeFindInfo(  String parentId, String author, String price){
+         
+         FindInfo findInfo = new FindInfo();
+         
+         // restrict results to children of parent s1
+         findInfo.setFindChildren(new FindChildren());
+         findInfo.getFindChildren().setParentId(parentId);
+         findInfo.setFindByIndex(new FindByIndex());
+         
+         ObjKey okeyAuthor = null;
+         if (author.length() != 0) {
+             okeyAuthor = new ObjKey();
+             okeyAuthor.setName("AUTHOR");
+             okeyAuthor.setData(new String[] {author});
+         }
+         
+         ObjKey okeyPrice = null;
+         if (price.length() != 0){
+             okeyPrice = new ObjKey();
+             okeyPrice.setName("PRICE");
+             okeyPrice.setData(new String[] {price});
+         }
+         
+         int n = ((okeyAuthor != null) ? 1:0) + ((okeyPrice != null) ? 1:0);
+         findInfo.getFindByIndex().setObjKeys(new ObjKey[n]);
+         int i = 0;
+         if (okeyAuthor != null){
+             findInfo.getFindByIndex().getObjKeys()[i++] = okeyAuthor;
+         }
+         if (okeyPrice != null){
+             findInfo.getFindByIndex().getObjKeys()[i++] = okeyPrice;
+         }
+         
+         return findInfo;
+     }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

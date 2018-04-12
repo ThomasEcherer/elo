@@ -1,0 +1,141 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+
+
+// This example demonstrates how a sord can be checked out by using the Archive path
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+//
+//The following structure is created
+//  e1
+//   |_ 
+//      e2
+//       |_ 
+//          e3
+//           |_
+//              e4
+//
+// The sord e4 will be checked out by supplying the path e1\e2\e3\e4
+        
+public class CheckoutByArchivePath {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            checkoutArchivePath();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void checkoutArchivePath() throws RemoteException {
+        
+        // Create Sord object structure
+         EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+         Sord e1 = ed.getSord();
+         e1.setName("e1");
+         e1.setId(ix.ix().checkinSord(e1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + e1.getId() + " and name " + e1.getName());
+
+         ed = ix.ix().createSord(e1.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord e2 = ed.getSord();
+         e2.setName("e2");
+         e2.setId(ix.ix().checkinSord(e2, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + e2.getId() + " and name " + e2.getName());
+         
+         ed = ix.ix().createSord(e2.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord e3 = ed.getSord();
+         e3.setName("e3");
+         e3.setId(ix.ix().checkinSord(e3, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + e3.getId() + " and name " + e3.getName());
+        
+         ed = ix.ix().createSord(e3.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord e4 = ed.getSord();
+         e4.setName("e4");
+         e4.setId(ix.ix().checkinSord(e4, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + e4.getId() + " and name " + e4.getName());
+         
+         // Checkout sord by archive path
+         EditInfo ed2 = ix.ix().checkoutSord("ARCPATH:#e1#e2#e3#e4", EDIT_INFO.getMbSord(), LOCK.getNO());
+         Sord sord = ed2.getSord();
+         System.out.println("#e1#e2#e3#e4 checked out Sord with Id = " + sord.getId() + ". e4 Id = " + e4.getId());
+         
+         ed2 = ix.ix().checkoutSord("ARCPATH:\\e1\\e2\\e3\\e4", EDIT_INFO.getMbSord(), LOCK.getNO());
+         sord = ed2.getSord();
+         System.out.println("\\e1\\e2\\e3\\e4 checked out Sord with Id = " + sord.getId() + ". e4 Id = " + e4.getId());
+        
+         ed2 = ix.ix().checkoutSord("ARCPATH:\\e1\\e2", EDIT_INFO.getMbSord(), LOCK.getNO());
+         sord = ed2.getSord();
+         System.out.println("\\e1\\e2 checked out Sord with Id = " + sord.getId() + ". e2 Id = " + e2.getId());
+         
+         // Delete sord objects
+         Boolean delete = true;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, e1.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, e1.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

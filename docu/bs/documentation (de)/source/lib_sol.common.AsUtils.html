@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-AsUtils'>/**
+</span> * Utilities to interact with the ELO Automation Services
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.002
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ *
+ * @requires sol.common.Config
+ * @requires sol.common.Template
+ * @requires sol.common.WfUtils
+ * @requires sol.common.HttpUtils
+ * @requires sol.common.JsonUtils
+ */
+sol.define(&quot;sol.common.AsUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-AsUtils-property-logger'>  /**
+</span>   * @private
+   */
+  logger: sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.AsUtils&quot; }),
+
+<span id='sol-common-AsUtils-method-guessAsBaseUrl'>  /**
+</span>   * Returns the guessed ELOas base URL
+   * @return {String} url. ELOas base URL.
+   */
+  guessAsBaseUrl: function () {
+    var wfBaseUrl, asBaseUrl;
+
+    wfBaseUrl = sol.common.WfUtils.getWfBaseUrl(),
+    asBaseUrl = wfBaseUrl.replace(/\/wf/, &quot;/as&quot;);
+
+    return asBaseUrl;
+  },
+
+<span id='sol-common-AsUtils-method-testAsBaseUrl'>  /**
+</span>   * Tests a given ELOas URL
+   * @param {String} url
+   *
+   *     var testResult = sol.common.AsUtils.testAsBaseUrl(&#39;http://elosrv01:8080/as-archive/&#39;);
+   *     if (testResult.asUrlTestOk) {
+   *       // valid url
+   *     }
+   *
+   * @return {Object} response
+   */
+  testAsBaseUrl: function (url) {
+    var httpResponse;
+
+    httpResponse = sol.common.HttpUtils.sendRequest({ url: url, resolve: false, connectTimeout: 3000, readTimeout: 10000 });
+    httpResponse.asUrlTestOk = (httpResponse.responseOk &amp;&amp; (httpResponse.content.indexOf(&quot;ELO Automation Services&quot;) &gt; -1));
+
+    return httpResponse;
+  },
+
+<span id='sol-common-AsUtils-method-convertAsUrlToConfigObject'>  /**
+</span>   * Converts an ELOas URL to a configuration object.
+   *
+   *     sol.common.AsUtils.convertAsUrlToConfigObject(&#39;http://elosrv01:8080/as-archive&#39;);
+   *     {
+   *       protocol: &#39;http&#39;,
+   *       server: &#39;elosrv01&#39;,
+   *       port: &#39;8080&#39;,
+   *       name: &#39;as-archive&#39;
+   *     }
+   *
+   * @param {String} url ELOas URL
+   * @return {Object} ELOas configuration object}
+   */
+  convertAsUrlToConfigObject: function (url) {
+    var urlParts, asConfig;
+
+    urlParts = url.match(/^(http|https):\/\/([a-z0-9.\-_]+):?([0-9]+)?\/([a-z0-9.\-_]+)/i);
+    if (!urlParts) {
+      throw &quot;Can&#39;t parse ELOas URL.&quot;;
+    }
+    asConfig = { protocol: urlParts[1], serverName: urlParts[2], port: urlParts[3], serviceName: urlParts[4] };
+    return asConfig;
+  },
+
+<span id='sol-common-AsUtils-method-callAs'>  /**
+</span>   * Calls an ELOas rule
+   *
+   * @param {Object} config Configuration
+   * @param {String} config.ruleName Rule name
+   * @param {String} [config.cmd=get] `run` for an asynchronous call, `get` for a synchronous call
+   * @param {String} [config.solutionNameForAsConfig=common] This will be used to load the ELOas server configuration
+   * @param {String} [config.expectJsonResponse=true] Expect JSON response
+   * @param {String} [config.addTicket=true] Adds the user ticket
+   * @param {String} [config.throwException=true] If `true` then a exception will be thrown if an error occurs.
+   * @return {Object} result
+   */
+  callAs: function (config) {
+    var me = this,
+        asUrl, result, errorMessage;
+
+    if (!config) {
+      throw &quot;Configuration is empty&quot;;
+    }
+
+    config.throwException = (config.throwException == false) ? false : true;
+    config.addTicket = (config.addTicket == false) ? false : true;
+    config.expectJsonResponse = (config.expectJsonResponse == false) ? false : true;
+
+    if (!config.ruleName) {
+      throw &quot;Rule name is empty&quot;;
+    }
+
+    asUrl = me.buildAsUrl(config);
+
+    me.logger.debug(&quot;Executing ELOas call: &quot;, asUrl);
+
+    result = sol.common.HttpUtils.sendGet(asUrl, {
+      connectTimeout: 30000,
+      readTimeout: 300000,
+      contentType: &quot;application/json;charset=UTF-8&quot;,
+      addTicket: config.addTicket
+    });
+
+    if (result.errorMessage) {
+      if (result.errorMessage.message) {
+        errorMessage = me.formatErrorMessage(&quot;HTTP error&quot;, [result.errorMessage.message + &quot;: &quot; + result.errorMessage.fileName + &quot;#&quot; + result.errorMessage.lineNumber]);
+      } else {
+        errorMessage = me.formatErrorMessage(&quot;HTTP error&quot;, [result.errorMessage, &quot;URL: &quot; + asUrl]);
+      }
+    } else if (!result.content) {
+      errorMessage = me.formatErrorMessage(&quot;ELOas result is empty&quot;);
+    } else if (result.content.indexOf(&quot;&lt;h1&gt;HTTP Status 500&quot;) &gt; -1) {
+      errorMessage = me.formatErrorMessage(&quot;ELOas exception&quot;, [result.content]);
+    } else if (result.content.indexOf(&quot;Error&quot;) == 0) {
+      errorMessage = me.formatErrorMessage(&quot;ELOas error&quot;, [result.content]);
+    } else if (result.content.indexOf(&quot;undefined&quot;) == 0) {
+      errorMessage = me.formatErrorMessage(&quot;ELOas result is &#39;undefined&#39;&quot;);
+    } else if (result.content.indexOf(&quot;Wait...&quot;) == 0) {
+      errorMessage = me.formatErrorMessage(&quot;ELOas doesn&#39;t respond.&quot;);
+    }
+
+    if (!errorMessage &amp;&amp; (config.cmd == &quot;get&quot;) &amp;&amp; config.expectJsonResponse) {
+      try {
+        JSON.parse(result.content);
+      } catch (ex) {
+        errorMessage = me.formatErrorMessage(&quot;Unexcepted response&quot;, [result.content]);
+      }
+    }
+
+    if (errorMessage) {
+      result.errorMessage = errorMessage;
+      if (config.throwException) {
+        throw errorMessage;
+      }
+    }
+
+    return result || {};
+  },
+
+<span id='sol-common-AsUtils-method-formatErrorMessage'>  /**
+</span>   * @private
+   * Formats the error message
+   * @param {String} message Message
+   * @param {Array} lines Lines
+   * @param {Object} params Parameters
+   * @param {String} [params.format=JC] Format
+   * @return {String} Error message
+   */
+  formatErrorMessage: function (message, lines, params) {
+    var errorMessage;
+
+    lines = lines || [];
+
+    params = params || {};
+    params.format = params.format || &quot;JC&quot;;
+
+    if (params.format == &quot;JC&quot;) {
+      errorMessage = &quot;&lt;h3&gt;&quot; + message + &quot;&lt;/h3&gt;&quot;;
+      if (lines.length &gt; 0) {
+        errorMessage += lines.join(&quot;&lt;br&gt;&quot;) + &quot;&lt;br&gt;&quot;;
+      }
+    } else {
+      errorMessage = message;
+      if (lines.length &gt; 0) {
+        errorMessage += &quot;: &quot; + lines.join(&quot;\r\n&quot;) + &quot;\r\n&quot;;
+      }
+    }
+
+    return errorMessage;
+  },
+
+<span id='sol-common-AsUtils-method-getAsUrl'>  /**
+</span>   * @deprecated
+   * Returns the ELOas URL
+   *
+   * @param {Object} config Configuration. The configuration will be send to ELOas via HTTP parameter &#39;param2&#39;
+   * @param {String} config.ruleName
+   * @param {String} [config.mode=&quot;get&quot;] (optional) &quot;run&quot; for an asynchronous call, &quot;get&quot; for a synchronous call
+   * @param {String} [config.solutionNameForAsConfig=&quot;common&quot;] (optional) This will be used to load the ELOas server configuration
+   * @return {String}
+   *
+   * Example:
+   *
+   */
+  getAsUrl: function (config) {
+    var solutionName, mode, ruleName, asCfg, asUrlTpl, asUrl, objId,
+        asUrlTplStringHead = &quot;{{asCfg.protocol}}://{{asCfg.serverName}}:{{asCfg.port}}/{{asCfg.serviceName}}/as?cmd={{asCall.mode}}&amp;name={{asCall.ruleName}}&quot;,
+        asUrlTplStringTail = &quot;&amp;param2={{asCall.config}}&amp;ticket={{ticket}}&quot;,
+        asUrlTplString = asUrlTplStringHead + asUrlTplStringTail;
+
+    if (!config) {
+      throw &quot;Configuration is empty&quot;;
+    }
+
+    if (!config.ruleName) {
+      throw &quot;Rule name is empty&quot;;
+    }
+
+    if (config.objId) {
+      objId = config.objId;
+      delete config.objId;
+      asUrlTplString = asUrlTplStringHead + &quot;&amp;param1={{asCall.objId}}&quot; + asUrlTplStringTail;
+    }
+
+    solutionName = config.solutionNameForAsConfig || &quot;common&quot;;
+    delete config.solutionNameForAsConfig;
+
+    mode = config.mode || &quot;get&quot;;
+    delete config.mode;
+
+    ruleName = config.ruleName;
+    delete config.ruleName;
+
+    asCfg = sol.create(&quot;sol.common.Config&quot;).loadEloAsConfig(solutionName);
+
+    asUrlTpl = sol.create(&quot;sol.common.Template&quot;, { source: asUrlTplString });
+    asUrl = asUrlTpl.apply({
+      ticket: ixConnect.loginResult.clientInfo.ticket,
+      asCfg: asCfg,
+      asCall: {
+        mode: mode,
+        ruleName: encodeURIComponent(ruleName),
+        objId: objId,
+        config: encodeURIComponent(sol.common.JsonUtils.stringifyAll(config))
+      }
+    });
+    return asUrl;
+  },
+
+<span id='sol-common-AsUtils-method-buildAsUrl'>  /**
+</span>   * Builds an ELOas URL
+   * @param {Object} params Parameters
+   * @param {String} params.solutionNameForAsConfig Solution name for AS config
+   * @param {String} params.protocol Protocol
+   * @param {String} params.serverName Server name
+   * @param {String} params.port Port
+   * @param {String} params.serviceName Service name
+   * @param {String} [params.cmd=get] Command, e.g. ´run´ or ´get´
+   * @param {String} params.ruleName Rule name
+   * @param {String} params.param1 Parameter 1
+   * @param {String} params.param2 Parameter 2
+   * @param {Object} params.param2Obj Parameter object 2
+   * @param {String} params.param3 Parameter 3
+   * @param {Object} params.param3Obj Parameter object 3
+   * @param {Boolean} addTicket If true the session ticket will be added
+   * @return {String} URL
+   */
+  buildAsUrl: function (params) {
+    var me = this,
+        urlParams = [],
+        url, additionalParams;
+
+    me.prepareParameter(params);
+    me.checkParams(params);
+
+    urlParams.push(&quot;cmd=&quot; + params.cmd);
+    urlParams.push(&quot;name=&quot; + encodeURIComponent(params.ruleName));
+
+    if (params.param1) {
+      urlParams.push(&quot;param1=&quot; + params.param1);
+    } else if (params.objId) {
+      urlParams.push(&quot;param1=&quot; + params.objId);
+    }
+
+    additionalParams = me.prepareUrlParams(params);
+
+    if (additionalParams.length &gt; 0) {
+      urlParams = urlParams.concat(additionalParams);
+    } else {
+      urlParams.push(&quot;param2=&quot; + encodeURIComponent(me.prepareParam2(params)));
+    }
+
+    if (params.addTicket) {
+      urlParams.push(&quot;ticket=&quot; + ixConnect.loginResult.clientInfo.ticket);
+    }
+
+    url = params.protocol + &quot;://&quot; + params.serverName + &quot;:&quot; + params.port + &quot;/&quot; + params.serviceName + &quot;/as?&quot; + urlParams.join(&quot;&amp;&quot;);
+
+    return url;
+  },
+
+<span id='sol-common-AsUtils-method-prepareParameter'>  /**
+</span>   * @private
+   * Applies the default values and the ELOas configuration. Used by {@link #buildAsUrl}.
+   * @param {Object} params
+   */
+  prepareParameter: function (params) {
+    var solutionNameForAsConfig, asCfg;
+
+    if (!params.serverName) {
+      if (params.param2Obj &amp;&amp; params.param2Obj.solutionNameForAsConfig) {
+        solutionNameForAsConfig = params.param2Obj.solutionNameForAsConfig;
+        delete params.param2Obj.solutionNameForAsConfig;
+      } else {
+        solutionNameForAsConfig = params.solutionNameForAsConfig;
+      }
+      asCfg = sol.create(&quot;sol.common.Config&quot;).loadEloAsConfig(solutionNameForAsConfig);
+      params.protocol = asCfg.protocol;
+      params.serverName = asCfg.serverName;
+      params.port = asCfg.port;
+      params.serviceName = asCfg.serviceName;
+    }
+
+    params.protocol = params.protocol || &quot;http&quot;;
+
+    if (!params.port &amp;&amp; params.protocol) {
+      if (params.protocol == &quot;http&quot;) {
+        params.port = 80;
+      }
+      if (params.protocol == &quot;https&quot;) {
+        params.port = 443;
+      }
+    }
+
+    params.cmd = params.cmd || params.mode || &quot;get&quot;;
+  },
+
+<span id='sol-common-AsUtils-method-checkParams'>  /**
+</span>   * @private
+   * Checks, if all mandatory parameters are set. Used by {@link #buildAsUrl}.
+   * @param {Object} params
+   */
+  checkParams: function (params) {
+    if (!params.serverName) {
+      throw &quot;Property &#39;params.serverName&#39; is empty&quot;;
+    }
+
+    if (!params.port) {
+      throw &quot;Property &#39;params.port&#39; is empty&quot;;
+    }
+
+    if (!params.serviceName) {
+      throw &quot;Property &#39;params.serverName&#39; is empty&quot;;
+    }
+
+    if (!params.ruleName) {
+      throw &quot;Property &#39;params.port&#39; is empty&quot;;
+    }
+  },
+
+<span id='sol-common-AsUtils-method-prepareUrlParams'>   /**
+</span>   * @private
+   * Prepares the additional parameters (param2 - param10). Used by {@link #buildAsUrl}.
+   * @param {Object} params
+   * @return {String[]}
+   */
+  prepareUrlParams: function (params) {
+    var additionalParams = [],
+        paramName, paramValue, i;
+
+    for (i = 2; i &lt;= 10; i++) {
+      paramName = &quot;param&quot; + i;
+      paramValue = params[paramName];
+      if (paramValue) {
+        additionalParams.push(paramName + &quot;=&quot; + encodeURIComponent(paramValue));
+        continue;
+      }
+
+      paramValue = params[&quot;param&quot; + i + &quot;Obj&quot;];
+      if (paramValue) {
+        paramValue = sol.common.JsonUtils.stringifyAll(paramValue);
+        additionalParams.push(paramName + &quot;=&quot; + encodeURIComponent(paramValue));
+      }
+    }
+
+    return additionalParams;
+  },
+
+<span id='sol-common-AsUtils-method-prepareParam2'>  /**
+</span>   * @private
+   * Prepares param2 with all properties from params (cleaned). Used by {@link #buildAsUrl}.
+   * @param {Object} params
+   * @return {String}
+   */
+  prepareParam2: function (params) {
+    var param2 = {},
+        ignoreProps, propertyName;
+
+    ignoreProps = [
+      &quot;param1&quot;,
+      &quot;solutionNameForAsConfig&quot;,
+      &quot;protocol&quot;,
+      &quot;serverName&quot;,
+      &quot;port&quot;,
+      &quot;serviceName&quot;,
+      &quot;cmd&quot;,
+      &quot;ruleName&quot;
+    ];
+
+    for (propertyName in params) {
+      if (params.hasOwnProperty(propertyName) &amp;&amp; (ignoreProps.indexOf(propertyName) &lt; 0)) {
+        param2[propertyName] = params[propertyName];
+      }
+    }
+
+    return JSON.stringify(param2);
+  }
+
+});
+</pre>
+</body>
+</html>

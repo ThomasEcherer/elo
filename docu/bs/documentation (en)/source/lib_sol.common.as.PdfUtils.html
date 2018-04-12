@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-as-PdfUtils'>/**
+</span> * PDF utilities
+ *
+ * @author MW, ELO Digital Office GmbH
+ *
+ * @eloas
+ *
+ * @requires sol.common.RepoUtils
+ */
+
+sol.define(&quot;sol.common.as.PdfUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-as-PdfUtils-method-mergePdfStreams'>  /**
+</span>   * Merges PDF streams
+   * @param {Array} inputStreams PDF input streams
+   * @param {java.io.OutputStream} outputStream
+   */
+  mergePdfStreams: function (inputStreams, outputStream) {
+    var me = this,
+        pdfBoxVersion, pdfMerger;
+
+    if (!inputStreams) {
+      throw &quot;Input streams are empty&quot;;
+    }
+
+    pdfBoxVersion = (new Packages.org.apache.pdfbox.pdmodel.PDDocument()).class.package.implementationVersion;
+    me.logger.debug([&quot;PDF box version: {0}&quot;, pdfBoxVersion]);
+
+    if (pdfBoxVersion &gt; &quot;2.0.0&quot;) {
+      pdfMerger = new Packages.org.apache.pdfbox.multipdf.PDFMergerUtility();
+    } else {
+      pdfMerger = new Packages.org.apache.pdfbox.util.PDFMergerUtility();
+    }
+
+    inputStreams.forEach(function (inputStream) {
+      pdfMerger.addSource(inputStream);
+    });
+
+    pdfMerger.destinationStream = outputStream;
+    pdfMerger.mergeDocuments();
+
+    inputStreams.forEach(function (inputStream) {
+      inputStream.close();
+    });
+  }
+});
+</pre>
+</body>
+</html>

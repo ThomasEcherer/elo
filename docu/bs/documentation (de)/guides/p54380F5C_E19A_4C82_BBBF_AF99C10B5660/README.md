@@ -1,0 +1,45 @@
+# Glossar und Abkürzungen
+
+## Glossar
+
+<table><thead><tr><td><span
+style='font-weight:bold'>Begriff</span></td><td><span
+style='font-weight:bold'>Beschreibung</span></td></tr></thead><tbody><tr><td><span
+style='font-weight:bold'>Aktion</span></td><td>Aktionen sind Folgen einfacher Ereignisse, die vom Benutzer über eine Funktion (Button) des Clients ausgelöst werden können. Sie sind als Indexserver-Skript oder ELOas-Regel implementiert.<br /><br />> <span
+style='font-weight:bold;font-style:italic'>Beispiel:</span><span
+style='font-style:italic'> Die Aktion </span><span style='font-weight:bold;
+font-style:italic'>Akte anlegen</span><span style='font-style:italic'> legt einen Ordner an, startet einen gleichnamigen Workflow und löst Client-Events wie z.B. </span><span
+style='font-weight:bold;font-style:italic'>Formular anzeigen</span><span
+style='font-style:italic'> aus.</span></td></tr><tr><td><span
+style='font-weight:bold'>Dynamische Stichwortliste</span></td><td>Dynamische Stichwortlisten erlauben die Verwendung von Daten aus externen Datenbanken für die Verschlagwortung oder Dateneingabe in ELO. Sie können sowohl in Indexfeldern (für Verschlagwortungsmasken) als auch in Map-Feldern (für Formulare) zur Verfügung gestellt werden. Fängt ein Benutzer an, in das entsprechende Feld zu tippen, wird der aktuelle Feldwert als Filterwert an die Stichwortliste übermittelt. Über eine Datenbankabfrage können zur Eingabe passende Einträge dann in tabellarischer Form erhalten und angezeigt werden.</td></tr><tr><td><span
+style='font-weight:bold'>Framework</span></td><td>Programmiergerüst, innerhalb dessen der Programmierer eine Anwendung erstellt, wobei u.a. durch die im Framework verwendeten Templates auch die Struktur der individuellen Anwendung beeinflusst wird. Ein Framework definiert insbesondere den Kontrollfluss der Anwendung und die Schnittstellen für die konkreten Klassen, die vom Programmierer erstellt werden müssen. Frameworks werden also im Allgemeinen mit dem Ziel einer Wiederverwendung „architektonischer Muster“ entwickelt und genutzt.<br /><br />Das <span
+style='font-style:italic'>Business Solutions</span>-Klassenframework erlaubt die Verwendung von zuvor in einer Basisklasse beschriebenen Funktionalitäten in abgeleiteten Klassen durch Vererbung. Weiterführend stellt es grundlegende objektrelationale Ansätze in JavaScript zur Verfügung.</td></tr><tr><td><span
+style='font-weight:bold'>Funktionsbaustein</span></td><td>Ein entwicklungstechnisch eigenständiger Programmteil, der über eine modulspezifische Schnittstelle aufgerufen wird. Ein Funktionsbaustein kann selbst weitere Bausteine einbinden und aufrufen.</td></tr><tr><td><span
+style='font-weight:bold'>Hilfsklasse</span></td><td>Hilfsklassen stellen Funktionalität zur Verfügung, die nicht zur Kernfunktionalität der Anwendung gehört, in der sie verwendet werden. <br /><br />Utility-Klassen sind spezielle Hilfsklassen, die ausschließlich statische Methoden besitzen.</td></tr><tr><td><span
+style='font-weight:bold'>Namespace</span></td><td>Raum, in dem jeder Name eindeutig ein Objekt bezeichnet. Der gleiche Name kann in einem anderen Namespace zur Bezeichnung eines anderen Objekts verwendet werden. Dazu werden Objekte in einer Baumstruktur angeordnet und über entsprechende Pfadnamen eindeutig angesprochen.<br /><br />Namespaces dienen der Untergliederung von <span
+style='font-style:italic'>ELO Business Solutions</span>, sorgen für eine logische Trennung und ermöglichen es, Klassen des <span
+style='font-style:italic'>Business Solutions</span>-Teams von Anpassungen Dritter zu trennen.<br /><br />> <span
+style='font-weight:bold;font-style:italic'>Beispiel:</span><span
+style='font-style:italic'> Der Namespace `sol.invoice.ix` enthält alle Klassen, die von </span><span
+style='font-weight:bold;font-style:italic'>ELO Business Solution Invoice</span><span
+style='font-style:italic'> zur Kommunikation mit dem Indexserver verwendet werden.</span></td></tr><tr><td><span
+style='font-weight:bold'>Object Formatter</span></td><td>Die Sord-Objekte des Indexservers enthalten in der Regel eine Vielzahl von Informationen, von denen bei einem Zugriff ein großer Teil möglicherweise nicht benötigt wird. Der Object Formatter erlaubt es, die zu übertragenden Objekte zu vereinfachen, indem die jeweils benötigten Objekt-Properties definiert werden. Dies empfiehlt sich bei umfangreichen Datenbankabfragen, um die vom Indexserver zum Client übertragene Datenmenge zu reduzieren. <br /><br />Diese Funktionalität wird von Services verwendet, die Daten für in <span
+style='font-style:italic'>AngularJS</span> entwickelte Dashboard-Apps sammeln.</td></tr><tr><td><span
+style='font-weight:bold'>Service</span></td><td>Ein eigenständiger Programmteil, der zusammenhängende Funktionalitäten zu einem Themenkomplex bündelt und über eine klar definierte Schnittstelle zur Verfügung stellt.<br /><br />Im Unterschied zu Funktionsbausteinen stellen Services Informationen für den Client bereit und werden nicht als Workflow-Knoten eingesetzt.</td></tr><tr><td><span
+style='font-weight:bold'>Sord</span></td><td>Ein Archivobjekt in ELO. Dabei kann es sich entweder um ein Dokument oder um einen Ordner handeln.</td></tr><tr><td><span
+style='font-weight:bold'>Workflow</span></td><td>Abfolge von Arbeitsschritten, die entweder vom Benutzer oder automatisiert vom System bearbeitet werden. Workflows werden durch Aktionen ausgelöst und durch Verknüpfungen von Funktionsbausteinen und Benutzerknoten realisiert.<br>
+&nbsp;<br />> <span
+style='font-weight:bold;font-style:italic'>Beispiel:</span><span
+style='font-style:italic'> Die Aktion </span><span style='font-weight:bold;
+font-style:italic'>Akte anlegen</span><span style='font-style:italic'> startet den Workflow `sol.pubsec.record.CreateRecord`   In diesem finden sich Funktionsbausteine, die bspw. einen Feed-Kommentar schreiben oder die Farbe der Aktenbeschriftung setzen. Der Workflow enthält auch einen Benutzerknoten, welcher ein Formular zur Erfassung der benötigten Informationen der Akte bereitstellt.</span></td></tr></tbody></table>
+
+
+
+## Abkürzungen
+
+<table><thead><tr><td><span
+style='font-weight:bold'>Abkürzung</span></td><td><span
+style='font-weight:bold'>Begriff</span></td></tr></thead><tbody><tr><td>AS</td><td>ELO Automation Services (ELOas)</td></tr><tr><td>BS Invoice</td><td>Business Solution Invoice</td></tr><tr><td>DX</td><td>DocXtractor</td></tr><tr><td>IX</td><td>ELO Indexserver (ELOix)</td></tr><tr><td>JS</td><td>JavaScript</td></tr></tbody></table>
+
+
+

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(java.io);
+
+//@include lib_Class.js
+
+<span id='sol-common-ExecUtils'>/**
+</span> * Execution utils
+ *
+ * @eloas
+ * @eloix
+ * @elojc
+ */
+sol.define(&quot;sol.common.ExecUtils&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-ExecUtils-method-startProcess'>  /**
+</span>   * Starts a process
+   * @param {Array} args Arguments
+   * @param {Object} config Config
+   * @param {String} config.dir Directory
+   * @param {Boolean} config.wait Wait
+   * @return {Object} Result
+   */
+  startProcess: function (args, config) {
+    var process,
+        outputArr = [],
+        processBuilder, scanner, returnCode;
+
+    config = config || {};
+
+    processBuilder = new java.lang.ProcessBuilder(java.util.Arrays.asList(args));
+    processBuilder.redirectErrorStream(true);
+
+    if (config.dir) {
+      processBuilder.directory(new File(config.dir));
+    }
+
+    process = processBuilder.start();
+    if (config.wait == false) {
+      return;
+    }
+    scanner = new java.util.Scanner(process.inputStream).useDelimiter(&quot;\\Z&quot;);
+    while (scanner.hasNextLine()) {
+      outputArr.push(scanner.nextLine());
+    }
+    scanner.close();
+    returnCode = process.waitFor();
+    return {
+      returnCode: returnCode,
+      output: outputArr.join(&quot;\r\n&quot;)
+    };
+  },
+
+<span id='sol-common-ExecUtils-method-open'>  /**
+</span>   * Opens a file by &quot;ShellExecute&quot;
+   * @param {String} path
+   */
+  open: function (path) {
+    if (!path) {
+      return;
+    }
+    var file = new File(path);
+    if (!file.exists()) {
+      return;
+    }
+    Packages.java.awt.Desktop.getDesktop().open(file);
+  },
+
+<span id='sol-common-ExecUtils-method-getUserProfileDir'>  /**
+</span>   * Returns the user profile directory
+   * @return {String} Path of the user profile directory
+   */
+  getUserProfileDir: function () {
+    return String(java.lang.System.getenv(&quot;UserProfile&quot;));
+  },
+
+<span id='sol-common-ExecUtils-method-getProgramFilesDir'>  /**
+</span>   * Returns the program files directory
+   * @return {String} Path of the program files directory
+   */
+  getProgramFilesDir: function () {
+    return String(java.lang.System.getenv(&quot;ProgramFiles&quot;));
+  },
+
+<span id='sol-common-ExecUtils-method-getProgramFilesX86Dir'>  /**
+</span>   * Returns the Program files directory
+   * @return {String} Path of the Program files directory
+   */
+  getProgramFilesX86Dir: function () {
+    return String(java.lang.System.getenv(&quot;ProgramFiles(x86)&quot;));
+  },
+
+<span id='sol-common-ExecUtils-method-runBatchFileInWindow'>  /**
+</span>   * Runs a batch file in a command window
+   * @param {Array} args Arguments. The first element must be the batch file name
+   * @param {Object} params Parameters
+   * @param {String} params.dir Directory
+   */
+  runBatchFileInWindow: function (args, params) {
+    var dir = null,
+        cmdString, argsString;
+
+    params = params || {};
+    if (!args || (args.length == 0)) {
+      throw &quot;The batch file name is empty&quot;;
+    }
+    if (params.dir) {
+      dir = new File(params.file);
+    }
+
+    cmdString = &#39;cmd.exe /c start cmd.exe /k \&quot;{0}\&quot;&#39;;
+
+    args = args.map(function (arg) {
+      return &#39;&quot;&#39; + arg + &#39;&quot;&#39;;
+    });
+    argsString = args.join(&quot; &quot;);
+    cmdString = cmdString.replace(&quot;{0}&quot;, argsString);
+
+    java.lang.Runtime.runtime.exec(cmdString, null, dir);
+  },
+
+<span id='sol-common-ExecUtils-method-insideTomcat'>  /**
+</span>   * Detects if the script runs inside Tomcat
+   * @return {Boolean}
+   */
+  insideTomcat: function () {
+    try {
+      java.lang.Class.forName(&quot;org.apache.catalina.util.ServerInfo&quot;);
+      return true;
+    } catch (ignore) {
+      // ignore
+    }
+    return false;
+  },
+
+<span id='sol-common-ExecUtils-method-getJavaVersion'>  /**
+</span>   * Returns the Java version
+   * @return {String}
+   */
+  getJavaVersion: function () {
+    var javaRuntimeVersion, bitness, javaVersion;
+
+    javaRuntimeVersion = String(java.lang.System.getProperty(&quot;java.runtime.version&quot;));
+    bitness = String(java.lang.System.getProperty(&quot;sun.arch.data.model&quot;));
+    javaVersion = javaRuntimeVersion + &quot; - &quot; + bitness + &quot; bit&quot;;
+    return javaVersion;
+  }
+});
+</pre>
+</body>
+</html>

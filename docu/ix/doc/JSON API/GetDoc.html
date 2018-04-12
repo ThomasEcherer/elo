@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Show ELO Document</title>
+
+<!-- Include Indexserver JavaScript Library -->
+<script type="text/javascript" src="EloixClient.js"></script>
+
+<!-- Example code -->
+<script type="text/javascript">
+
+// Simplify namespace access 
+// (all ELOix symbols are member of de.elo.ix.client)
+var IX = de.elo.ix.client;
+
+// Indexserver URL 
+// Since cross domain requests are not supported, Indexserver must be reachable 
+// via the same server from where this example HTML file is loaded.
+var ixUrl = "/ix-elo90/ix";
+
+/**
+ * This function reads the object given by its ID in the element "searchTerm". 
+ * If the object exists, it navigates the browser to its URL.
+ * If the object does not exsit, it opens an alert box and displays the error message created by Indexserver.
+ */
+function Example_getDoc() {
+	  try {
+		  // Get Indexserver connection
+	      var connFact = new IX.IXConnFactory(ixUrl, "GetDoc", "1.0");
+	      var conn = connFact.create("Administrator", "elo");
+				  
+		  // Read API constants
+	      var CONST = conn.getCONST();
+	
+		  // Get object ID from HTML element
+	      var objId = document.getElementById("searchTerm").value;
+	
+		  // Read object
+	      var ed = conn.ix().checkoutDoc(objId, "", CONST.EDIT_INFO.mbDocument, CONST.LOCK.NO);
+	
+		  // Assign URL to the link that shows the document in the browser window.
+	      document.getElementById("viewLink").href = ed.document.docs[0].url; // default: + "&acode=inline"; 
+
+	      // Assing URL to download link
+	      document.getElementById("downloadLink").href = ed.document.docs[0].url + "&acode=attachment";
+		  
+	  }
+	  catch (ex) {
+
+		  // Show message box with error text.
+		  alert(ex.toString());
+	  }
+	  finally {
+		  // Skip logout in this example.
+		  // Otherwise the document URL might not be valid when the browser loads it.
+	  }
+};
+</script>
+</head>
+<body>
+	  Object ID:<input id="searchTerm"	type="text" value="&lt;objid&gt;"/> 
+		<input id="bnSearch" type="button" value="get"	onclick="Example_getDoc()" /><br/>
+		<a href="about:blank" id="downloadLink">Download</a><br/>
+		<a href="about:blank" id="viewLink">View</a><br/>
+</body>
+</html>

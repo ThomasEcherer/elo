@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_document-as-actions-PrepareDocument-cfg-wfFieldName'><span id='sol-common_document-as-actions-PrepareDocument-cfg-defaultName'><span id='sol-common_document-as-actions-PrepareDocument-cfg-templateId'><span id='sol-common_document-as-actions-PrepareDocument-cfg-parentId'><span id='sol-common_document-as-actions-PrepareDocument'>/**
+</span></span></span></span></span> * Prepares a document for the template generating.
+ * This function will be called first when the as rule is executed. Afterwards CreateDocument is called
+ *
+ * @cfg {String} parentId (required) target folder objId
+ * @cfg {String} templateId (required) template document objId
+ * @cfg {String} defaultName (required) name for new document
+ * @cfg {String} wfFieldName (optional) template-sord-Fieldname which contains the workflow-name
+
+ *
+ * @eloas
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.as.ActionBase
+ */
+sol.define(&quot;sol.common_document.as.actions.PrepareDocument&quot;, {
+  extend: &quot;sol.common.as.ActionBase&quot;,
+
+<span id='sol-common_document-as-actions-PrepareDocument-property-solution'>  solution: &quot;common_document&quot;,
+</span>
+<span id='sol-common_document-as-actions-PrepareDocument-property-requiredProperty'>  requiredProperty: [&quot;parentId&quot;, &quot;templateId&quot;, &quot;defaultName&quot;],
+</span>
+<span id='sol-common_document-as-actions-PrepareDocument-method-getName'>  getName: function () {
+</span>    return &quot;PrepareDocument&quot;;
+  },
+
+<span id='sol-common_document-as-actions-PrepareDocument-method-process'>  process: function () {
+</span>    var me = this,
+        sord, name, objId, aclConfig, flowId;
+
+    sord = sol.common.RepoUtils.getSord(me.templateId);
+    name = sord.name;
+
+    objId = me.createEmptyDocument(name, sord);
+
+    aclConfig = { mode: &quot;SET&quot;, inherit: { fromDirectParent: true }, rights: { r: true, w: true, d: true, e: true, l: true } };
+    if (me.userName) {
+      aclConfig.users = [me.userName];
+    }
+
+    sol.common.AclUtils.changeRightsInBackground(objId, aclConfig);
+
+    flowId = me.startMaskStandardWorkflow(objId, { name: name, field: me.wfFieldName || &quot;STANDARD_WORKFLOW&quot; });
+
+    if (flowId) {
+      me.addWfDialogEvent(flowId, { objId: objId, title: name, dialogId: me.getName() });
+    }
+
+    me.addActionEvent(&quot;sol.common_document.as.actions.CreateDocument&quot;, {
+      objId: objId,
+      templateId: me.templateId,
+      defaultName: me.defaultName,
+      prepared: true
+    }, {
+      type: &quot;WF_STATUS&quot;,
+      value: &quot;CREATE&quot;,
+      flowId: flowId
+    });
+  },
+
+<span id='sol-common_document-as-actions-PrepareDocument-method-createEmptyDocument'>  createEmptyDocument: function (name, sord) {
+</span>    var me = this,
+        objId, mapKeys,
+        objKeys = sol.common.SordUtils.getTemplateSord(sord).sord.objKeys,
+        config = {
+          parentId: me.parentId,
+          name: name,
+          maskId: sord.mask,
+          objKeysObj: objKeys,
+          contentString: &quot; &quot;
+        };
+
+    me.logger.debug(&quot;create document from template... &quot;, objKeys);
+    objId = sol.common.RepoUtils.saveToRepo(config);
+
+    me.logger.debug(&quot;read mapKeys from template document...&quot;);
+    mapKeys = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, me.templateId, null, LockC.NO).items;
+    if (mapKeys &amp;&amp; mapKeys.length &gt; 0) {
+      me.logger.debug(&quot;write mapKeys to new document...&quot;);
+      ixConnect.ix().checkinMap(MapDomainC.DOMAIN_SORD, objId, objId, mapKeys, LockC.NO);
+      me.logger.debug(&quot;applied map keys.&quot;);
+    }
+
+    return objId;
+  }
+
+});
+
+<span id='sol-common_document-as-actions-CreateDocument-cfg-defaultName'><span id='sol-common_document-as-actions-CreateDocument-cfg-prepared'><span id='sol-common_document-as-actions-CreateDocument-cfg-templateId'><span id='sol-common_document-as-actions-CreateDocument-cfg-objId'><span id='sol-common_document-as-actions-CreateDocument'>/**
+</span></span></span></span></span> * Creates a document from a template and saves it as new version on a prepared document.
+ *
+ * @cfg {String} objId (required) sord to update
+ * @cfg {String} templateId (required) template document objId
+ * @cfg {Boolean} prepared (optional) must be true (only if called via AS-rule)
+ * @cfg {String} defaultName (optional) only if you want to change the name of the document.
+
+ *
+ * @eloas
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.as.DocumentGenerator
+ * @requires sol.common.as.ActionBase
+ * @requires sol.common.as.renderer.Word
+ */
+sol.define(&quot;sol.common_document.as.actions.CreateDocument&quot;, {
+  extend: &quot;sol.common.as.ActionBase&quot;,
+
+<span id='sol-common_document-as-actions-CreateDocument-property-requiredProperty'>  requiredProperty: [&quot;objId&quot;, &quot;templateId&quot;],
+</span>
+<span id='sol-common_document-as-actions-CreateDocument-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.as.ActionBase&quot;, &quot;initialize&quot;, [config]);
+
+    sol.common.TranslateTerms.require(&quot;sol.common_document&quot;);
+  },
+
+<span id='sol-common_document-as-actions-CreateDocument-method-getName'>  getName: function () {
+</span>    return &quot;CreateDocument&quot;;
+  },
+
+<span id='sol-common_document-as-actions-CreateDocument-method-process'>  process: function () {
+</span>    var me = this,
+        name,
+        generator, result, templateSord, extension;
+
+    templateSord = sol.common.RepoUtils.getSord(me.templateId, { sordZ: SordC.mbAll });
+    name = (me.defaultName &amp;&amp; sol.create(&quot;sol.common.Template&quot;, { source: &quot;{{translate &#39;&quot; + me.defaultName + &quot;&#39;}}&quot; }).apply()) || templateSord.name;
+    extension = String(templateSord.docVersion.ext).toLowerCase();
+    if (extension.indexOf(&quot;doc&quot;) != 0) {
+      me.addErrorEvent(&quot;sol.common_document.msg.wrongDocType&quot;, null, null, ixConnect.loginResult.clientInfo.language);
+      return;
+    }
+
+    generator = sol.create(&quot;sol.common.as.DocumentGenerator&quot;, {
+      name: name,
+      dataCollector: &quot;RF_sol_common_service_ParentDataCollector&quot;,
+      renderer: &quot;sol.common.as.renderer.Word&quot;,
+      collectorConfig: {
+        objId: me.objId,
+        allMapFields: true
+      },
+      rendererConfig: {
+        objId: me.objId,
+        templateId: me.templateId
+      }
+    });
+
+    result = generator.process();
+
+    if (result.objId) {
+      me.addGotoIdEvent(result.objId, true);
+    }
+  }
+
+});</pre>
+</body>
+</html>

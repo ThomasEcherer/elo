@@ -1,0 +1,545 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{315aaf73-ecbe-4f1b-a93c-424626eeb715}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src-ser">
+      <UniqueIdentifier>{44e8cf95-a359-430e-a1a6-10f4e56cf474}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src-ser\api">
+      <UniqueIdentifier>{59a34cc2-47f4-4c05-84fe-db9cb04f87c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src-ser\impl">
+      <UniqueIdentifier>{ab7d420d-0369-4510-b0b5-e5e23dff9c41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{9ae96a52-4c95-4db4-ad3b-61c51c63a77c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="byps">
+      <UniqueIdentifier>{9953e405-6667-4763-a643-c41600cef49d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\src\ReadMe.txt">
+      <Filter>src</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EloixClientCpp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src-ser\api\Indexserver-api.h">
+      <Filter>src-ser\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src-ser\impl\Indexserver-impl.h">
+      <Filter>src-ser\impl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXAPI.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXAuthentication.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXAuthenticationListener.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXConnection.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXConnFactory.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXProperties.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXWireClient.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\EventBusApi.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\EloixClientCppTest\TestBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Base64Coder.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXClientMask.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\IXClientPathInfo.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\RsaEncryption.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BApiDescriptor.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BArray.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BArray.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BAsyncResult.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BAsyncResult.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BAuthentication.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BBinaryModel.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BBuffer.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BBuffer.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BByteOrder.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BBytes.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BBytes.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BClient.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BClient.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BContentStream.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BContentStream.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BDateTime.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BDateTime.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BException.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BException.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BInput.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BInput.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BIO.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BIO.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BLogger.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BLogger.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BLostConnectionHandler.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BLostConnectionHandler.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMessage.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMessage.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMessageHeader.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMessageHeader.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMethodRequest.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMethodRequest.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMethodResult.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BMethodResult.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BNegotiate.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BNegotiate.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BOutput.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BOutput.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BProtocol.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BProtocol.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BRegistry.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BRegistry.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BRemote.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSerializable.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSerializable.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSerializer.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSerializer.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BServer.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BServer.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSkeleton.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSkeleton.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BStreamRequest.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BStreamRequest.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BStub.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BStub.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BSynchronized.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTargetId.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTargetId.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTestAdapter.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BThreadPool.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BThreadPool.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTransport.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTransport.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BTransportFactory.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BUtils.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BUtils.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BValueClass.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BValueClass.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BVariant.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BVariant.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BVersioning.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BWire.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BWire.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\Byps.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\Byps.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\Bypshttp.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\Bypshttp.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\Byps-impl.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HHttpClient.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HHttpClient.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HServerR.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HServerR.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HTransportFactoryClient.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HTransportFactoryClient.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HWireClient.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HWireClient.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\HWireClientI.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\platform\platform.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\platform\platform-api.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\platform\platform-impl.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BFile.h">
+      <Filter>byps</Filter>
+    </ClInclude>
+    <ClInclude Include="..\byps\include\BFile.hpp">
+      <Filter>byps</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="EloixClientCpp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Base64Coder.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXAuthentication.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXAuthenticationListener.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXConnection.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXConnFactory.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXProperties.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\RsaEncryption.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-001.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-002.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-003.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-004.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-005.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-006.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-007.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-008.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-009.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-010.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-011.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-012.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-013.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-014.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-015.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-016.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-017.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-018.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-019.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-020.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-021.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-022.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-023.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-024.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-025.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-026.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-027.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-028.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-029.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-030.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-031.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXWireClient.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\EventBusApi.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\EloixClientCppTest\TestBase.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXClientMask.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\IXClientPathInfo.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-032.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-033.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-034.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-035.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-036.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-037.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-038.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-039.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-040.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src-ser\impl\Indexserver-impl-041.cpp">
+      <Filter>src-ser\impl</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

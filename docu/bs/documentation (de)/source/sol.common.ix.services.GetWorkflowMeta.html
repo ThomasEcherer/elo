@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.GetWorkflowMetadata&quot; });
+
+<span id='sol-common-ix-services-GetWorkflowMetadata'>/**
+</span> * Retrieves some metadata of a workflow.
+ *
+ * # As IX service call
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_service_GetWorkflowMetadata&#39;, {
+ *       flowId: &quot;4711&quot;
+ *     });
+ *
+ * Returns the workflow metadata:
+ *
+ *     {
+ *       flowId: 4711,            // the workflow id
+ *       name: &quot;Musterflow&quot;,      // the workflow name
+ *       objId: &quot;0815&quot;,           // the objId
+ *       objName: &quot;Testdoc&quot;,      // the objects name
+ *       status: &quot;SUCCESS&quot;,       // the workflow status
+ *       templateId: 23,          // the template id
+ *       templateName: &quot;Muster&quot;,  // the template name
+ *       ownerId: 0,              // the owner id
+ *       ownerName: &quot;Admin&quot;,      // the owner name
+ *       activeNodes: [           // a list of all active nodes
+ *         {
+ *           nodeId: 1,           // id of the active node
+ *           nodeName: &quot;node 1&quot;,  // name of the active node
+ *           userId: 0,           // id of the node user
+ *           userName: &quot;Admin&quot;    // name of the node user
+ *         }
+ *       ]
+ *     }
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ */
+sol.define(&quot;sol.common.ix.services.GetWorkflowMetadata&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-GetWorkflowMetadata-cfg-requiredConfig'>  requiredConfig: [&quot;flowId&quot;],
+</span>
+<span id='sol-common-ix-services-GetWorkflowMetadata-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId
+   */
+
+<span id='sol-common-ix-services-GetWorkflowMetadata-cfg-inclFinished'>  /**
+</span>   * @cfg {Boolean} [inclFinished=true] (optional)
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+
+    me.inclFinished = (me.inclFinished === false) ? false : true;
+  },
+
+<span id='sol-common-ix-services-GetWorkflowMetadata-method-process'>  /**
+</span>   * Retrieves the metadata
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        wfUtils = sol.common.WfUtils,
+        result = {},
+        wfDiagram, wfStatus, activeNodes;
+
+    try {
+      wfDiagram = wfUtils.getWorkflow(me.flowId, { inclFinished: me.inclFinished });
+      wfStatus = wfUtils.getWorkflowStatus(wfDiagram);
+
+      result.flowId = wfDiagram.id;
+      result.name = wfDiagram.name;
+      result.objId = wfDiagram.objId;
+      result.objName = wfDiagram.objName;
+      result.status = wfStatus;
+      result.templateId = wfDiagram.templateId;
+      result.templateName = wfDiagram.templateName;
+      result.ownerId = wfDiagram.ownerId;
+      result.ownerName = wfDiagram.ownerName;
+
+      activeNodes = wfUtils.getActiveNodes(wfDiagram);
+
+      if (activeNodes &amp;&amp; (activeNodes.length &gt; 0)) {
+        result.activeNodes = activeNodes.map(function (node) {
+          return {
+            nodeId: node.id,
+            nodeName: node.name,
+            userId: node.userId,
+            userName: node.userName
+          };
+        });
+      }
+
+    } catch (ex) {
+      me.logger.error(&quot;error retrieving workflow metadata&quot;, ex);
+    }
+
+    return result;
+  }
+
+});
+
+<span id='sol-common-ix-services-GetWorkflowMetadata-static-method-RF_sol_common_service_GetWorkflowMetadata'>/**
+</span> * @member sol.common.ix.services.GetWorkflowMetadata
+ * @method RF_sol_common_service_GetWorkflowMetadata
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_GetWorkflowMetadata(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_common_service_GetWorkflowMetadata&quot;, args);
+
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;flowId&quot;),
+      service, result;
+
+  service = sol.create(&quot;sol.common.ix.services.GetWorkflowMetadata&quot;, params);
+  result = sol.common.JsonUtils.stringifyAll(service.process());
+
+  logger.exit(&quot;RF_sol_common_service_GetWorkflowMetadata&quot;, result);
+
+  return result;
+}
+</pre>
+</body>
+</html>

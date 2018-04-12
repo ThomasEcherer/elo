@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.jscript);
+importPackage(Packages.de.elo.ix.scripting);
+
+//@include lib_Class.js
+
+<span id='sol-common-ix-DynKwlUserNameIterator'>/**
+</span> * Base class for a dynamic keyword list that provides user names and IDs
+ *
+ * The list of current fields is returned as a table.
+ *
+ * |ID|Name|
+ * |:-----|:------|
+ * |0|Administrator|
+ * |1|Michael Jackson|
+ * |2|Donald Duck|
+ *
+ * # Example implementation
+ *
+ * Following example shows the implementation of an iterator that returns user names and IDs:
+ *
+ *     // script: sol.common.ix.DynKwlUserNameIterator.js
+ *     sol.define(&quot;sol.common.ix.dynkwl.UserNames&quot;, {
+ *       extend: &quot;sol.common.ix.DynKwlUserNameIterator&quot;,
+ *       initialize: function (config) {
+ *         var me = this;
+ *         me.$super(&quot;sol.common.ix.DynKwlUserNameIterator&quot;, &quot;initialize&quot;, [config]);
+ *       }
+ *     });
+ *
+ *     function getDataIterator () {
+ *       var log = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.DynKwlUserNameIterator&quot; }),
+ *           iterator;
+ *       try {
+ *         log.info(&quot;DynamicKeywordList (&quot;);
+ *         iterator = sol.create(&quot;sol.common.ix.dynkwl.UserNames&quot;, {});
+ *         return new DynamicKeywordDataProvider(iterator);
+ *       } finally {
+ *         log.info(&quot;)getDataIterator&quot;);
+ *       }
+ *     }
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ *
+ * @requires sol.common.SordUtils
+ * @requires sol.common.StringUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.UserUtils
+ */
+sol.define(&quot;sol.common.ix.DynKwlUserNameIterator&quot;, {
+
+<span id='sol-common-ix-DynKwlUserNameIterator-cfg-tableTitle'>  /**
+</span>   * @cfg {string} tableTitle
+   * name of this table. The title is displayed by the client.
+   */
+  tableTitle: undefined,
+
+<span id='sol-common-ix-DynKwlUserNameIterator-cfg-tableHeaders'>  /**
+</span>   * @cfg {Array} tableHeaders (required)
+   * column header names. if null column is hidden in the client.
+   *
+   *     [&quot;Name&quot;, &quot;Description&quot;]
+   */
+  tableHeaders: undefined,
+
+<span id='sol-common-ix-DynKwlUserNameIterator-property-errorMessage'>  /**
+</span>   * @property
+   * @private
+   * Error message that is passed to the client if value is missing.
+   */
+  errorMessage: &quot;&quot;,
+
+<span id='sol-common-ix-DynKwlUserNameIterator-cfg-userIdFieldName'>  /**
+</span>   * @cfg {String} userIdFieldName (optional)
+   * Name of the user ID field. If this field name is not provided then it will be {{currentFieldName}} + _ID + {{index}}.
+   */
+
+  initialize: function (config) {
+    var me = this,
+        terms = sol.common.TranslateTerms;
+
+    me.log = sol.create(&quot;sol.Logger&quot;, { scope: this.$className || &quot;sol.common.ix.DynKwlUserNameIterator&quot; });
+    me.log.enter(&quot;initialize&quot;, config);
+    config = config || {};
+
+    terms.require(&quot;sol.common.dynkwl.userNames&quot;);
+
+    me.tableTitle = config.tableTitle || me.tableTitle || terms.translate(&quot;sol.common.dynkwl.userNames.tableTitle&quot;);
+    me.tableHeaders = config.tableHeaders || me.tableHeaders || [null, terms.translate(&quot;sol.common.dynkwl.userNames.header.name&quot;)];
+
+    me.errorMessage = &quot;&quot;;
+    me.log.exit(&quot;initialize&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-open'>  /**
+</span>   * Opens a connection for the elo java client and non map field capable clients.
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec
+   * @param {de.elo.ix.client.Sord} sord Working version of the current sord object
+   * @param {String} fieldName Name of the currently focused field
+   */
+  open: function (ec, sord, fieldName) {
+    var me = this,
+        value;
+    me.log.enter(&quot;open&quot;, { sord: sord, fieldName: fieldName });
+
+    value = sol.common.SordUtils.getObjKeyValue(sord, fieldName);
+    me.buildKeyNames(fieldName);
+
+    me.index = 0;
+    me.resultSet = me.getUserTable(value);
+    me.log.exit(&quot;open&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-openMap'>  /**
+</span>   * Opens a connection for elo wf forms and map field capable components
+   *
+   * @param {de.elo.ix.client.IXServerEventsContext} ec
+   * @param {java.util.HashMap} map Map of all entries passed by the client
+   * @param {String} focusName Name of the currently focused field
+   */
+  openMap: function (ec, map, focusName) {
+    var me = this,
+        value;
+
+    me.log.enter(&quot;openMap&quot;, { focusName: focusName, map: map });
+
+    value = map[focusName];
+    me.buildKeyNames(focusName);
+
+    me.index = 0;
+    me.resultSet = me.getUserTable(value);
+    me.log.exit(&quot;openMap&quot;);
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-buildKeyNames'>  /**
+</span>   * Builds the table key names
+   * @param {String} fieldName Field name
+   */
+  buildKeyNames: function (fieldName) {
+    var me = this,
+        userFieldName, fieldIndex;
+    userFieldName = String(fieldName);
+    fieldIndex = sol.common.StringUtils.getTrailingNumber(userFieldName) || &quot;&quot;;
+    if (!me.userIdFieldName) {
+      me.userIdFieldName = sol.common.StringUtils.removeTrailingNumber(userFieldName) + &quot;_ID&quot; + fieldIndex;
+    }
+    me._keyNames = [me.userIdFieldName, userFieldName];
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getNextRow'>  /**
+</span>   * Returns the next row of the table.
+   *
+   * @return {Array} table row
+   */
+  getNextRow: function () {
+    var me = this,
+        row;
+    me.log.debug(&quot;getNextRow&quot;);
+    row = me.resultSet[me.index++];
+    return row;
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getHeader'>  /**
+</span>   * Returns the header of this table that can be displayed by the clients.
+   *
+   * @return {Array} table header
+   */
+  getHeader: function () {
+    var me = this;
+    me.log.debug(&quot;getHeader&quot;);
+    return me.tableHeaders;
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getKeyNames'>  /**
+</span>   * Returns the keys of this table that can be used in order to map
+   * map or group fields with columns.
+   *
+   * @return {Array} Table keys
+   */
+  getKeyNames: function () {
+    var me = this;
+    me.log.debug(&quot;getKeyNames&quot;);
+    return me._keyNames;
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-hasMoreRows'>  /**
+</span>   * Returns true if table has more rows.
+   *
+   * @return {Boolean} Has more rows
+   */
+  hasMoreRows: function () {
+    var me = this;
+    me.log.debug(&quot;hasMoreRows&quot;);
+    return (this.index &lt; (this.resultSet.length));
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getMessage'>  /**
+</span>   * Returns the error message that should be displayed by the client
+   * instead of the table data.
+   *
+   * @return {String} Error message
+   */
+  getMessage: function () {
+    var me = this;
+    me.log.debug(&quot;getMessage&quot;);
+    return this.errorMessage;
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getTitle'>  /**
+</span>   * Returns a title for this table used by the user interface.
+   *
+   * @return {String} title
+   */
+  getTitle: function () {
+    var me = this;
+    me.log.debug(&quot;getTitle&quot;);
+    return this.tableTitle;
+  },
+
+<span id='sol-common-ix-DynKwlUserNameIterator-method-getUserTable'>  /**
+</span>   * Returns the user name and ID table
+   * @private
+   * @param {String} value Current value
+   * @return {Array}
+   */
+  getUserTable: function (value) {
+    var userNameTable = [],
+        userNames;
+
+    value = (value == undefined) ? &quot;&quot; : String(value);
+    userNames = sol.common.UserUtils.getUserNames({ namePart: value });
+
+    userNameTable = userNames.map(function (userName) {
+      return [String(userName.id), String(userName.name)];
+    });
+
+    return userNameTable;
+  }
+});
+</pre>
+</body>
+</html>

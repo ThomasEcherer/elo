@@ -1,0 +1,204 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.FindTasksInfo;
+import de.elo.ix.client.UserTask;
+import de.elo.ix.client.FindResult;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.WFCollectNode;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ * This example shows how an Adhoc workflow is created with a distribution (non-sequential) 
+ * form. In this case the person nodes all all activated at once and the workflow cannot 
+ * be finished until all of the users have forwarded their node. This example uses 
+ * findFirstTask/findNextTask to retrieve the nodes to be forwarded. findFirstTask and findNextTask 
+ * require the user of the active node to be provided.
+ */
+public class AdhocWorkFlowSplitter {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args){
+        
+         try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            createAdhocWorkFlow();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+        
+    }
+    
+    public static void createAdhocWorkFlow() throws RemoteException{
+        
+        // Create 3 workflow users
+        String[] userId = new String[3];
+        String userName = new String();
+        
+        for (int i = 0; i < 3; i++){
+            userName = ("WF-User" + (i + 1));
+            userId[i] = Integer.toString(WFHelper.createNewUser(ix, userName, "elo", true));
+        }
+
+        // Create Sord object
+        EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+        ed.getSord().setName("Adhoc WF Sord " + (new Date()));
+        int objId = ix.ix().checkinSord(ed.getSord(), SORD.getMbMin(), LOCK.getNO());
+       
+        // Start workflow
+        String flowName = "Adhoc WF " + (new Date());
+        int flowId = ix.ix().startAdHocWorkFlow(
+                                              flowName, 
+                                              ed.getSord().getGuid(),
+                                              userId,
+                                              "Adhoc WF Start",
+                                              true,
+                                              false,
+                                              userId[0],
+                                              "Workflow cancelled!",
+                                              userId[2],
+                                              "Workflow finished!",
+                                              null);                 
+
+        System.out.println("started WF: sordName=" + ed.getSord().getName() + 
+                ", flowId=" + flowId + 
+                ", flowName=" + flowName);
+
+        
+        // Find nodes to forward for user WF-User1
+        forwardUserNodes("WF-User1", "elo", flowName);
+        System.out.println("First node forwarded by user WF-User1");
+
+        // Find nodes to forward for user WF-User2
+        forwardUserNodes("WF-User2", "elo", flowName);
+        System.out.println("Second node forwarded by user WF-User2");
+
+        // Find nodes to forward for user WF-User3
+        forwardUserNodes("WF-User3", "elo", flowName);
+        System.out.println("Third node forwarded by user WF-User3");
+
+        // Find nodes to forward for user WF-User3
+        forwardUserNodes("WF-User3", "elo", flowName);
+        System.out.println("Workflow-completed node forwarded by user WF-User3");
+        
+        // Delete Sord
+       ix.ix().deleteSord(null, Integer.toString(objId), LOCK.getNO(), null);     
+    }
+    /**
+     * Finds active nodes for the user supplied and then forwards the node to the successor node
+     * 
+     * @param userName name of the user for whom the node is active
+     * @param password password for the user
+     * @param flowName name of the workflow which contains the node
+     * @throws java.rmi.RemoteException
+     */
+            
+    public static void forwardUserNodes(String userName, String password, String flowName) throws RemoteException{
+        
+            // login as given user
+            IXConnection connUser = connFact.create(userName, password, "IX-Workshop", null);
+            System.out.println("Logged in as " + userName);
+            
+            // nextTaskIdx contains the next task to be returned when findNextTasks is called
+            int nextTaskIdx = 0;
+            // max is the maximum number of nodes to be returned each time findFirstTasks or findNextTasks is called
+            final int max = 10;
+
+            // Prepare a find object that describes a search for workflows
+            FindTasksInfo fi = new FindTasksInfo();
+            fi.setInclWorkflows(true);
+            fi.setInclGroup(true);
+            
+            // find tasks
+            FindResult fr = connUser.ix().findFirstTasks(fi, max);
+            UserTask[] tasks = fr.getTasks();
+            while (tasks.length > 0) {   
+                // process results
+                for (int i = 0; i < tasks.length; i++) {
+                    
+                    // A task is either reminder, activity or wf-node.
+                    // Here, must be a wf-node.
+                    UserTask task = tasks[i];
+                    WFCollectNode wfc = task.getWfNode();
+                    
+                    if (wfc.getFlowName().equals(flowName)){
+                        // Active node for user and workflow found
+                        WFHelper.forwardNode(connFact, wfc, "Forwarded Node on " + new Date());
+                    }
+                }
+                
+                // more results?
+                if (!fr.isMoreResults()) {
+                    break;
+                }
+                
+                // get next tasks
+                nextTaskIdx += tasks.length;
+                fr = connUser.ix().findNextTasks(fr.getSearchId(), nextTaskIdx, max);
+            }
+            
+            if (fr != null) {
+                connUser.ix().findClose(fr.getSearchId());
+            }
+            connUser.ix().logout();
+            System.out.println("Logged-out as user " + userName);
+    }
+        
+    
+    /**
+     * Connect and login to IndexServer
+     */
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    /**
+     * Logout from IndexServer
+     */
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

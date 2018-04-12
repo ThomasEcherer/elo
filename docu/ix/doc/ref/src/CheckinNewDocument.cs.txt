@@ -1,0 +1,146 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	///
+	/// 1. Create/checkin new document
+	/// 2. Checkout and show document 
+	///
+	/// </summary>
+	public class CheckinNewDocument
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// 1. Create/checkin new document
+
+				// Initialize Sord object
+				IndexServer.EditInfo ed = ix.createDoc(ci, "1", "0", null, CONST.EDIT_INFO.mbSordDocAtt);
+				ed.sord.name = "C# example CheckinNewDocument";
+
+				// Create test file
+				String testFile = internalCreateTestFile("CheckinNewDocument example file", "txt");
+
+				// Supply the extension of the document
+				ed.document.docs = new IndexServer.DocVersion[1];
+				ed.document.docs[0] = new IndexServer.DocVersion();
+				ed.document.docs[0].ext = IXClient.getFileExt(testFile);
+        ed.document.docs[0].pathId = ed.sord.path;
+        ed.document.docs[0].encryptionSet = ed.sord.details.encryptionSet;
+
+				// CheckinDocBegin: let IndexServer generate an URL to upload the document
+				ed.document = ix.checkinDocBegin(ci, ed.document);
+				Logger.instance().log("prepared upload URL=" + ed.document.docs[0].url + ", doc-guid=" + ed.document.docs[0].guid);
+
+				// Upload the document
+				String uploadResult = ix.upload(ed.document.docs[0].url, testFile);
+				ed.document.docs[0].uploadResult = uploadResult;
+				Logger.instance().log("upload succeeded");
+
+				// CheckinDocEnd: uploadResult contains the document information from ELODM.
+				// Pass this information to IndexServer.
+				ed.document = ix.checkinDocEnd(ci, ed.sord, CONST.SORD.mbAll, ed.document, CONST.LOCK.NO);
+				Logger.instance().log("inserted document:");
+				Logger.instance().log("  objId=" + ed.document.objId);
+				Logger.instance().log("  docId=" + ed.document.docs[0].id);
+				Logger.instance().log("  doc-guid=" + ed.document.docs[0].guid);
+				Logger.instance().log("  URL=" + ed.document.docs[0].url);
+
+				// 2. Checkout and show document
+				ed = ix.checkoutDoc(ci, ed.sord.guid, null, CONST.EDIT_INFO.mbAll, CONST.LOCK.NO);
+				String tempName2 = internalMakeTempFileName(ed.document.docs[0].ext);
+				ix.download(ed.document.docs[0].url, tempName2);
+
+				// Uncomment this to show document in notepad:
+				//System.Diagnostics.Process.Start("notepad.exe", tempName2);
+				//System.Threading.Thread.Sleep(10 * 1000);
+
+				System.IO.File.Delete(tempName2);
+							
+				bool cleanUp = true;
+				if (cleanUp)
+				{
+					// Delete Document
+          IndexServer.DeleteOptions delOpts = new IndexServer.DeleteOptions();
+          delOpts.deleteFinally = true;
+          ix.deleteSord(ci, null, ed.sord.guid, CONST.LOCK.NO, null);
+          ix.deleteSord(ci, null, ed.sord.guid, CONST.LOCK.NO, delOpts);
+				}
+			}
+			catch (Exception e) 
+			{
+				throw e;
+			}
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					//ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private String internalMakeTempFileName(String ext)
+		{
+			Random r = new Random((int)DateTime.Now.Ticks);
+			String tempDir = System.IO.Path.GetTempPath();
+			String tempName = "";
+			do
+			{
+				tempName = tempDir + "eloix" + r.Next() + "." + ext;
+			} while (System.IO.File.Exists(tempName));
+			return tempName;
+		}
+
+		private String internalCreateTestFile(String text, String ext)
+		{
+			String tempName = internalMakeTempFileName(ext);
+			System.IO.FileStream fstrm = new System.IO.FileStream(tempName, 
+				System.IO.FileMode.Create, System.IO.FileAccess.Write);
+			System.Text.ASCIIEncoding encoding = new System.Text.ASCIIEncoding();
+			int n = encoding.GetByteCount(text);
+			byte[] buf = new byte[n];
+			encoding.GetBytes(text, 0, text.Length, buf, 0);
+			fstrm.Write(buf, 0, buf.Length);
+			fstrm.Close();
+			return tempName;
+		}
+	}
+
+}

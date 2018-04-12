@@ -1,0 +1,1 @@
+Ext.data.JsonP.p47_Anleitungen({"guide":"<h1 id='p47_Anleitungen-section-guidelines'>Guidelines</h1>\n\n\n<p>The following contains several guidelines for helping you install ELO Business Solutions.</p>\n\n","title":"Guidelines"});

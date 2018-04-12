@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+sol.define(&quot;sol.common.jc.BrowserView&quot;, {
+  singleton: true,
+
+  browsers: {},
+  browserViews: {},
+
+  show: function (viewName, url) {
+    if (!viewName || !url) {
+      return;
+    }
+    var me = this;
+    if (!me.browsers[viewName]) {
+      me.createBrowserView(viewName);
+    }
+    me.browsers[viewName].navigate(url);
+    me.browserViews[viewName].show();
+  },
+
+  createBrowserView: function (viewName) {
+    var me = this,
+        controlPanel;
+    me.browsers[viewName] = components.createBrowser();
+    controlPanel = components.createToolbar(0);
+    workspace.removeView(viewName);
+    me.browserViews[viewName] = workspace.addView(viewName, true, me.browsers[viewName], controlPanel);
+    me.browserViews[viewName].setHasPreview(false);
+  }
+});
+</pre>
+</body>
+</html>

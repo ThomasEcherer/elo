@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ScriptVersionReportCreate&quot; });
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate'>/**
+</span> * Generates a report of child entries for a given archive path.
+ *
+ * This report can be saved and used by `sol.common.ix.services.ScriptVersionReportValidate`
+ * later in order to check for changes in files.
+ *
+ * # As IX service call
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_service_ScriptVersionReportCreate&#39;, {
+ *       arcPath: &quot;ARCPATH[1]:\\Administration\\Business Solutions&quot;
+ *     });
+ *
+ * # Returns data as followed
+ *
+ * The service creates a data structure that looks as follows.
+ *
+ *     {
+ *       date: &quot;20150623105541&quot;,
+ *       files: [{
+ *              refPath:  &quot;¶Administration¶Business Solutions¶connector_xml¶resources&quot;,
+ *              name:     &quot;doc_import_example&quot;,
+ *              filehash: &quot;9F0FF55B9F675DBD3CE42E9B3B337DA3&quot;,
+ *              guid:     &quot;(B22ECD56-1537-3B3B-CBBA-5DAE2A66DA81)&quot;,
+ *              version:  &quot;6&quot;,
+ *              editor:   &quot;James Bond&quot;,
+ *              date:     &quot;20150414141537&quot;,
+ *              deleted:  false
+ *          }, {
+ *              refPath:  &quot;¶Administration¶Business Solutions¶connector_xml¶resources&quot;,
+ *              name:     &quot;standard_import_example&quot;,
+ *              filehash: &quot;6F35A6E25C927442CFD484EBBF6ECAE2&quot;,
+ *              guid:     &quot;(04089DB6-E667-EDDE-DB86-5FCB6E5F4DFB)&quot;,
+ *              version:  &quot;1&quot;,
+ *              editor:   &quot;Batman Superman&quot;,
+ *              date:     &quot;20150402162230&quot;,
+ *              deleted:  false
+ *          }]
+ *     }
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.ServiceBase
+ *
+ */
+sol.define(&quot;sol.common.ix.services.ScriptVersionReportCreate&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-cfg-arcPath'>  /**
+</span>   * @cfg {string} arcPath (required)
+   * Repository start path
+   */
+  arcPath: undefined,
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+    me.checkMandatoryProperties(&quot;arcPath&quot;);
+  },
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-process'>  /**
+</span>   * Generates a Version Script List in JSON-Format into a document.
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        sordsSubEntry = [],
+        arcPath = me.arcPath,
+        scriptVersionList = {},
+        timeDateJava = new Date(),
+        isoDate = me.isoFromDate(timeDateJava),
+        i,
+        fileentry,
+        ed,
+        dv;
+
+    sordsSubEntry = me.findFileInfo(arcPath, sordsSubEntry);
+    scriptVersionList.date = isoDate;
+    scriptVersionList.files = [];
+    for (i = 0; i &lt; sordsSubEntry.length; i++) {
+      fileentry = {};
+      ed = ixConnect.ix().checkoutDoc(sordsSubEntry[i].id, -1, EditInfoC.mbDocument, LockC.NO);
+      dv = me.getWorkVersion(ed.document.docs);
+      fileentry.refPath = sordsSubEntry[i].refPaths[0].pathAsString;
+      fileentry.name = sordsSubEntry[i].name;
+      fileentry.filehash = dv.md5;
+      fileentry.guid = sordsSubEntry[i].guid;
+      fileentry.version = dv.version;
+      fileentry.editor = dv.ownerName;
+      fileentry.date = dv.updateDateIso;
+      fileentry.deleted = dv.deleted;
+      scriptVersionList.files.push(fileentry);
+    }
+    me.logger.debug([&quot;JSON-object scriptVersionList = &#39;{0}&#39; is generated&quot;, scriptVersionList]);
+    return scriptVersionList;
+  },
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-findFileInfo'>  /**
+</span>   * List sub entries of a folder
+   *
+   * @param {String} arcPath archive path to start search
+   * @param {Object[]} sordsSubEntry (childelements) of current folder represented by de.elo.ix.client.Sord
+   * @return {Object[]} Subentries (childelements) of current folder represented by de.elo.ix.client.Sord
+   */
+  findFileInfo: function (arcPath, sordsSubEntry) {
+    var me = this,
+        ed,
+        parentId,
+        fi,
+        sordZ,
+        fr,
+        frSords,
+        isFolder,
+        isDocument,
+        isReference,
+        i,
+        idx;
+
+    try {
+      ed = ixConnect.ix().checkoutSord(arcPath, EditInfoC.mbOnlyId, LockC.NO);
+      parentId = ed.sord.id;
+
+      fi = new FindInfo();
+      fi.findChildren = new FindChildren();
+      fi.findChildren.parentId = parentId;
+      fi.findChildren.endLevel = 1;
+      fi.findChildren.mainParent = true;
+      sordZ = SordC.mbAll;
+
+      idx = 0;
+      fr = ixConnect.ix().findFirstSords(fi, 1000, sordZ);
+      while (true) {
+        frSords = fr.sords;
+        for (i = 0; i &lt; frSords.length; i++) {
+          isFolder = frSords[i].type &lt; SordC.LBT_DOCUMENT;
+          isDocument = frSords[i].type &gt;= SordC.LBT_DOCUMENT &amp;&amp; frSords[i].type &lt;= SordC.LBT_DOCUMENT_MAX;
+          isReference = frSords[i].parentId != parentId;
+
+          if (isFolder &amp;&amp; !isReference) {
+            sordsSubEntry = me.findFileInfo(arcPath + &quot;\\&quot; + frSords[i].name, sordsSubEntry);
+          }
+          if (isDocument &amp;&amp; !isReference) {
+            me.logger.debug(&quot;Arcpath=&quot; + arcPath + &quot;\\&quot; + frSords[i].name);
+            sordsSubEntry.push(frSords[i]);
+          }
+        }
+        if (!fr.isMoreResults()) {
+          break;
+        }
+        idx += fr.sords.length;
+        fr = ixConnect.ix().findNextSords(fr.searchId, idx, 1000, sordZ);
+        frSords = fr.sords;
+      }
+    } catch (e) {
+      me.logger.debug([&quot;function findChildren (arcPath: &#39;{0}&#39;) catch (e) name: &#39;{1}&#39; message: &#39;{2}&#39;&quot;, arcPath, e.name, e.message]);
+    }
+    if (fr) {
+      ixConnect.ix().findClose(fr.searchId);
+    }
+    return sordsSubEntry;
+  },
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-isoFromDate'>  isoFromDate: function (timeDateJava) {
+</span>    var me = this,
+        isoDate = me.pad(timeDateJava.getFullYear(), 4) +
+        me.pad(timeDateJava.getMonth() + 1, 2) +
+        me.pad(timeDateJava.getDate(), 2) +
+        me.pad(timeDateJava.getHours(), 2) +
+        me.pad(timeDateJava.getMinutes(), 2) +
+        me.pad(timeDateJava.getSeconds(), 2);
+    return isoDate;
+  },
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-pad'>  pad: function (val, len) {
+</span>    val = String(val);
+    while (val.length &lt; len) {
+      val = &quot;0&quot; + val;
+    }
+    return val;
+  },
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-method-getWorkVersion'>  getWorkVersion: function (docs) {
+</span>    var dv, i;
+
+    dv = null;
+    for (i = 0; i &lt; docs.length; i++) {
+      dv = docs[i];
+      if (dv.workVersion) {
+        return dv;
+      }
+    }
+    return dv;
+  }
+
+});
+
+<span id='sol-common-ix-services-ScriptVersionReportCreate-static-method-RF_sol_service_ScriptVersionReportCreate'>/**
+</span> * @member sol.common.ix.services.ScriptVersionReportCreate
+ * @method RF_sol_service_ScriptVersionReportCreate
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_ScriptVersionReportCreate(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_service_ScriptVersionReportCreate&quot;, args);
+  var params, module, scriptVersionList;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;arcPath&quot;);
+  module = sol.create(&quot;sol.common.ix.services.ScriptVersionReportCreate&quot;, params);
+  scriptVersionList = module.process();
+  logger.exit(&quot;RF_sol_service_ScriptVersionReportCreate&quot;);
+  return sol.common.ix.RfUtils.stringify(scriptVersionList);
+}</pre>
+</body>
+</html>

@@ -1,0 +1,73 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Login/logout user with single-sign-on login
+	/// </summary>
+	public class SingleSignOnLogin
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		// [X] Account for authorisation.
+		public String runAs = "yourname";
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login ...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", runAs);
+
+				// If successfully logged on, you can find the ticket here: 
+				// loginResult.clientInfo.ticket.
+				Logger.instance().log("login successfully, ticket=" + loginResult.clientInfo.ticket);
+				Logger.instance().log("ticket lifetime seconds=" + loginResult.ticketLifetime);
+				Logger.instance().log("user ID=" + loginResult.user.id);
+
+				// Otherwise an exception was thrown in ix.login() and you will not 
+				// reach this lines.
+
+				// Use in subsequent calls always the returned ClientInfo object (contains ticket).
+				ci = loginResult.clientInfo;
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

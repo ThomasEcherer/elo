@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.ServiceBase.js
+//@include lib_sol.common.RepoUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.UploadFileContent&quot; });
+
+<span id='sol-common-ix-services-FindSords'>/**
+</span> * Find Sords
+ *
+ * # As IX call
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_common_service_FindSords&quot;, {
+ *       &quot;objKeysObj&quot;: {
+ *         &quot;COMPANY_CODE&quot;: &quot;1000&quot;,
+ *         &quot;VENDOR_NO&quot;: &quot;1111&quot;,
+ *         &quot;INVOICE_NUMBER&quot;: &quot;2222&quot;
+ *       }
+ *     });
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ *
+ * @requires  sol.Logger
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.FindSords&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-FindSords-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.findConfig = config;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, []);
+  },
+
+<span id='sol-common-ix-services-FindSords-method-process'>  /**
+</span>   * Find sords
+   * @return {Array} Template sords
+   */
+  process: function () {
+    var me = this,
+        sords, tplSords, result;
+
+    sords = sol.common.RepoUtils.findSords(me.findConfig);
+
+    tplSords = sords.map(function (sord) {
+      return sol.common.SordUtils.getTemplateSord(sord).sord;
+    });
+
+    result = { sords: tplSords };
+
+    return result;
+  }
+});
+
+<span id='sol-common-ix-services-FindSords-static-method-RF_sol_common_service_FindSords'>/**
+</span> * @member sol.common.ix.services.FindSords
+ * @method RF_sol_common_service_FindSords
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_FindSords(ec, args) {
+  var params, service, result, resultString;
+
+  logger.enter(&quot;RF_sol_common_service_FindSords&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args);
+
+  service = sol.create(&quot;sol.common.ix.services.FindSords&quot;, params);
+  result = service.process();
+  resultString = JSON.stringify(result);
+
+  logger.exit(&quot;RF_sol_common_service_FindSords&quot;);
+
+  return resultString;
+}
+</pre>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common_sig.as.functions.CreateDocumentToSign&quot; });
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign'>/**
+</span> * Checks whether a document and user are specified, copies the doc into the parent object and starts the workflow to sign it.
+ *
+ * The User will be set on the workflow node with the kay `sol.common_sig.wf.user.signDocument`.
+ *
+ * If `documentBasePath` and `documentTypeSource` are defined, this function will copy a template to the target specified by `objId`.
+ * If neither of those are defined, the finction will try to convert and sign the element specified by `objId`.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  handlebars
+ * @requires  moment
+ * @requires  sol.common.ObjectUtils
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.StringUtils
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.IxUtils
+ * @requires  sol.common.SordMap
+ * @requires  sol.common.ObjectFormatter
+ * @requires  sol.common.Template
+ * @requires  sol.common.as.Utils
+ * @requires  sol.common.as.FunctionBase
+ * @requires  sol.common.as.functions.OfficeConverter
+ *
+ */
+sol.define(&quot;sol.common_sig.as.functions.CreateDocumentToSign&quot;, {
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;wfTemplate&quot;, &quot;wfNameTemplate&quot;, &quot;userSource&quot;],
+</span>
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required) This is either the id of the target (in case `documentBasePath` and `documentTypeSource` are definied) or the id of the document which should be signed.
+   */
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-wfTemplate'>  /**
+</span>   * @cfg {String} wfTemplate (required) The name of the workflow template which should be started
+   */
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-wfNameTemplate'>  /**
+</span>   * @cfg {String} wfNameTemplate (required) The template for the name of the started workflow (in handlebars syntax: `sord` and `wfDate` are available)
+   */
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-userSource'>  /**
+</span>   * @cfg {Object} userSource (required) Definition where the signing user should be read from (see {@link sol.common.SordUtils#getValue} for object definition)
+   */
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-documentBasePath'>  /**
+</span>   * @cfg {String} documentBasePath (optional) ARCPATH with the documents which could be signed
+   */
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-cfg-documentTypeSource'>  /**
+</span>   * @cfg {Object} documentTypeSource (optional) Definition where the selected document type should be read from (see {@link sol.common.SordUtils#getValue} for object definition)
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-method-process'>  /**
+</span>   * Creates a document to sign and starts the signing workflow.
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        sord, documentType, userName, convertObjId, convertSord, objId, documentMap, tplSord, wfName, flowId, wfDiagram, i, node, objKey;
+
+    me.logger.enter(&quot;sol.common_sig.as.functions.CreateDocumentToSign&quot;);
+
+    sord = sol.common.RepoUtils.getSord(me.objId);
+    userName = sol.common.SordUtils.getValue(sord, me.userSource);
+
+    if (me.documentBasePath &amp;&amp; me.documentTypeSource) {
+      me.logger.debug([&quot;Copy document template &#39;{0}&#39; to &#39;{1}&#39;&quot;, documentType, sord.id]);
+      documentType = sol.common.SordUtils.getValue(sord, me.documentTypeSource);
+      convertObjId = sol.common.IxUtils.execute(&quot;RF_sol_function_CopyFolderContents&quot;, {
+        objId: sord.id,
+        source: me.getTemplateArcPath(documentType, me.documentBasePath),
+        copySourceAcl: false,
+        inheritDestinationAcl: true,
+        name: documentType,
+        asAdmin: true
+      });
+    } else {
+      me.logger.debug(&quot;Use original object for signing&quot;);
+      convertObjId = sord.id;
+    }
+
+    if (userName &amp;&amp; (userName != &quot;&quot;)) {
+      me.logger.debug(&quot;start signing process&quot;);
+      convertSord = sol.common.RepoUtils.getSord(convertObjId, { sordZ: SordC.mbAll });
+      objId = me.convertToPdf(convertSord);
+      if (objId !== &quot;-1&quot;) {
+        documentMap = sol.create(&quot;sol.common.SordMap&quot;, { objId: objId });
+
+        for (i = 0; i &lt; sord.objKeys.length; i++) {
+          objKey = sord.objKeys[i];
+          documentMap.setValue(objKey.name, sol.common.SordUtils.getObjKeyValue(sord, objKey.name));
+        }
+
+        documentMap.write();
+
+        tplSord = sol.common.SordUtils.getTemplateSord(sord).sord;
+        wfName = sol.create(&quot;sol.common.Template&quot;, { source: me.wfNameTemplate }).apply({ sord: tplSord, wfDate: new Date() });
+
+        flowId = ixConnect.ix().startWorkFlow(me.wfTemplate, wfName, objId);
+
+        me.logger.debug([&quot;flowId={0}&quot;, flowId]);
+
+        wfDiagram = ixConnect.ix().checkoutWorkFlow(flowId.toString(), WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.YES);
+        if (wfDiagram &amp;&amp; wfDiagram.nodes) {
+          for (i = 0; i &lt; wfDiagram.nodes.length; i++) {
+            node = wfDiagram.nodes[i];
+
+            me.logger.debug([&quot;node={0}; nodename={1}; nameTranslationKey={2}&quot;, node.type, node.name, node.nameTranslationKey]);
+
+            if (node.nameTranslationKey == &quot;sol.common_sig.wf.user.signDocument&quot;) {
+              node.setUserName(userName);
+            }
+          }
+        }
+        ixConnect.ix().checkinWorkFlow(wfDiagram, WFDiagramC.mbAll, LockC.YES);
+
+        me.logger.info([&quot;Started signing process for &#39;{0}&#39; on &#39;{1}&#39; (objId={2}, flowId={3})&quot;, userName, convertSord.name, convertSord.id, flowId]);
+      }
+    }
+
+    me.logger.exit(&quot;sol.common_sig.as.functions.CreateDocumentToSign&quot;);
+
+    return { passOn: true };
+  },
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-method-convertToPdf'>  /**
+</span>   * @private
+   * Converts a document to a PDF.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {String} The objId of the converted document or &#39;-1&#39; if there was an error
+   */
+  convertToPdf: function (sord) {
+    var me = this,
+        objId = &quot;-1&quot;,
+        ext, converter, convertResult;
+    me.logger.enter(&quot;convertToPdf&quot;);
+    try {
+      ext = (sord &amp;&amp; sord.docVersion &amp;&amp; sord.docVersion.ext) ? sord.docVersion.ext : null;
+      if (ext &amp;&amp; (ext == &quot;pdf&quot;)) {
+        me.logger.debug(&quot;skip converting, document is already an PDF&quot;);
+        objId = sord.id;
+      } else {
+        converter = sol.create(&quot;sol.common.as.functions.OfficeConverter&quot;, {
+          openFromRepo: {
+            objId: sord.id
+          },
+          saveToRepo: {
+            format: &quot;pdf&quot;,
+            parentId: sord.parentId,
+            name: sord.name
+          }
+        });
+        if (converter.isSupported(ext)) {
+          convertResult = converter.execute();
+          if (convertResult &amp;&amp; convertResult.objId) {
+            objId = convertResult.objId;
+          }
+        } else {
+          me.logger.warn([&quot;format &#39;{0}&#39; is not supported&quot;, ext]);
+        }
+      }
+    } catch (ex) {
+      me.logger.error([&quot;error converting document (objId={0}, name={1})&quot;, sord.id, sord.name], ex);
+    }
+    me.logger.exit(&quot;convertToPdf&quot;);
+    return objId;
+  },
+
+<span id='sol-common_sig-as-functions-CreateDocumentToSign-method-getTemplateArcPath'>  /**
+</span>   * @private
+   * @param {String} documentType
+   * @param {String} basePath
+   * @return {String}
+   */
+  getTemplateArcPath: function (documentType, basePath) {
+    return sol.common.RepoUtils.getObjIdFromRelativePath(basePath, &quot;/&quot; + documentType);
+  }
+});
+</pre>
+</body>
+</html>

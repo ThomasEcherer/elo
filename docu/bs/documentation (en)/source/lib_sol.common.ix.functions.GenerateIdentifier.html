@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+<span id='sol-common-ix-functions-GenerateIdentifier'>/**
+</span> * Base class to generate IDs and names by templates
+ *
+ * A sub class must implement the methods `getIdentifierTemplateId`, `getIdentifier` and `setIdentifier`
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.01.002
+ *
+ * @eloix
+ *
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.FunctionBase
+ */
+
+sol.define(&quot;sol.common.ix.functions.GenerateIdentifier&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-identifierCounterTemplateId'>  /**
+</span>   * @cfg {String} identifierCounterTemplateId (required)
+   * Object ID of the identifier counter template
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-identifierTemplateId'>  /**
+</span>   * @cfg {String} identifierTemplateId (required)
+   * Object ID of the identifier template
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID of destination object
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-fieldName'>  /**
+</span>   * @cfg {String} fieldName (required)
+   * Field name of the identifier field
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-applyIdentifier'>  /**
+</span>   * @cfg {Boolean} [applyIdentifier=false]
+   * `True` if the identifier should be written to the object
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-optionalIdentifier'>  /**
+</span>   * @cfg {Boolean} [optionalIdentifier=false]
+   * If `true`, nothing will be generated if the generator field is empty
+   */
+
+<span id='sol-common-ix-functions-GenerateIdentifier-cfg-updateExisting'>  /**
+</span>   * @cfg {Boolean} [updateExisting=false]
+   * If `true`, an existing value will be overridden
+   */
+
+  process: function () {
+    var me = this,
+        identifierTemplate, identifier;
+
+    me.readObject();
+
+    me.identifierTemplateId = me.identifierTemplateId || me.getIdentifierTemplateId();
+
+    if (me.identifierTemplateId &amp;&amp; me.updateIdentifier()) {
+
+      identifierTemplate = sol.create(&quot;sol.common.Template&quot;, {});
+      identifierTemplate.load(me.identifierTemplateId);
+      identifier = identifierTemplate.apply({
+        sord: me.templateSord
+      });
+
+      if (me.applyIdentifier &amp;&amp; me.checkUpdate(identifier)) {
+        me.setIdentifier(identifier);
+        ixConnect.ix().checkinSord(me.sord, SordC.mbAll, LockC.NO);
+      }
+
+      return JSON.stringify({ identifier: identifier });
+    }
+    return &quot;&quot;;
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-readObject'>  /**
+</span>   * @private
+   */
+  readObject: function () {
+    var me = this,
+        templateSordFormatter;
+    if (!me.objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    me.sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAll, LockC.NO);
+    templateSordFormatter = sol.create(&quot;sol.common.ObjectFormatter.TemplateSord&quot;, { data: me.sord, config: { sordKeys: [&quot;name&quot;], objKeys: [], mapKeys: [] } });
+    me.templateSord = templateSordFormatter.build();
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-updateIdentifier'>  /**
+</span>   * @private
+   * @return {Boolean} status
+   */
+  updateIdentifier: function () {
+    var me = this;
+    return me.updateExisting || org.apache.commons.lang.StringUtils.isBlank(me.getIdentifier());
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-checkUpdate'>  /**
+</span>   * @private
+   * @param {String} identifier
+   * @return {Boolean}
+   */
+  checkUpdate: function (identifier) {
+    var me = this;
+    return (identifier != me.getIdentifier());
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-getIdentifierTemplateId'>  /**
+</span>   * @abstract
+   * Must return the Object ID of the template.
+   */
+  getIdentifierTemplateId: function () {
+    throw &quot;Can&#39;t call abstract method &#39;getIdentifierTemplateId()&#39;&quot;;
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-getIdentifier'>  /**
+</span>   * @abstract
+   * Must read the identifier from the appropriate field
+   */
+  getIdentifier: function () {
+    throw &quot;Can&#39;t call abstract method &#39;getIdentifier()&#39;&quot;;
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-setIdentifier'>  /**
+</span>   * Must write the identifier to the appropriate field
+   * @abstract
+   * @param {String} identifier Identifier
+   */
+  setIdentifier: function (identifier) {
+    throw &quot;Can&#39;t call abstract method &#39;setIdentifier()&#39;&quot;;
+  },
+
+<span id='sol-common-ix-functions-GenerateIdentifier-method-getTemplateId'>  /**
+</span>   * Reads the template name from generator field and determinates the object ID of the template
+   * @private
+   * @param {String} typeDescription
+   * @param {String} templateNameField
+   * @param {String} templateFolderId
+   * @return {String} templateid
+   */
+  getTemplateId: function (typeDescription, templateNameField, templateFolderId) {
+    var me = this,
+        templateName;
+    if (!templateNameField) {
+      throw typeDescription + &quot; template name field must not be empty.&quot;;
+    }
+    templateName = sol.common.SordUtils.getObjKeyValue(me.sord, templateNameField);
+    if (!templateName &amp;&amp; me.optionalIdentifier) {
+      return null;
+    } else if (!templateName) {
+      throw typeDescription + &quot; template name must not be empty.&quot;;
+    }
+    if (!templateFolderId) {
+      throw typeDescription + &quot; template folder ID must not be empty.&quot;;
+    }
+    return sol.common.RepoUtils.getObjIdFromRelativePath(templateFolderId, &quot;/&quot; + templateName);
+  }
+});
+</pre>
+</body>
+</html>

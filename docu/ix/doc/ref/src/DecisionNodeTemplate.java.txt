@@ -1,0 +1,153 @@
+
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.examples.*;
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFNode;
+import de.elo.ix.client.WFNodeAssoc;
+import de.elo.ix.client.WFTypeZ;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+
+/**
+ *
+ * Creates a simple template with a decision node.
+ * The decision node automatically forwards the workflow to the appropriate person 
+ * node depending upon the supplied condition.
+ */
+public class DecisionNodeTemplate {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            createDecisionTemplate(ix, "DecisionDemo", "Amount > 100");
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+     /**
+     * Create a workflow template
+     */
+    public static WFDiagram createDecisionTemplate(IXConnection ix, String flowName, String decisionText) throws RemoteException {
+        
+        CONS = ix.getCONST();
+        // create required users
+        int userId_1 = WFHelper.createNewUser(ix, "WF-User1", "elo");
+        int userId_2 = WFHelper.createNewUser(ix, "WF-User2", "elo");
+
+        // Call IX to prepare a workfow object.
+        // If flowName is provided use flowName otherwise set name to "WF-Template + Date"
+        if (flowName == null) {
+            flowName = "WF-Template " + (new Date());
+        }    
+        WFTypeZ wfType = CONS.getWORKFLOW_TYPE().getTEMPLATE();
+        WFDiagram wf = ix.ix().createWorkFlow(flowName, wfType);
+        
+        // Create an array of nodes.
+        // Begin node
+        WFNode[] nodes = new WFNode[4];
+        nodes[0] = WFHelper.createNode(ix, 0, CONS.getWORKFLOW_NODE().getTYPE_BEGINNODE(),100, 100);
+        nodes[0].setName("Begin-node");
+        nodes[0].setUserId(CONS.getWORKFLOW_NODE().getUSERID_OWNER());
+        
+        // Decision node
+        nodes[1] = WFHelper.createNode(ix, 1, CONS.getWORKFLOW_NODE().getTYPE_IFNODE(), 100, 200);
+        nodes[1].setName("Decision");
+        nodes[1].setYesNoCondition(decisionText);
+        
+        // Person node 1
+        nodes[2] = WFHelper.createNode(ix, 2, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 20, 300);
+        nodes[2].setName("Condition True Node");
+        nodes[2].setUserId(userId_1);
+        nodes[2].setUserName("WF-User1");
+       
+        // Person node 2
+        nodes[3] = WFHelper.createNode(ix, 3, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 180, 300);
+        nodes[3].setName("Condition False Node");
+        nodes[3].setUserId(userId_2);
+        nodes[3].setUserName("WF-User2");
+ 
+
+        // Assign nodes to workflow
+        wf.setNodes(nodes);
+        
+        // Create a matrix that describes how the nodes are connected with each other.
+        WFNodeAssoc[] assocs = new WFNodeAssoc[4];
+        
+        assocs[0] = new WFNodeAssoc();
+        assocs[0].setNodeFrom(0);
+        assocs[0].setNodeTo(1);
+        assocs[0].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+        
+        assocs[1] = new WFNodeAssoc();
+        assocs[1].setNodeFrom(1);
+        assocs[1].setNodeTo(2);
+        assocs[1].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getIF_FALSE());
+        
+        assocs[2] = new WFNodeAssoc();
+        assocs[2].setNodeFrom(1);
+        assocs[2].setNodeTo(3);
+        assocs[2].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getIF_TRUE());
+        
+        assocs[3] = new WFNodeAssoc();
+        assocs[3].setNodeFrom(2);
+        assocs[3].setNodeTo(3);
+        assocs[3].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+        
+        wf.getMatrix().setAssocs(assocs);
+        
+        // Checkin WF
+        int wfId = ix.ix().checkinWorkFlow(wf, CONS.getWORKFLOW().getMbAll(), CONS.getLOCK().getNO());
+        wf.setId(wfId);
+        
+        System.out.println("Created template " + wf.getName() + " with id = " + wf.getId());
+        return wf;
+    }
+    
+     //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+ 
+    }
+    
+      // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

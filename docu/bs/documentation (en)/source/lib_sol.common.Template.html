@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+/* eslint-disable */
+//@include lib_handlebars.js
+//@include lib_moment.js
+/* eslint-enable */
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.TranslateTerms.js
+
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+<span id='sol-common-Template'>/**
+</span> * This class encapsulates templating operations by handlebars.js.
+ *
+ * For more information on using templates and the template syntax of handlebars please refer to
+ * &lt;a href=&quot;http://www.handlebarsjs.com/&quot;&gt;www.handlebarsjs.com&lt;/a&gt;.
+ *
+ * # Using templates from a string
+ *
+ *     var tpl = sol.create(&#39;sol.common.Template&#39;, {
+ *         source: &#39;Hello {{name}}.&#39;
+ *     });
+ *
+ *     var result = tpl.apply({
+ *       name: &#39;Marcus&#39;
+ *     });
+ *
+ * # Using templates from an elo text file
+ *
+ *     var tpl = sol.create(&#39;sol.common.Template&#39;, {});
+ *
+ *     // load data from a text file in ELO
+ *     tpl.load(&#39;GUID&#39;);
+ *
+ *     // accessing objKey properties is difficult.
+ *     // use sol.common.ObjectFormatter to get an easy to use sord object.
+ *     var data = sol.common.ObjectFormatter.format({
+ *       sord: {
+ *         formatter: &#39;sol.common.ObjectFormatter.TemplateSord&#39;,
+ *         data: sord
+ *     });
+ *
+ *     var result = tpl.apply(data);
+ *
+ * # Helper functions
+ *
+ * ## Date formatting: formatDate
+ * Registers the templating function `formatDate`. For all formating strings &lt;a href=&quot;http://momentjs.com/&quot;&gt;moment.js&lt;/a&gt; syntax will be used.
+ *
+ *     {{formatDate outputFormat inputDate inputFormat}}
+ *
+ * All parameters are optional:
+ *
+ * - outputFormat {String} default: &#39;YYYYMMDDHHmmss&#39;
+ * - inputDate {Date|String} default: the current date
+ * - inputFormat {String} default: &#39;YYYYMMDDHHmmss&#39;
+ *
+ * But, if an inputDate is defined, the outputFormat has to be set (even if it is to an empty string), and if an inputFormat is defined, both previous parameters have to be defined.
+ *
+ * The following example would output a human readable date from a index field:
+ *
+ *     {{formatDate &#39;DD.MM.YYYY HH:mm:ss&#39; sord.objKeys.MY_DATE}}
+ *
+ * ## monthName
+ * Registers the `monthName` helper which returns the month name of a date.
+ *
+ *     {{{monthName isoDate=sord.objKeys.INVOICE_DATE textStyle=&#39;SHORT&#39; locale=&#39;de&#39;}}}
+ *
+ * ## Counter
+ * Registers the `count` helper which allows the use of IX conters in Template Strings.
+ *
+ *     {{count &#39;MY_COUNTER&#39;}}
+ *
+ * It also supports the normalization of the counter results to a spezific length by padding characters on the left side.
+ * This can be configured, by a second parameter with a string of the desired length an containing the desired characters.
+ * If the counter value has a greater length then the parameter, it will not be altered.
+ *
+ *     {{count &#39;MY_COUNTER&#39; &#39;0000&#39;}}  // all returned values will be of the length 4 and the missing positions will be fitted with zeros
+ *
+ * Another spezial feature of this helper is the use of template statements inside the counter name parameter
+ *
+ *     {{count &#39;MY_COUNTER_{{sord.objKeys.FILE_REFERENCE}}&#39;}} // this will create a counter for every file reference
+ *
+ * ## ObjKey Iterator: eachObjKey
+ * Registers the templating iterator `eachObjKey` to iterate over an array of object keys.
+ * This Iterator handles the String[] array of the ObjKey-value property.
+ *
+ * The enclosed context can use the properties name and value. Please note that `eachObjKey` is only required
+ * if sol.common.ObjectFormatter.TemplateSord is not used.
+ *
+ *     {{#eachObjKey sord}}{{name}}: {{value}}{{/eachObjKey}}
+ *
+ * ## Map values helper: mapTable
+ * Registers the templating iterator `mapTable` to iterate over an object with object keys
+ * which ends with an index number
+ *
+ *     {{#mapTable mapKeys indicatorKey=&quot;INVI_POS_NO&quot;}}
+ *       {{INVI_POS_NO}} {{INVI_POS_DATA}}
+ *     {{/mapTable}}
+ *
+ *     // example map table
+ *     INVI_POS_NO1 = &quot;1&quot;
+ *     INVI_POS_NO2 = &quot;2&quot;
+ *     INVI_POS_DATA1 = &quot;Data 123&quot;
+ *     INVI_POS_DATA2 = &quot;Data 345&quot;
+ *
+ * `#mapTable` is an iterator with an isolated scope. Values of the sord can still be accessed using `../`.
+ *
+ *     {{#mapTable mapKeys indicatorKey=&quot;INVI_POS_NO&quot;}}
+ *       {{../sord.objKeys.INVOICE_NO}} {{INVI_POS_NO}} {{INVI_POS_DATA}}
+ *     {{/mapTable}}
+ *
+ * ## Substring helper: substring
+ * Registers the templating function `substring`, which allows to only use parts from an input value.
+ *
+ *     {{substring stringProperty 0 4}}
+ *     {{substring stringProperty 0 1 uppercase=&#39;true&#39;}}
+ *
+ * ## Translation helper: translate
+ * Registers the templating function `translate`, which allows to use translation keys in the templates.
+ *
+ * The language string is optional. If it is omitted, the function tries to get the language from the connection.
+ *
+ *     {{translate stringProperty languageProperty}}
+ *
+ * or
+ *
+ *     {{translate &quot;this.is.a.TranslationKey&quot;, &quot;de&quot;}}
+ *
+ *
+ * ## Barcode creation helper: base64Barcode
+ * Registers the templating function `base64Barcode` which creates barcode images for Apache FOP reports.
+ *
+ * QR code example:
+ *
+ *     {{base64Barcode type=&quot;QR_CODE&quot; content=&quot;elodms://12345&quot;}}
+ *
+ * Code 39 example:
+ *
+ *     {{base64Barcode type=&quot;CODE_39&quot; content=&quot;HELLO&quot;}}
+ *
+ * Interleaved 2 of 5 example:
+ *
+ *     {{base64Barcode type=&quot;ITF&quot; content=&quot;123456&quot;}}
+ *
+ * Apache FOP integration example:
+ *
+ *     &lt;fo:block&gt;&lt;fo:external-graphic src=&quot;url(&#39;data:image/png;base64,{{base64Barcode content=&quot;dms://{{sord.guid}}&quot; type=&quot;QR_CODE&quot;}}&#39;)&quot;/&gt;&lt;/fo:block&gt;
+ *
+ * ## Image as Base 64 helper: base64Image
+ *
+ * Loads an image from the repository by the object ID and returns it as base64 encoded String
+ *
+ * Example:
+ *
+ *     var base64Content = sol.create(&quot;sol.common.Template&quot;, { source: &quot;{{base64Image objId=&#39;{{sord.objKeys.VISITOR_PHOTO_GUID}}&#39;}}&quot; }).applySord(sord);
+ *
+ * Apache FOP integration example
+ *
+ *     &lt;fo:block&gt;&lt;fo:external-graphic src=&quot;url(&#39;data:image/jpg;base64,{{base64Image objId=&#39;{{hierarchy.visitor.objKeys.VISITOR_PHOTO_GUID}}&#39;}}&#39;)&quot;/&gt;&lt;/fo:block&gt;
+ *
+ * ## Using if conditions if, ifCond
+ *
+ * Handlebars provides an easy way to check if a value is given using the build in helper
+ *
+ *     {{#if sord.name}} ... {{/if}}
+ *
+ * Camparison of Strings can be realised thanks to ifCond. Please note that the compare iterator must be passed as a string value.
+ *
+ *     {{#ifCond sordA.name &#39;==&#39; sordB.name}} ... {{/ifCond}}
+ *     {{#ifCond sordA.objKeys.NET_AMOUNT &#39;&lt;&#39; sordB.objKeys.NET_AMOUNT}} ... {{/ifCond}}
+ *
+ * Following operators are supported by ifCond:
+ *
+ *     ==  ===  !==  !=  &lt;  &lt;=  &gt;  &gt;=  &amp;&amp;  ||
+ *
+ *
+ * ## Using if conditions if, ifContains
+ *
+ * Handlebars provides an easy way to check if a value is given using the build in helper
+ *
+ *     {{#if sord.name}} ... {{/if}}
+ *
+ * A string can be searched for another string thanks to ifContains.
+ *
+ *     {{#ifContains sordA.name sordB.name}} ... {{/ifContains}}
+ *     {{#ifContains sordA.objKeys.DESCRIPTION &#39;INV&#39;}} ... {{/ifContains}}
+ *
+ *
+ * ## Current user
+ *
+ * The current user name can be given by
+ *
+ *     {{currentUser}}
+ *
+ * Additional properties like the user id can be accessed thanks to an optional property.
+ * Following properties are supported:
+ *
+ *     {{currentUser &#39;id&#39;}}
+ *     {{currentUser &#39;guid&#39;}}
+ *     {{currentUser &#39;desc&#39;}}
+ *
+ * By default or if properties are passed that are not mentioned above the users name ist returned.
+ *
+ * ## Get user folder GUIDs
+ *
+ * Every ELO user has a folder that allows storing personal data. The following helper will return the guid of this folder based on the current user session.
+ *
+ *     {{userFolder}}
+ *
+ * In addition the default subfolders can be adressed as well
+ *
+ *     {{userFolder &#39;private&#39;}}
+ *     {{userFolder &#39;data&#39;}}
+ *     {{userFolder &#39;inbox&#39;}}
+ *
+ * ## Pad left
+ *
+ *     {{padLeft sord.objKeys.VENDOR_NO &#39;0000000000&#39;}}
+ *
+ * ## Number
+ *
+ * Returns a number with a dot as decimal separator
+ *
+ *    {{number sord.mapKeys.INVI_TOTAL_NET_PRICE1}}
+ *
+ * ## External link
+ *
+ * Creates an external link and returns the appropriate URL
+ *
+ *     {{{externalLink objId=&#39;{{{sord.id}}}&#39; limitTo=1 limitToUnit=&#39;y&#39; times=5}}}
+ *
+ * ## Custom
+ * This helper lets you use your previously by {@link #registerCustomHelper} registered functions.
+ * This only works in ELO modules which support the &#39;globalScope&#39; (currently only JavaClient and IndexServer).
+ *
+ * To register a custom helper, create an instance of &#39;sol.common.Template&#39; and register your helper function.
+ * A `lib_your.namespace.CustomHelper.js` could be implemented like this:
+ *
+ *     //&amp;#64;include lib_sol.common.Template.js
+ *
+ *     (function () {
+ *       var tpl = sol.create(&quot;sol.common.Template&quot;);
+ *
+ *       tpl.registerCustomHelper(&quot;hello&quot;, function (config) {
+ *         return &quot;hello &quot; + arguments[0];
+ *       });
+ *
+ *       // register further helpers
+ *
+ *     }());
+ *
+ * It is important this registration is executed bevor a custom helper will be used for the first time.
+ * E.g. when the scripts are loaded like in the example above.
+ *
+ * The helper will used with `{{custom &#39;%HELPER_NAME%&#39; %ADDITIONAL_ARGS% }}`:
+ *
+ *     var tpl = sol.create(&quot;sol.common.Template&quot;, { source: &quot;{{custom &#39;hello&#39; name}}&quot; });
+ *     var str = tpl.apply({ name: &quot;hans&quot; });
+ *
+ * This will result in `str =&gt; hello hans`
+ *
+ * Another implementation of the same helper function might look like this:
+ *
+ *     ...
+ *       var tpl = sol.create(&quot;sol.common.Template&quot;);
+ *       var fct = function (cfg) {
+ *         return &quot;hello &quot; + cfg.hash.name;
+ *       };
+ *       tpl.registerCustomHelper(&quot;hello&quot;, fct);
+ *     ...
+ *
+ * Which would then be used like this (to the same result):
+ *
+ *     var tpl = sol.create(&quot;sol.common.Template&quot;, { source: &quot;{{custom &#39;hello&#39; name=name}}&quot; });
+ *     var str = tpl.apply({ name: &quot;hans&quot; });
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ *
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.as.BarcodeUtils
+ */
+sol.define(&quot;sol.common.Template&quot;, {
+
+<span id='sol-common-Template-cfg-source'>  /**
+</span>   * @cfg {String} source
+   * Template source as a string.
+   *
+   *         source = &quot;Hello {{name}}.&quot;
+   */
+
+<span id='sol-common-Template-property-template'>  /**
+</span>   * @property {Object} template
+   * Compiled handlebars.js template.
+   */
+
+<span id='sol-common-Template-property-isRepoPath'>  /**
+</span>   * @property {Boolean} isRepoPath
+   * If true the given string is a repository path and the separator is replaced by pilcrow.
+   */
+
+  pilcrow: &quot;\u00b6&quot;,
+
+<span id='sol-common-Template-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: me.$className });
+    config = config || {};
+    if (config.source) {
+      me.setSource(config.source, config.isRepoPath);
+    }
+    if (config.objId) {
+      me.load(config.objId);
+    }
+  },
+
+<span id='sol-common-Template-method-compile'>  /**
+</span>  * @private
+  * Compiles the template string.
+  */
+  compile: function () {
+    var me = this;
+    if (!me.source) {
+      return;
+    }
+    try {
+      me.template = Handlebars.compile(me.source);
+    } catch (e) {
+      throw &quot;Exception compiling template&quot;;
+    }
+  },
+
+<span id='sol-common-Template-method-load'>  /**
+</span>   * Loads the template string from an ELO document
+   * @param {String} objId ELO object ID
+   */
+  load: function (objId) {
+    var me = this,
+        repoUtils, content;
+
+    me.logger.enter(&quot;load&quot;, arguments);
+    if (!objId) {
+      throw &quot;Template.load(): Object Id must not be empty&quot;;
+    }
+    repoUtils = sol.common.RepoUtils;
+    content = repoUtils.downloadSmallContentToString(objId);
+    content = String(content).replace(&quot;\uFEFF&quot;, &quot;&quot;);
+
+    if (!content) {
+      throw &quot;Template string must not be empty.&quot;;
+    }
+    me.source = content;
+    me.compile();
+    me.logger.exit(&quot;load&quot;, { source: me.source });
+  },
+
+<span id='sol-common-Template-method-setSource'>  /**
+</span>   * Sets the source from a template string
+   * @param {String} source
+   * @param {Boolean} isRepoPath
+   */
+  setSource: function (source, isRepoPath) {
+    var me = this;
+    me.logger.enter(&quot;setSource&quot;, arguments);
+    source = String(source);
+    if (isRepoPath &amp;&amp; (source.indexOf(me.pilcrow) &lt; 0)) {
+      source = sol.common.StringUtils.replaceAll(source, &quot;/&quot;, me.pilcrow);
+    }
+    me.source = source;
+    me.compile();
+    me.logger.exit(&quot;setSource&quot;, { source: me.source });
+  },
+
+<span id='sol-common-Template-method-apply'>  /**
+</span>  * Apply the template with the object data.
+  * @param {Object} paramObj Data object which contains the data to fill in.
+  * @returns {String}
+  */
+  apply: function (paramObj) {
+    var me = this;
+    if (!me.template) {
+      throw &quot;Template is empty&quot;;
+    }
+    me.logger.enter(&quot;apply&quot;, arguments);
+    me.result = me.template(paramObj);
+    me.logger.exit(&quot;apply&quot;, me.result);
+    return me.result;
+  },
+
+<span id='sol-common-Template-method-applySord'>  /**
+</span>   * Renders the template with the sord data.
+   * @param {String|de.elo.ix.client.Sord} sord Object ID of the element or a Sord.
+   * @returns {String}
+   */
+  applySord: function (sord) {
+    var me = this,
+        _result;
+    me.logger.enter(&quot;applySord&quot;, arguments);
+    if (!sord) {
+      me.logger.exit(&quot;applySord&quot;);
+      return;
+    }
+    if (!sol.common.SordUtils.isSord(sord) || !sol.common.SordUtils.isIndexdataLoaded(sord)) {
+      sord = ixConnect.ix().checkoutSord(sord, EditInfoC.mbSord, LockC.NO).sord;
+    }
+    _result = me.apply(sol.common.SordUtils.getTemplateSord(sord));
+    me.logger.exit(&quot;applySord&quot;);
+    return _result;
+  },
+
+<span id='sol-common-Template-method-getResult'>  getResult: function () {
+</span>    var me = this;
+    me.logger.enter(&quot;getResult&quot;, arguments);
+    me.logger.exit(&quot;getResult&quot;, me.result);
+    return me.result;
+  },
+
+<span id='sol-common-Template-method-registerCustomHelper'>  /**
+</span>   * Registers an helper function globally. This function can be used later by using the custom helper.
+   * @param {String} name Name of the helper
+   * @param {Function} fct The function which will be used by the custom helper. This function recieves all parameters that are handed over to the custom helper after the name of the called cutom helper.
+   */
+  registerCustomHelper: function (name, fct) {
+    var me = this;
+    if (typeof globalScope === &quot;object&quot;) {
+      globalScope.$handlebars = globalScope.$handlebars || {};
+      globalScope.$handlebars.customhelper = globalScope.$handlebars.customhelper || {};
+      if (globalScope.$handlebars.customhelper[name]) {
+        me.logger.warn([&quot;Overriding existing custom helper &#39;{0}&#39;&quot;, name]);
+      }
+      globalScope.$handlebars.customhelper[name] = fct;
+    } else {
+      throw &quot;custom handlebars helpers are not supported in this environment&quot;;
+    }
+  }
+
+});
+
+/* Register helpers for handlebars.js templates */
+
+Handlebars.registerHelper(&quot;custom&quot;, function () {
+  var customHelperName;
+
+  if (typeof globalScope !== &quot;object&quot;) {
+    return new Handlebars.SafeString(&quot;# custom helpers are not supported in this environment #&quot;);
+  }
+
+  if (arguments.length &lt; 1) {
+    return new Handlebars.SafeString(&quot;# no custom helper name given #&quot;);
+  }
+
+  customHelperName = arguments[0];
+
+  if (!globalScope.$handlebars || !globalScope.$handlebars.customhelper || typeof globalScope.$handlebars.customhelper[customHelperName] !== &quot;function&quot;) {
+    return new Handlebars.SafeString(&quot;# no custom helper registered for name &#39;&quot; + customHelperName + &quot;&#39; #&quot;);
+  }
+
+  return globalScope.$handlebars.customhelper[customHelperName].apply(this, Array.prototype.slice.call(arguments, 1));
+}),
+
+Handlebars.registerHelper(&quot;formatDate&quot;, function () {
+  var defaultFormat = &quot;YYYYMMDDHHmmss&quot;,
+      outputFormat, inputDate, inputFormat, isDate, date;
+
+  defaultFormat = &quot;YYYYMMDDHHmmss&quot;;
+  outputFormat = (arguments.length &gt; 1) ? arguments[0] : defaultFormat;
+  inputDate = (arguments.length &gt; 2) ? arguments[1] : null;
+  inputFormat = (arguments.length &gt; 3) ? arguments[2] : null;
+  isDate = sol.common.ObjectUtils.isDate(inputDate);
+
+  if (inputDate) {
+    if (!isDate &amp;&amp; !inputFormat) {
+      inputFormat = (inputDate.length === 8) ? &quot;YYYYMMDD&quot; : defaultFormat;
+    }
+    date = (isDate) ? moment(inputDate) : moment(inputDate, inputFormat);
+  } else {
+    date = moment();
+  }
+
+  return new Handlebars.SafeString(date.format(outputFormat));
+});
+
+Handlebars.registerHelper(&quot;count&quot;, function () {
+  var counterTemplateString = arguments[0],
+      context = arguments[arguments.length - 1],
+      padLeft = (arguments.length === 3) ? arguments[1] : null,
+      counterTemplate, counterName, count;
+
+  if (!counterTemplateString) {
+    return new Handlebars.SafeString(&quot;-&quot;);
+  }
+  counterTemplate = Handlebars.compile(counterTemplateString);
+  counterName = counterTemplate(context.data.root);
+
+  if (!counterName) {
+    return new Handlebars.SafeString(&quot;-&quot;);
+    //throw &quot;Counter name must not be empty.&quot;;
+  }
+  count = sol.common.CounterUtils.incCounter(counterName);
+  if (padLeft) {
+    count = sol.common.StringUtils.padLeft(count, padLeft.length, padLeft[0]);
+  }
+  return new Handlebars.SafeString(count);
+});
+
+Handlebars.registerHelper(&quot;padLeft&quot;, function (str, padLeft) {
+  return new Handlebars.SafeString(sol.common.StringUtils.padLeft(str, padLeft.length, padLeft[0]));
+});
+
+Handlebars.registerHelper(&quot;eachObjKey&quot;, function (context, options) {
+  var ret = &quot;&quot;,
+      i, objKey, value;
+  for (i = 0; i &lt; context.length; i++) {
+    objKey = context[i];
+    value = &quot;&quot;;
+    if (objKey.data &amp;&amp; (objKey.data.length &gt; 0)) {
+      value = objKey.data[0];
+    }
+    ret += options.fn({ key: objKey.name, value: value });
+  }
+
+  return ret;
+});
+
+Handlebars.registerHelper(&quot;mapTable&quot;, function (context, options) {
+  var ret = &quot;&quot;,
+      maxLines = 2000,
+      indicatorKey = options.hash.indicatorKey,
+      i, key, index, name;
+
+  if (!options.mapFields) {
+    options.mapFields = [];
+    for (key in context) {
+      index = sol.common.StringUtils.getTrailingNumber(key);
+      if (index == undefined) {
+        continue;
+      }
+      name = sol.common.StringUtils.removeTrailingNumber(key);
+      options.mapFields[index] = options.mapFields[index] || {};
+      options.mapFields[index][name] = context[key];
+    }
+  }
+
+  for (i = 1; i &lt; maxLines; i++) {
+    if (!context[indicatorKey + i]) {
+      break;
+    }
+    ret += options.fn(options.mapFields[i]);
+  }
+  return ret;
+});
+
+Handlebars.registerHelper(&quot;substring&quot;, function (str, start, end, options) {
+  var resultStr = str ? str.substring(start, end) : &quot;&quot;;
+  if (resultStr &amp;&amp; options &amp;&amp; options.hash &amp;&amp; options.hash.uppercase) {
+    resultStr = resultStr.toUpperCase();
+  }
+  return new Handlebars.SafeString(resultStr);
+});
+
+Handlebars.registerHelper(&quot;translate&quot;, function (key, language) {
+  var translatedStr = &quot;&quot;;
+  try {
+    // additional check necessary, because if language is omitted in template string, language parameter has accidentally the context parameter
+    if (!language || ((typeof language === &quot;object&quot;) &amp;&amp; (language.name === &quot;translate&quot;))) {
+      translatedStr = sol.common.TranslateTerms.translate(key);
+    } else {
+      translatedStr = sol.common.TranslateTerms.getTerm(language, key);
+    }
+  } catch (ex) {
+    translatedStr = key;
+  }
+  return new Handlebars.SafeString(translatedStr);
+});
+
+Handlebars.registerHelper(&quot;ifCond&quot;, function (v1, operator, v2, options) {
+  switch (operator) {
+    case &quot;==&quot;:
+      return (v1 == v2) ? options.fn(this) : options.inverse(this);
+    case &quot;===&quot;:
+      return (v1 === v2) ? options.fn(this) : options.inverse(this);
+    case &quot;!==&quot;:
+      return (v1 !== v2) ? options.fn(this) : options.inverse(this);
+    case &quot;!=&quot;:
+      return (v1 != v2) ? options.fn(this) : options.inverse(this);
+    case &quot;&lt;&quot;:
+      return (v1 &lt; v2) ? options.fn(this) : options.inverse(this);
+    case &quot;&lt;=&quot;:
+      return (v1 &lt;= v2) ? options.fn(this) : options.inverse(this);
+    case &quot;&gt;&quot;:
+      return (v1 &gt; v2) ? options.fn(this) : options.inverse(this);
+    case &quot;&gt;=&quot;:
+      return (v1 &gt;= v2) ? options.fn(this) : options.inverse(this);
+    case &quot;&amp;&amp;&quot;:
+      return (v1 &amp;&amp; v2) ? options.fn(this) : options.inverse(this);
+    case &quot;||&quot;:
+      return (v1 || v2) ? options.fn(this) : options.inverse(this);
+    default:
+      return options.inverse(this);
+  }
+});
+
+Handlebars.registerHelper(&quot;base64Barcode&quot;, function (options) {
+  var me = this,
+      config = options.hash,
+      contentTemplate, base64String;
+  config.returnBase64 = true;
+  contentTemplate = Handlebars.compile(config.content);
+  config.content = contentTemplate(me);
+  base64String = sol.common.as.BarcodeUtils.generate(config.type, config.content, config);
+  return new Handlebars.SafeString(base64String);
+});
+
+Handlebars.registerHelper(&quot;base64Image&quot;, function (options) {
+  var me = this,
+      config = options.hash,
+      objIdTemplate, base64Content;
+  objIdTemplate = Handlebars.compile(config.objId);
+  config.objId = objIdTemplate(me);
+  if (!config.objId) {
+    throw &quot;Object ID is empty&quot;;
+  }
+  try {
+    base64Content = sol.common.RepoUtils.downloadToBase64String(config.objId);
+  } catch (ex) {
+    // return a transparent 1x1 px png
+    base64Content = &quot;iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=&quot;;
+    log.warn(&quot;could not load image with objId=&quot; + config.objId); // TODO sol.common.GlobelLogger
+  }
+  return new Handlebars.SafeString(base64Content);
+});
+
+Handlebars.registerHelper(&quot;ifContains&quot;, function (input, searchString, options) {
+  if (input.toString().indexOf(searchString) != -1) {
+    return options.fn(this);
+  }	else {
+    return options.inverse(this);
+  }
+});
+
+Handlebars.registerHelper(&quot;doublecurly&quot;, function (object, open) {
+  return open ? new Handlebars.SafeString(&quot;{{&quot;) : new Handlebars.SafeString(&quot;}}&quot;);
+});
+
+Handlebars.registerHelper(&quot;text&quot;, function (inputString) {
+  return new Handlebars.SafeString(inputString);
+});
+
+Handlebars.registerHelper(&quot;currentUser&quot;, function (options) {
+  var user = ixConnect.loginResult.user;
+  switch (options) {
+    case &quot;id&quot;:
+      return new Handlebars.SafeString(user.id);
+    case &quot;guid&quot;:
+      return new Handlebars.SafeString(user.guid);
+    case &quot;desc&quot;:
+      return new Handlebars.SafeString(user.desc);
+    default:
+      return new Handlebars.SafeString(user.name);
+  }
+});
+
+Handlebars.registerHelper(&quot;userFolder&quot;, function (options) {
+  var user = ixConnect.loginResult.user,
+      query, sord;
+
+  switch (options) {
+    case &quot;private&quot;:
+      query = &quot;OKEY:ELOINDEX=/users/private#&quot; + user.guid;
+      break;
+    case &quot;data&quot;:
+      query = &quot;OKEY:ELOINDEX=/users/data#&quot; + user.guid;
+      break;
+    case &quot;inbox&quot;:
+      query = &quot;OKEY:ELOINDEX=/users/inbox#&quot; + user.guid;
+      break;
+    default:
+      query = &quot;ARCPATH:/&quot; + user.name;
+  }
+
+  sord = ixConnect.ix().checkoutSord(query, SordC.mbOnlyGuid, LockC.NO);
+  if (sord) {
+    return new Handlebars.SafeString(sord.guid);
+  }
+});
+
+Handlebars.registerHelper(&quot;number&quot;, function (number) {
+  number = (number == undefined) ? &quot;&quot; : String(number);
+  if (number.match(/^-?\d+,\d+$/)) {
+    number = number.replace(&quot;,&quot;, &quot;.&quot;);
+  }
+  return new Handlebars.SafeString(number);
+});
+
+Handlebars.registerHelper(&quot;externalLink&quot;, function (options) {
+  var me = this,
+      objIdTemplate, url, config;
+
+  config = options.hash;
+  if (config.objId) {
+    objIdTemplate = Handlebars.compile(config.objId);
+    config.objId = objIdTemplate(me);
+  }
+
+  url = sol.common.RepoUtils.createExternalLink(config);
+
+  return new Handlebars.SafeString(url);
+});
+
+Handlebars.registerHelper(&quot;monthName&quot;, function (options) {
+  var monthName = &quot;&quot;,
+      isoDate, month, textStyleString, textStyle, localeString;
+
+  isoDate = options.hash.isoDate || moment().format(&quot;YYYYMM&quot;);
+
+  if (/^\d{6}/.test(isoDate)) {
+    month = isoDate.substring(4, 6);
+    textStyleString = options.hash.textStyle || &quot;FULL&quot;;
+    textStyle = java.time.format.TextStyle[textStyleString.toUpperCase()];
+    localeString = options.hash.locale || &quot;en&quot;;
+    monthName = java.time.Month.of(month).getDisplayName(textStyle, new java.util.Locale(localeString));
+  }
+
+  return new Handlebars.SafeString(monthName);
+});
+
+
+<span id='sol-common-TemplateUtils'>/**
+</span> * This class contains util functions to facilitate working with templates.
+ * E.g. render, which takes any object(=template) and inputdata and returns the recursively rendered object.
+ */
+sol.define(&quot;sol.common.TemplateUtils&quot;, {
+  singleton: true,
+<span id='sol-common-TemplateUtils-method-render'>  /* renders a template `tpl` using the JavaScript-Object `tplData`
+</span>  * if options.emptyNonRendered is defined as true, but no data for the string to be rendered existed in tplData
+  * the string will be emptied. otherwise, it will stay the same (e.g. &quot;{{sord.objKeys.MYFIELD}}&quot;)
+  */
+  render: function (tpl, tplData, options) {
+    function typeRecursion(any, data, opts) {
+      return (
+        ((typeof any === &quot;string&quot;) || (typeof java !== &quot;undefined&quot; &amp;&amp; any instanceof java.lang.String))
+          ? (
+            function (str) {
+              return str // if String is not empty
+                &amp;&amp; ((str.indexOf(&quot;{{&quot;) &gt; -1) ? ((sol.create(&quot;sol.common.Template&quot;, { source: str })).apply(data).trim()) : str) // render string
+                || (opts.emptyNonRendered ? &quot;&quot; : str); // if rendered String is empty, act according to option
+            }(String(any))
+          )
+          : (
+            Array.isArray(any) &amp;&amp; any.map(function (x) { // iterate array
+              return typeRecursion(x, data, opts);
+            })
+            || (typeof any === &quot;object&quot; &amp;&amp; any !== null) &amp;&amp; Object.keys(any).forEach(function (k) { // iterate object (RegExp, Date, ... have no iterable keys, so this is safe)
+              try {
+                any[k] = typeRecursion(any[k], data, opts);
+              } catch (e) {}
+            }) // forEach does not return anything, but `any` has been altered. Subsequently, the following case will return a reference to the altered object
+            || any // anything else: leave as is
+          )
+      );
+    }
+    return typeRecursion(tpl, tplData, (options || {}));
+  }
+});
+</pre>
+</body>
+</html>

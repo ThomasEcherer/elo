@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_sig-forms-Signature'>/**
+</span> * @private
+ * Utility-Class that helps writing signatures.
+ * 
+ * It&#39;s needed to declare a text with &#39;SIGNATURE_INIT&#39; on the description-field, 
+ * to get the signature container.
+ * It&#39;s also needed to declare a buttons with &#39;SIGNATURE_RESET&#39; - (clears the field).
+ */
+sol.define(&quot;sol.common_sig.forms.Signature&quot;, {
+<span id='sol-common_sig-forms-Signature-method-initialize'>  /**
+</span>   * Initialize the signature pad 
+   * @param {Object} config
+   */
+  initialize: function (config) {
+    var me = this,
+        canvas = null,
+        lastname, firstname, divElem, refreshDiv, span,
+        resizeCanvas;
+
+    me.clearButton = $var(config.varNameBtnClear);
+    me.wrapper = $var(config.varNameContainer);
+    me.varNameContainer = config.varNameContainer;
+
+    if (me.wrapper) {
+      me.wrapper.innerHTML = &quot;&lt;canvas&gt;&lt;/canvas&gt;&quot;;
+      canvas = me.wrapper.querySelector(&quot;canvas&quot;);
+      canvas.style.border = config.border;
+      canvas.style.width = config.width;
+      canvas.style.height = config.height;
+      canvas.style.position = &quot;absolute&quot;;
+      
+      lastname = document.querySelector(&quot;.lastname &gt; div&quot;);
+      firstname = document.querySelector(&quot;.firstname &gt; div&quot;);
+      
+      divElem = document.createElement(&quot;div&quot;);
+      divElem.className = &quot;signature_background&quot;;
+      document.getElementById(&quot;SIGNATURE_INIT&quot;).appendChild(divElem);
+      refreshDiv = document.createElement(&quot;div&quot;);
+      refreshDiv.addEventListener(&quot;click&quot;, function (event) {
+        me.signaturePad.clear();
+      });
+      refreshDiv.className = &quot;refesh_cycle&quot;;
+      document.getElementById(&quot;SIGNATURE_INIT&quot;).appendChild(refreshDiv);
+      span = document.createElement(&quot;span&quot;);
+      span.className = &quot;caption_decr&quot;;
+      if(firstname &amp;&amp; lastname) { 
+        span.innerHTML = lastname.textContent + &quot;,&amp;nbsp; &quot; + firstname.textContent;  
+      }
+      document.getElementById(&quot;SIGNATURE_INIT&quot;).appendChild(span);
+      
+    }
+
+    if (canvas) {
+      //trick to size the DPI
+      resizeCanvas = function () {
+        var ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext(&quot;2d&quot;).scale(ratio, ratio);
+      };
+
+      window.onresize = resizeCanvas;
+      resizeCanvas();
+      me.signaturePad = new SignaturePad(canvas, {
+        minWidth: config.penMinWidth,
+        maxWidth: config.penMaxWidth,
+        penColor: config.penColor
+      });
+    }
+    
+  },
+<span id='sol-common_sig-forms-Signature-method-clear'>  /**
+</span>   * Clears the signature pad 
+   */
+  clear: function () {
+    var me = this;
+    if (me.clearButton &amp;&amp; me.signaturePad) {
+      me.clearButton.addEventListener(&quot;click&quot;, function (event) {
+        me.signaturePad.clear();
+      });
+    }
+  },
+  
+<span id='sol-common_sig-forms-Signature-method-saveSignature'>  /**
+</span>   * Saves the signature
+   */
+  saveSignature: function () {
+    var me = this,
+        image;
+    if (me.signaturePad.isEmpty()) {
+      console.info(&quot;Please provide signature first.&quot;);
+    } else {
+      image = me.signaturePad.toDataURL().replace(/^data:image\/(jpeg|png|gif|bmp);base64,/, &quot;&quot;);
+      
+      sol.common.IxUtils.execute(&quot;RF_sol_common_sig_service_UploadSignature&quot;, {
+        flowId: ELO_PARAMS.ELO_FLOWID,
+        base64Content: image
+      });
+    }
+  }
+});
+</pre>
+</body>
+</html>

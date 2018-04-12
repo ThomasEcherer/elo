@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.CopyFolderContents&quot; });
+
+<span id='sol-common-ix-functions-CopyFolderContents'>/**
+</span> * Copies whole folder recursively.
+ *
+ * # As IX function call
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_CopyFolderContents&quot; {
+ *       objId: 123,
+ *       source: 1233,
+ *       copySourceAcl: false,
+ *       inheritDestinationAcl: true
+ *     });
+ *
+ * * # Node configuration example:
+ *
+ *     {
+ *       &quot;source&quot;: &quot;ARCPATH:/MyTemplates/MyTemplate1&quot;
+ *     }
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.02.003
+ *
+ * @eloix
+ * @requires  sol.Logger
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ObjectUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.CopyFolderContents&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;source&quot;],
+</span>
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-objId'>  /**
+</span>   * @cfg {Number} objId (required)
+   * ObjectId of destination folder
+   */
+  objId: undefined,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-source'>  /**
+</span>   * @cfg {Number} source (required)
+   * ObjectId of source folder which content should be copied
+   */
+  source: undefined,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-copySourceAcl'>  /**
+</span>   * @cfg {Boolean} [copySourceAcl=false]
+   * Copies the ACL of parent element when set
+   */
+  copySourceAcl: false,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-inheritDestinationAcl'>  /**
+</span>   * @cfg {Boolean} [inheritDestinationAcl=true]
+   * Inherits the ACL of the destination element when set
+   */
+  inheritDestinationAcl: true,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-copyOnlyWorkversion'>  /**
+</span>   * @cfg {Boolean} [copyOnlyWorkversion=true]
+   * Copy only the work version
+   */
+  copyOnlyWorkversion: true,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-copyOnlyBaseElement'>  /**
+</span>   * @cfg {Boolean} [copyOnlyBaseElement=false]
+   * Copy only the base element
+   */
+  copyOnlyBaseElement: false,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-name'>  /**
+</span>   * @cfg {String} name
+   * If set, the new elements name will set to this, instead of the sources name
+   */
+  name: undefined,
+
+<span id='sol-common-ix-functions-CopyFolderContents-cfg-sleepTime'>  /**
+</span>   * @cfg {Number} [sleepTime=200]
+   * The time in ms to recheck, if the process has finished.
+   * For longer running copy processes this value can be increased to reduce the number of polling requests.
+   */
+  sleepTime: undefined,
+
+<span id='sol-common-ix-functions-CopyFolderContents-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sleepTime = (sol.common.ObjectUtils.isNumber(config.sleepTime)) ? config.sleepTime : 200;
+  },
+
+<span id='sol-common-ix-functions-CopyFolderContents-method-process'>  /**
+</span>   * Copies whole folder recursively.
+   * @returns {String} The objId of the copied folder
+   */
+  process: function () {
+    var me = this,
+        ixConn, jobState, navInfo, procInfo, dstObjId;
+
+    ixConn = (me.asAdmin === true) ? ixConnectAdmin : ixConnect;
+
+    me.source = sol.common.RepoUtils.getObjId(me.source);
+
+    navInfo = new NavigationInfo();
+    navInfo.startIDs = [me.source];
+
+    procInfo = new ProcessInfo();
+    procInfo.desc = &quot;sol.common.ix.functions.CopyFolderContents&quot;;
+    procInfo.errorMode = ProcessInfoC.ERRORMODE_CRITICAL_ONLY;
+
+    procInfo.procCopyElements = new ProcessCopyElements();
+    procInfo.procCopyElements.copyOptions = new CopyOptions();
+    if (me.name) {
+      procInfo.procCopyElements.copyOptions.targetName = me.name;
+    }
+
+    if (me.copyOnlyWorkversion) {
+      procInfo.procCopyElements.copyOptions.copyOnlyWorkversion = true;
+    }
+
+    if (me.copyOnlyBaseElement) {
+      procInfo.procCopyElements.copyOptions.copyOnlyBaseElement = true;
+    } else {
+      procInfo.procCopyElements.copyOptions.copyStructuresAndDocuments = true;
+
+    }
+
+    procInfo.procCopyElements.copyOptions.newParentId = me.objId;
+    procInfo.procCopyElements.createMapping = true;
+
+    // Set permissions
+    if (me.copySourceAcl != me.inheritDestinationAcl) {
+      if (me.copySourceAcl) {
+        procInfo.procCopyElements.copyOptions.keepOriginalPermissions = true;
+      }
+      if (me.inheritDestinationAcl) {
+        procInfo.procCopyElements.copyOptions.takeTargetPermissions = true;
+      }
+    }
+
+    me.logger.debug([&quot;sol.common.ix.functions.CopyFolderContents: source={0}, newParent.id={1}&quot;, me.source, me.objId]);
+
+    jobState = ixConn.ix().processTrees(navInfo, procInfo);
+
+    while (jobState &amp;&amp; jobState.jobRunning) {
+      Packages.java.lang.Thread.sleep(me.sleepTime);
+      jobState = ixConn.ix().queryJobState(jobState.getJobGuid(), true, true, true);
+      me.logger.debug([&quot;jobState.countProcessed={0}, jobState.countErrors={1}&quot;, jobState.countProcessed, jobState.countErrors]);
+    }
+
+    me.logger.debug([&quot;Job &#39;{0}&#39; finished: jobState.countProcessed={1}, jobState.countErrors={2}&quot;, procInfo.desc, jobState.countProcessed, jobState.countErrors]);
+
+    dstObjId = jobState.procInfo.procCopyElements.copyResult.mapIdsSource2Copy.get(new java.lang.Integer(me.source));
+
+    return dstObjId;
+  }
+});
+
+<span id='sol-common-ix-functions-CopyFolderContents-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.CopyFolderContents
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_sol.common.ix.functions.CopyFolderContents&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.CopyFolderContents&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_sol.common.ix.functions.CopyFolderContents&quot;);
+}
+
+<span id='sol-common-ix-functions-CopyFolderContents-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.CopyFolderContents
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_sol.common.ix.functions.CopyFolderContents&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+
+  module = sol.create(&quot;sol.common.ix.functions.CopyFolderContents&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_sol.common.ix.functions.CopyFolderContents&quot;);
+}
+
+<span id='sol-common-ix-functions-CopyFolderContents-static-method-RF_sol_function_CopyFolderContents'>/**
+</span> * @member sol.common.ix.functions.CopyFolderContents
+ * @method RF_sol_function_CopyFolderContents
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_CopyFolderContents(iXSEContext, args) {
+  var params, module, objId;
+  logger.enter(&quot;RF_sol_function_CopyFolderContents&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;, &quot;source&quot;, &quot;copySourceAcl&quot;, &quot;inheritDestinationAcl&quot;);
+
+  try {
+    sol.common.ix.RfUtils.checkMainAdminRights(iXSEContext.user, params);
+  } catch (e) {
+    params.asAdmin = false;
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.CopyFolderContents&quot;, params);
+  objId = module.process();
+  logger.exit(&quot;RF_sol_function_CopyFolderContents&quot;);
+  return sol.common.JsonUtils.stringifyAll(objId);
+}</pre>
+</body>
+</html>

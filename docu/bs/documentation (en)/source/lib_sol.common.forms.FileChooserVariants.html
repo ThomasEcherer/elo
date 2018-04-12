@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common-forms-FileChooserVariants'>/**
+</span> * Implements a file-chooser, drago-drop functionality (Webbrowser only) and webcam functionality for ELO wf Forms
+ *
+ * @author ESt, ELO Digital Office GmbH
+ * @version 1
+ *
+ * In some forms, you&#39;d maybe like to let the user select a picture. And save it for later use.
+ * If so, please use the 113_capturepic_webcam &quot;HR&quot;-Form as an inspiration.
+ *
+ * As soon as you defined your own form having all required fields, you can use the following config for initializing this class
+ * ### Example config
+ *
+ *     {
+ *       name: &quot;personnelphotopicker&quot;,
+ *       webcamName: &quot;personnelphotocam&quot;,
+ *       webcamConfig: {
+ *         javaStartupButton: &quot;WEBCAM_JAVA&quot;,
+ *         varNameBtnReset: &quot;JS_WEBCAM_RESET&quot;, 
+ *         varNameBtnSnap: &quot;JS_WEBCAM_SNAP&quot;, 
+ *         varNameContainer: &quot;WEBCAM_INIT&quot;,
+ *         width: 540,
+ *         height: 390,
+ *         dest_width: 720,
+ *         dest_height: 520,
+ *         crop_width: 400,
+ *         crop_height: 520,
+ *         image_format: &quot;jpeg&quot;,
+ *         jpeg_quality: 90,
+ *         swfURL: &quot;lib_webcam.swf&quot;,
+ *         fps: 45,
+ *         showIfNoCam: true
+ *       },
+ *       dropZoneId: &quot;dropZone&quot;,
+ *       filePickerId: &quot;filePicker&quot;,
+ *       accept: &quot;image/jpeg, image/jpg, image/png&quot;,
+ *       maxSize: &quot;3&quot;, //Megabyte (float values possible)
+ *       maskNameForRule: &quot;Personnel file&quot;,
+ *       solTypeForRule: &quot;PERSONNELFILE&quot;,
+ *       photoReferenceField: &quot;IX_GRP_HR_PERSONNEL_PHOTO_GUID&quot;,
+ *       photoReferenceFieldObjId: &quot;IX_MAP_HR_PERSONNEL_PHOTO_OBJID&quot;,
+ *       clearPreviewField: &quot;JS_PICTURE_CLEAR&quot;,
+ *       filePickerField: &quot;JS_FILEPICKER&quot;,
+ *       photoConfig: {
+ *         maskName: &quot;Personnel file document&quot;,
+ *         pictureName: &quot;Mitarbeiterfoto&quot;
+ *       }
+ *     }
+ * 
+ * ### Setup
+ * Add the following to your `Header.txt`
+ * 
+ *     function onInit() {
+ *       this.fcv = sol.create(&quot;sol.common.forms.FileChooserVariants&quot;, config);
+ *     }
+ * 
+ *     // i recommend to save using these precautions, otherwise empty images might get saved
+ *     // also, note that &quot;webbrowser&quot;-webcam pictures need to be saved using the function &quot;webcam.savePicture&quot; instead of calling &quot;fcv.uploadImage&quot; directly
+ *     function nextClicked(id) {
+ *       return (
+ *         sol.common.forms.Utils.disableCancelButtonValidation(id, [&quot;sol.common.wf.node.cancel&quot;]) 
+ *         || (typeof this.fcv.displayImage !== &quot;undefined&quot; &amp;&amp; this.fcv.displayImage.src &amp;&amp; this.fcv.uploadImage(this.fcv.displayImage.src))
+ *         || ($var(config.webcamConfig.varNameContainer) &amp;&amp; this.fcv.webcam.savePicture(this.fcv.uploadImage.bind(this.fcv)));
+ *       );
+ *     }
+ *
+ */
+sol.define(&quot;sol.common.forms.FileChooserVariants&quot;, {
+<span id='sol-common-forms-FileChooserVariants-property-webcam'>  //instruments
+</span>  webcam: undefined,
+<span id='sol-common-forms-FileChooserVariants-property-dropZone'>  dropZone: undefined,
+</span><span id='sol-common-forms-FileChooserVariants-property-filePicker'>  filePicker: undefined,
+</span><span id='sol-common-forms-FileChooserVariants-property-dragdropfile'>  // base64 temporary stores
+</span>  dragdropfile: undefined,
+<span id='sol-common-forms-FileChooserVariants-property-webacamImage'>  webacamImage: undefined,
+</span><span id='sol-common-forms-FileChooserVariants-property-displayDiv'>  //divs
+</span>  displayDiv: undefined,
+<span id='sol-common-forms-FileChooserVariants-property-displayImage'>  displayImage: undefined,
+</span><span id='sol-common-forms-FileChooserVariants-method-initialize'>  /**
+</span>   * Initialize the tools
+   * @param {Object} config Configuration
+   */
+  initialize: function (config) {
+    var me = this;
+    me.config = config;
+    // initialize webcam
+    me.webcam = (navigator.userAgent.indexOf(&quot;JavaFX&quot;) === -1) &amp;&amp; sol.create(&quot;sol.common.forms.Webcam&quot;, config.webcamConfig);
+
+    if (/*(navigator.userAgent.indexOf(&quot;JavaFX&quot;) &gt; -1) &amp;&amp; */$var(config.webcamConfig.varNameContainer)) {
+      $var(config.webcamConfig.varNameContainer).style.width = String(me.calcLiveCrop()[0]) + &quot;px&quot;;
+      $var(config.webcamConfig.varNameContainer).style.height = String(me.calcLiveCrop()[1]) + &quot;px&quot;;
+    }
+
+    //initialize dropZone
+    me.dropZone = document.createElement(&quot;div&quot;);
+    me.dropZone.id = config.dropZoneId;
+    me.dropZone.style = &quot;background: gray; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; opacity: 0.6; visibility: hidden;&quot;;
+    document.body.appendChild(me.dropZone);
+    me.dropZone.addEventListener(&quot;dragleave&quot;, me.hideDropZone.bind(me));
+    me.dropZone.addEventListener(&quot;drop&quot;, me.fileDroppedHandler.bind(me));
+    me.dropZone.addEventListener(&quot;dragenter&quot;, function (e) { 
+      e.dataTransfer.dropEffect = &quot;copy&quot;; e.preventDefault(); 
+    });
+    me.dropZone.addEventListener(&quot;dragover&quot;, function (e) { 
+      e.dataTransfer.dropEffect = &quot;copy&quot;; e.preventDefault(); 
+    });
+    window.addEventListener(&quot;dragenter&quot;, me.showDropZone.bind(me));
+
+    //initialize filePicker
+    me.filePicker = document.createElement(&quot;input&quot;);
+    me.filePicker.type = &quot;file&quot;;
+    me.filePicker.id = config.filePickerId;
+    me.filePicker.accept = config.accept;
+    me.filePicker.style = &quot;display:none&quot;;
+    me.filePicker.addEventListener(&quot;change&quot;, me.filePickedInBrowser.bind(me)); // will only be called in Browser
+    $var(me.config.filePickerField).addEventListener(&quot;click&quot;, me.filePickedHandler.bind(me));
+
+    //assign event-handlers
+    $var(config.webcamConfig.varNameBtnSnap).onclick = me.JS_WEBCAM_SNAP.bind(me);
+    $var(config.webcamConfig.varNameBtnReset).onclick = me.webcam &amp;&amp; me.webcam.reset.bind(me);
+    $var(config.webcamConfig.javaStartupButton).onclick = me.JS_WEBCAM_SNAP.bind(me);
+    $var(config.clearPreviewField).onclick = me.JS_PICTURE_CLEAR.bind(me);
+
+    if (navigator.userAgent.indexOf(&quot;JavaFX&quot;) === -1) {
+      $hide(config.webcamConfig.javaStartupButton); //Filereader only exists in Web-Clients. Hide Java Webcambutton in Webclient
+    } else {
+      $hide(config.webcamConfig.varNameBtnSnap); // Hide JS Webcambutton in Java Client
+      var fakeWebcamDiv = document.createElement(&quot;div&quot;);
+      fakeWebcamDiv.classList.add(&quot;sol-webcam&quot;);
+      (document.getElementById(me.config.webcamConfig.varNameContainer)).appendChild(fakeWebcamDiv);
+    }
+    me.buttonMode(&quot;noReset&quot;);
+  },
+<span id='sol-common-forms-FileChooserVariants-method-calcLiveCrop'>  calcLiveCrop: function () {
+</span>    var me = this, c = me.config.webcamConfig;
+    return [Math.floor(c.crop_width / c.dest_width * c.width), Math.floor(c.crop_height / c.dest_height * c.height)];
+  },
+
+<span id='sol-common-forms-FileChooserVariants-method-javaBrowser'>  javaBrowser: function () {
+</span>    return (navigator.userAgent.indexOf(&quot;JavaFX&quot;) &gt; -1);
+  },
+
+<span id='sol-common-forms-FileChooserVariants-method-buttonMode'>  buttonMode: function (mode) {
+</span>    var me = this, 
+        jCam = me.config.webcamConfig.javaStartupButton,
+        wCam = me.config.webcamConfig.varNameBtnSnap,
+        xChoose = me.config.filePickerField,
+        xReset = me.config.clearPreviewField;
+
+    if (mode === &quot;resetOnly&quot;) {
+      $show(xReset);
+      $hide(xChoose);
+      if (me.javaBrowser()) {
+        $hide(jCam);
+      } else {
+        $hide(wCam);
+      }
+    } else if (mode === &quot;noReset&quot;) {
+      $hide(xReset);
+      $show(xChoose);
+      if (me.javaBrowser()) {
+        $show(jCam);
+      } else {
+        $show(wCam);
+      }
+    }
+  },
+
+<span id='sol-common-forms-FileChooserVariants-method-uploadImage'>  // function can be used to upload an image
+</span>  uploadImage: function (image) {
+    var me = this, base64;
+    try {
+      sol.common.forms.Utils.initializeIxSession();
+      ELOF.showLoadingDiv();
+      base64 = image.replace(/^data:image\/(jpeg|png|gif|bmp);base64,/, &quot;&quot;);
+      if (base64 !== &quot;&quot;) {
+        me.intervalUntil(
+          function () {
+            return true;  // basically do nothing until condition is met
+          },
+          function () { // condition: until IX Session is initialized
+            return (elo.IX);
+          },
+          function () {
+            var result = sol.common.IxUtils.execute(&quot;RF_sol_hr_service_UploadPhoto&quot;, {
+              objId: ELO_PARAMS.ELO_OBJID,
+              base64Content: base64,
+              cfg: me.config.photoConfig
+            });
+            sol.common.IxUtils.execute(&quot;RF_sol_function_Set&quot;, {
+              objId: ELO_PARAMS.ELO_OBJID,
+              entries: [
+                { type: &quot;GRP&quot;, key: me.config.photoReferenceField, value: result.guid },
+                { type: &quot;MAP&quot;, key: me.config.photoReferenceFieldObjId, value: result.objId }
+              ]
+            });
+            return result;  // unnecessary
+          },
+          10, // try every 10 miliseconds
+          { name: &quot;initializing IX Session&quot;, logging: false }
+        );
+
+      }
+    } catch (err) {
+      console.info(&quot;Error: &quot; + err);   
+    } finally {
+      ELOF.hideLoadingDiv();
+    }
+    return false;
+  },
+<span id='sol-common-forms-FileChooserVariants-method-createDivsIfNoneExist'>  createDivsIfNoneExist: function () {
+</span>    var me = this;
+    if (!me.displayImage) {
+      me.displayDiv = document.createElement(&quot;div&quot;);
+      me.displayDiv.classList.add(&quot;display-image-result-container&quot;);
+      me.displayDiv = (document.getElementById(me.config.webcamConfig.varNameContainer)).appendChild(me.displayDiv);
+      me.displayImage = document.createElement(&quot;img&quot;);
+      me.displayImage.classList.add(&quot;display-image-result&quot;);
+      me.displayDiv.appendChild(me.displayImage);
+    }
+  },
+<span id='sol-common-forms-FileChooserVariants-method-displayImageInPage'>  displayImageInPage: function (reader, file) {
+</span>    var me = this;
+
+    me.createDivsIfNoneExist();
+    me.displayImage.file = file;
+    reader.onload = (function (aImg) { return function (e) { aImg.src = e.target.result; }; })(me.displayImage);
+    reader.readAsDataURL(file);
+    me.buttonMode(&quot;resetOnly&quot;);
+    $var(me.config.webcamConfig.varNameContainer) &amp;&amp; $var(me.config.webcamConfig.varNameContainer).classList.add(&quot;webcamImageHidden&quot;);
+  },
+<span id='sol-common-forms-FileChooserVariants-method-preconditionsFulfilled'>  preconditionsFulfilled: function (file) {
+</span>    var me = this;
+    if (file.size &lt;= (Math.floor(me.config.maxSize * 1000000))) {
+      if ((me.config.accept.split(&quot;,&quot;).map(function (s) { return s.trim() })).indexOf(file.type) &gt; -1) {
+        return true;
+      } else {
+        eloAlert(&quot;Allowed file types: &quot; + me.config.accept + &quot;(your file: &quot; + file.type + &quot;)&quot;, &quot;Info&quot;);
+      }
+    } else {
+      eloAlert(&quot;Max. file size: &quot; + me.config.maxSize + &quot;Megabyte! (your file: &quot; + (Math.floor(file.size / 1000000)) + &quot;Megabyte)&quot;, &quot;Info&quot;);
+    }
+    return false;
+  },
+<span id='sol-common-forms-FileChooserVariants-method-fileDroppedHandler'>  fileDroppedHandler: function (ev) {
+</span>    var me = this, dt = ev.dataTransfer, reader = new FileReader();
+    ev.preventDefault();
+    me.hideDropZone();
+    // If dropped items aren&#39;t files, reject them
+    if (dt.items &amp;&amp; dt.items.length &gt; 0 &amp;&amp; dt.items[0].kind == &quot;file&quot;) {
+      me.dragdropfile = dt.items[0].getAsFile();
+      me.preconditionsFulfilled(me.dragdropfile) &amp;&amp; me.displayImageInPage(reader, me.dragdropfile);
+    }
+  },
+<span id='sol-common-forms-FileChooserVariants-method-filePickedInBrowser'>  filePickedInBrowser: function (ev) {
+</span>    var me = this, dt = ev.target, reader = new FileReader();
+    if (navigator.userAgent.indexOf(&quot;JavaFX&quot;) === -1) { //web-client
+      ev.preventDefault();
+      if (dt.files &amp;&amp; dt.files.length &gt; 0) {
+        me.dragdropfile = dt.files[0];
+        me.preconditionsFulfilled(me.dragdropfile) &amp;&amp; me.displayImageInPage(reader, me.dragdropfile);
+      }
+    }
+  },
+<span id='sol-common-forms-FileChooserVariants-method-filePickedHandler'>  filePickedHandler: function (e) { 
+</span>    var me = this, data;    
+    if (navigator.userAgent.indexOf(&quot;JavaFX&quot;) === -1) { // Web-Client
+      if (me.filePicker) {
+        me.filePicker.value = null;
+        me.filePicker.click();  //this executes the actual handler for opening the file selection dialog. This trick is required, because I did not
+                                //want to use the standard filepicker Button. (it would not look like an ELO Button)
+      }
+    } else {  // Java-Client
+      data = { text: &quot;capture&quot;, objId: ELO_PARAMS.ELO_OBJID }; // I think, sendCustomMessage needs this?
+      me.createDivsIfNoneExist();
+      api.communication.Parent.sendCustomMessage(&quot;workspace.showFileChooserDialog_&quot; + JSON.stringify({ accept: me.config.accept, maxSize: me.config.maxSize }), data, function (data, event) {
+        me.dragdropfile = { base64: String(data.response.base64), type: String(data.response.type) };
+        if (me.preconditionsFulfilled(data.response)) {
+          if (me.dragdropfile.base64 !== &quot;&quot;) {
+            me.displayImage.src = &quot;data:&quot; + data.response.type + &quot;;base64,&quot; + me.dragdropfile.base64;
+            me.buttonMode(&quot;resetOnly&quot;);
+            $var(me.config.webcamConfig.varNameContainer) &amp;&amp; $var(me.config.webcamConfig.varNameContainer).classList.add(&quot;webcamImageHidden&quot;);
+          }
+        }
+      });
+    }
+  },
+
+<span id='sol-common-forms-FileChooserVariants-method-intervalUntil'>  /**
+</span>   * small wrapper around interval functions
+   * 
+   * This function is 100% decoupled from any ELO-specifics and can be used in pure Javascript environments
+   * 
+   * f: function to perform work
+   * 
+   * until: function to check if f should be run again or not
+   * 
+   * after: function to run after until conditions were met
+   * 
+   * intervalTime: time in ms (interval runs every x ms)
+   * 
+   *     params: {
+   *       f: any            pass f any param you like
+   *       f_message:String  console.log before f is called 
+   *       until:any   pass any any param you like
+   *       until_message: String  console.log before until is called
+   *       conditionmet_message:String  console.log if contition is met
+   *       after:any   pass after any param you like
+   *       afterafter_message:String   console.log after after was called
+   *       logging: Boolean    enables logging if set to true
+   *       maxtries: Integer     how often the f function will be executed before the interval is stopped
+   *       name: String          name in logger
+   *     }
+   * 
+   * if the messages are defined as empty strings, no console-logging will be done.
+   *
+   * Of course the execution time of f and until is synchronized. f always runs before until.
+   * 
+   * @returns a function, which can later be used to stop the interval, if the until condition seems to never reach an end
+  */
+  intervalUntil: function (f, until, after, intervalTime, params) {
+    var intervals = [], parms = params || {}, maxTries = params.maxtries - 1, executed = 0, 
+        allowF = true, allowUntil = false; //for synchronizing f and until
+    function logIt(message, paramMsg) {
+      parms.logging &amp;&amp; paramMsg !== &quot;&quot; &amp;&amp; console.log(&quot;Interval &quot; + (parms.name ? &quot;&#39;&quot; + parms.name + &quot;&#39;&quot; : &quot;&quot;) + &quot;:&quot; + (paramMsg || message));
+    }
+
+    intervals.push(
+      setInterval(  //setInterval is a standard Javascript function
+        function () {
+          if (!allowF) {
+            return;
+          }
+          logIt(&quot;performing work&quot;, parms.f_message);
+          f &amp;&amp; f(parms.f);
+          executed++;
+          allowF = false;
+          allowUntil = true;
+        }, intervalTime
+      )
+    );
+    intervals.push(
+      setInterval(
+        function () {
+          if (!allowUntil) {
+            return;
+          }
+          logIt(&quot;until condition met?&quot;, parms.until_message);
+          if (parms.maxtries &amp;&amp; maxTries-- === 0 || until &amp;&amp; until(parms.until)) {
+            logIt(maxTries === 0 ? &quot;Tried too many times:&quot; + parms.maxTries : &quot;until condition met!&quot;, maxTries === 0 ? parms.maxTriesMessage : parms.conditionmet_message);
+            intervals.forEach(clearInterval);   //clearInterval is a standard Javascript function
+            after &amp;&amp; after(parms.after);
+            logIt(&quot;after callback executed. Interval finished &amp; closed after &quot; + executed + &quot; cycles!&quot;, parms.afterafter_message);
+          }
+          allowF = true;
+          allowUntil = false;
+        }, intervalTime
+      )
+    );
+    return function () {
+      intervals.forEach(clearInterval);
+      logIt(&quot;closed manually after &quot; + executed + &quot; cycles!&quot;, parms.clearedManually);
+    };
+  },
+<span id='sol-common-forms-FileChooserVariants-method-JS_WEBCAM_SNAP'>  // takes a webcam-picture
+</span>  JS_WEBCAM_SNAP: function () {
+    var me = this, data = { text: &quot;capture&quot;, objId: ELO_PARAMS.ELO_OBJID, cropImageDimension: { width: me.config.webcamConfig.width, height: me.config.webcamConfig.height } }, renderedCanvas;
+    me.createDivsIfNoneExist();
+
+    if (navigator.userAgent.indexOf(&quot;JavaFX&quot;) === -1) { // Web-Client
+      me.JS_PICTURE_CLEAR();
+      Webcam.freeze();  //library function
+      me.webcam.state = true;
+    } else {  // Java-Client
+      try {
+        me.webcamImage = &quot;&quot;;
+        api.communication.Parent.sendCustomMessage(&quot;sol.common.jc.WebcamUtils.getImage&quot;, data, function (data, event) {
+          me.webcamImage = data.response;
+          if (typeof me.webcamImage === &quot;string&quot; &amp;&amp; me.webcamImage !== &quot;&quot;) {
+            me.displayImage.src = &quot;data:image/jpeg;base64,&quot; + me.webcamImage;
+            me.buttonMode(&quot;resetOnly&quot;);
+            $var(me.config.webcamConfig.varNameContainer) &amp;&amp; $var(me.config.webcamConfig.varNameContainer).classList.add(&quot;webcamImageHidden&quot;);
+          }
+        });
+      } catch (e) {
+        console.log(&quot;Webcam already in use in another application&quot;);
+      }
+    }
+    
+  },
+<span id='sol-common-forms-FileChooserVariants-method-JS_PICTURE_CLEAR'>  // clears / resets the captured picture
+</span>  JS_PICTURE_CLEAR: function () {
+    var me = this;
+    me.webcam.state = false;
+    me.webcam.capture = false;
+    Webcam.unfreeze();  //library function
+    if (typeof me.displayImage !== &quot;undefined&quot; &amp;&amp; me.displayImage.src) {
+      me.displayImage.src = &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==&quot;; // base64 empty pixel
+      me.displayImage.src = &quot;&quot;;
+      me.buttonMode(&quot;noReset&quot;);
+      $var(me.config.webcamConfig.varNameContainer) &amp;&amp; $var(me.config.webcamConfig.varNameContainer).classList.remove(&quot;webcamImageHidden&quot;);
+    }
+  },
+<span id='sol-common-forms-FileChooserVariants-method-showDropZone'>  showDropZone: function (e) {
+</span>    this.dropZone.style.visibility = &quot;visible&quot;;
+  },
+<span id='sol-common-forms-FileChooserVariants-method-hideDropZone'>  hideDropZone: function (e) {
+</span>    this.dropZone.style.visibility = &quot;hidden&quot;;
+  }
+      
+});</pre>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+importPackage(java.io);
+
+<span id='sol-common-jc-CommonDialogs'>/**
+</span> * This class provides common dialogs
+ * e.g for saving files
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ */
+sol.define(&quot;sol.common.jc.CommonDialogs&quot;, {
+
+  singleton: true,
+
+<span id='sol-common-jc-CommonDialogs-method-showSaveDialog'>  /**
+</span>   * Shows a save dialog
+   * @param {Object} dialogConfig Configuration for the dialog
+   * @param {String} dialogConfig.title. Title of the dialog
+   * @param {String} dialogConfig.filterName. Name of the file filter.
+   * @param {String} dialogConfig.extension. Extension of the file filter.
+   * @param {String} dialogConfig.dir. Destination folder
+   * @param {String} dialogConfig.fileName. File name
+   * @return {java.io.File} selected File
+   */
+  showSaveDialog: function (dialogConfig) {
+    var me = this,
+        fileChooser = me.createFileChooser(dialogConfig),
+        returnCode;
+    fileChooser.dialogType = javax.swing.JFileChooser.SAVE_DIALOG;
+    returnCode = fileChooser.showSaveDialog(null);
+    if (returnCode == javax.swing.JFileChooser.APPROVE_OPTION) {
+      return fileChooser.selectedFile;
+    }
+  },
+
+<span id='sol-common-jc-CommonDialogs-method-createFileChooser'>  /**
+</span>   * @private
+   * Creates a file chooser dialog
+   * @param {Object} dialogConfig Configuration for the dialog
+   * @return {javax.swing.JFileChooser}
+   */
+  createFileChooser: function (dialogConfig) {
+    var fileChooser = new javax.swing.JFileChooser(),
+        fileFilter;
+    if (dialogConfig.title) {
+      fileChooser.dialogTitle = dialogConfig.title;
+    }
+
+    if (dialogConfig.filterName &amp;&amp; dialogConfig.filterExtension) {
+      fileFilter = new javax.swing.filechooser.FileNameExtensionFilter(dialogConfig.filterName, dialogConfig.filterExtension);
+      fileChooser.fileFilter = fileFilter;
+    }
+
+    if (dialogConfig.dir) {
+      fileChooser.currentDirectory = dialogConfig.dir;
+    }
+
+    if (dialogConfig.fileName) {
+      fileChooser.selectedFile = new File(dialogConfig.fileName);
+    }
+
+    if (dialogConfig.directoriesOnly) {
+      fileChooser.fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY;
+    }
+
+    return fileChooser;
+  }
+});
+</pre>
+</body>
+</html>

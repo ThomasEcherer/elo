@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.AsyncUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.Map.js
+//@include lib_sol.common.ix.DynAdHocFlowUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.UserNodeStart&quot; });
+
+<span id='sol-common-ix-functions-UserNodeStart'>/**
+</span> * Adds rights for the current user and writes the current user to an index field
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.ObjectFormatter
+ * @requires  sol.common.Template
+ * @requires  sol.common.UserUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.FunctionBase
+ * @requires sol.common.ix.DynAdHocFlowUtils
+ *
+ * Node configuration example:
+ *
+ *     {
+ *       &quot;fieldName&quot;: &quot;CONTRACT_RESPONSIBLE&quot;
+ *     }
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.UserNodeStart&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-UserNodeStart-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;wfDiagram&quot;],
+</span>
+<span id='sol-common-ix-functions-UserNodeStart-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * Object ID
+   */
+
+<span id='sol-common-ix-functions-UserNodeStart-cfg-fieldName'>  /**
+</span>   * @cfg {String} fieldName (optional)
+   * Destination field name for the user name
+   */
+
+<span id='sol-common-ix-functions-UserNodeStart-cfg-rightsConfig'>  /**
+</span>   * @cfg {Object} rightsConfig (optional)
+   * Rights configuration
+   * See {@link sol.common.AclUtils#changeRightsInBackground ACL utilities}
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-UserNodeStart-method-process'>  process: function () {
+</span>    var me = this,
+        userName, users;
+
+    userName = sol.common.WfUtils.getNodeUser(me.wfDiagram, me.nodeId, { useSessionUserAlternatively: true });
+
+    sol.common.ix.DynAdHocFlowUtils.setCurrentUser(me.wfDiagram.objId, me.wfDiagram.id, userName);
+
+    if (me.fieldName) {
+      sol.common.IxUtils.execute(&quot;RF_sol_function_UserToIndex&quot;, { objId: me.objId, fieldName: me.fieldName, userName: userName });
+    }
+
+    me.rightsConfig = me.rightsConfig || {};
+    me.rightsConfig.objId = me.objId;
+
+    users = me.rightsConfig.users || [];
+    users.push(userName);
+
+    me.rightsConfig.users = users;
+    me.rightsConfig.rights = me.rightsConfig.rights || { r: true, w: true, d: true, e: true, l: true };
+    me.rightsConfig.dontWait = true;
+
+    if (!sol.common.AclUtils.containsSessionUserAndhasEffectiveRights(me.rightsConfig)) {
+      sol.common.IxUtils.execute(&quot;RF_sol_function_ChangeRights&quot;, me.rightsConfig);
+    }
+  }
+});
+
+
+<span id='sol-common-ix-functions-UserNodeStart-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.UserNodeStart
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_UserNodeStart&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  params.nodeId = nodeId;
+
+  module = sol.create(&quot;sol.common.ix.functions.UserNodeStart&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_UserNodeStart&quot;);
+}
+
+
+<span id='sol-common-ix-functions-UserNodeStart-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.UserNodeStart
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_UserNodeStart&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId);
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  params.nodeId = nodeId;
+
+  module = sol.create(&quot;sol.common.ix.functions.UserNodeStart&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_UserNodeStart&quot;);
+}
+</pre>
+</body>
+</html>

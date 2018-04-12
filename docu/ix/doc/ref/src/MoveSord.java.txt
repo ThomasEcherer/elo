@@ -1,0 +1,190 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.CopySordC;
+import de.elo.ix.client.FindInfo;
+import de.elo.ix.client.FindChildren;
+import de.elo.ix.client.FindResult;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+
+/** This example demonstrates how a sord is moved to another location.
+ *
+ * The following structure is created
+ *  s1  Move Sord Demo
+ *   |_ 
+ *      o1
+ *       |_ 
+ *          r1
+ *       |
+ *      o2
+ *
+ * r1 will be moved from 01 to 02
+ *
+ * NOTE: Copying a sord creates a logical copy or reference to the original sord.
+ * A link creates a 'connection' to a separate sord as such is 
+ * not a copy of the original sord.
+ */
+        
+public class MoveSord {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static CopySordC COPY_SORD;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            moveSord();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void moveSord() throws RemoteException {
+        
+         // Create Sord object structure
+         //s1
+         EditInfo ed = ix.ix().createSord("1", "0", EDIT_INFO.getMbSord());
+         Sord s1 = ed.getSord();
+         s1.setName("s1 Move Sord Demo");
+         s1.setId(ix.ix().checkinSord(s1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + s1.getId() + " and name " + s1.getName());
+         
+         //o1
+         ed = ix.ix().createSord(s1.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord o1 = ed.getSord();
+         o1.setName("o1");
+         o1.setId(ix.ix().checkinSord(o1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + o1.getId() + " and name " + o1.getName());
+         
+         //r1
+         ed = ix.ix().createSord(o1.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord r1 = ed.getSord();
+         r1.setName("r1");
+         r1.setId(ix.ix().checkinSord(r1, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + r1.getId() + " and name " + r1.getName());
+        
+         //o2
+         ed = ix.ix().createSord(s1.getGuid(), "0", EDIT_INFO.getMbSord());
+         Sord o2 = ed.getSord();
+         o2.setName("o2");
+         o2.setId(ix.ix().checkinSord(o2, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + o2.getId() + " and name " + o2.getName());
+         
+         
+         // Verify that o1 contains r1
+         String childIdsO1 = internalFindSordIdsInParent(o1.getGuid());
+         String childIdsO2 = internalFindSordIdsInParent(o2.getGuid());
+         System.out.println("Contents before move: o1: (" + childIdsO1 + "), o2: (" + childIdsO2 + ")");
+         System.out.println("Parent of r1 is: " + r1.getParentId());
+         
+         // Move r1 into o2
+         ix.ix().copySord(o2.getGuid(), r1.getGuid(), null, COPY_SORD.getMOVE());
+         
+         // Verify that o2 contains r1
+         childIdsO1 = internalFindSordIdsInParent(o1.getGuid());
+         childIdsO2 = internalFindSordIdsInParent(o2.getGuid());
+         System.out.println("Contents after move: o1: (" + childIdsO1 + "), o2: (" + childIdsO2 + ")");
+         
+         // Verify that o2 contains r1 with o2 as parent
+         Sord r1AfterMove = ix.ix().checkoutSord(r1.getGuid(), EDIT_INFO.getMbSord(), LOCK.getNO()).getSord();
+         System.out.println("Parent of r1 is: " + r1AfterMove.getParentId());
+         System.out.println("r1 has new parent!");
+         
+         // Delete sord objects
+         Boolean delete = false;
+         if (delete == true){
+            // Delete sord twice - first for logical delete in archive and
+            // second time to permanently delete the sord.
+            DeleteOptions delOpts = new DeleteOptions();
+            delOpts.setDeleteFinally(true);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), null);
+            ix.ix().deleteSord(null, s1.getGuid(), LOCK.getNO(), delOpts);
+            System.out.println("Sords deleted");
+         }
+        
+        
+       
+    }
+     
+    // Returns a list of the search result ids 
+    public static String internalFindSordIdsInParent(String parentId) throws RemoteException{
+        
+        FindInfo findInfo = new FindInfo();
+        findInfo.setFindChildren(new FindChildren());
+        findInfo.getFindChildren().setParentId(parentId);
+        
+        FindResult findResult = ix.ix().findFirstSords(findInfo, 100, SORD.getMbOnlyId());
+        if (findResult.getIds() == null)return "";
+           
+        if (findResult.getIds() != null){
+            
+            ix.ix().findClose(findResult.getSearchId());
+        } 
+        
+        String strList = "";
+        for (int i = 0; i < findResult.getIds().length; i++){
+            
+            if (i != 0) strList += ",";
+            strList += findResult.getIds()[i];
+        }
+        
+        return strList;
+    }
+    
+    
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        COPY_SORD = CONS.getCOPY_SORD();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

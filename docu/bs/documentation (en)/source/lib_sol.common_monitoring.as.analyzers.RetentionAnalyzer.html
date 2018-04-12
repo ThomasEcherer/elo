@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer'>/**
+</span> * Analyzes, if an object is obsolete by checking if a specified retention time is exceeded.
+ *
+ * This analyzer does that, by checking the objects (and possible children) changed date. If all changes are older then the minimum age an action will be executed.
+ *
+ *     var analyzer = sol.create(&quot;sol.common_monitoring.as.analyzers.RetentionAnalyzer&quot;, {
+ *       retention: { value: 2, unit: &quot;M&quot; },
+ *       action: { type: &quot;WORKFLOW&quot;, templateId: &quot;TestMonitoring&quot;, user: &quot;Administrator&quot; }
+ *     });
+ *
+ * For possible retention configuration see {@link sol.common_monitoring.as.MonitorUtils#evalDateUnitConfig}.
+ *
+ * The action needs to be specified, because analysers are responsible for determining the actions. This special analyzer just returns exactely one ore no action.
+ *
+ * @eloas
+ *
+ * @requires sol.common.DateUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common_monitoring.as.MonitorUtils
+ */
+sol.define(&quot;sol.common_monitoring.as.analyzers.RetentionAnalyzer&quot;, {
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-cfg-requiredConfig'>  requiredConfig: [&quot;retention&quot;, &quot;action&quot;],
+</span>
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-cfg-retention'>  /**
+</span>   * @cfg {Object} retention Configuration to determine, if an object is obsolete or not (see {@link sol.common_monitoring.as.MonitorUtils#evalDateUnitConfig})
+   * @cfg {String} retention.type (optional)
+   * @cfg {String} retention.key (optional)
+   * @cfg {Number} retention.value (optional)
+   * @cfg {String|Object} retention.unit (optional)
+   * @cfg {String} retention.unit.type (optional)
+   * @cfg {String} retention.unit.key (optional)
+   */
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-cfg-action'>  /**
+</span>   * @cfg {Object} action
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me._todayIso = sol.common.DateUtils.dateToIso(new Date());
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-method-analyze'>  /**
+</span>   * Analyzes if the object and all children are older than a specified retention time.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Object[]}
+   */
+  analyze: function (sord) {
+    var me = this,
+        results = [],
+        latestChange, latestChildChangedDate, nextRun;
+
+    me.logger.enter(&quot;analyze&quot;, { objId: sord.id, name: String(sord.name) });
+
+    latestChange = me.retrieveChangedDate(sord);
+    latestChildChangedDate = me.retrieveOldestChildrenChangedDate(sord);
+    if (latestChildChangedDate &amp;&amp; (latestChange.getTime() &lt; latestChildChangedDate.getTime())) {
+      latestChange = latestChildChangedDate;
+    }
+    me.logger.debug([&quot;last change: {0}&quot;, latestChange]);
+
+    if (me.isObsolete(sord, latestChange)) {
+      results.push({ action: me.action });
+      me.logger.info([&quot;retention exceeded: objId={0}, latestChange={1}&quot;, sord.id, latestChange]);
+    } else {
+      nextRun = me.calculateNextCheck(sord, latestChange, true);
+      results.push({ nextRun: nextRun });
+      me.logger.info([&quot;retention not exceeded: objId={0}, nextPossibleRetention={1};&quot;, sord.id, nextRun]);
+    }
+
+    me.logger.exit(&quot;analyze&quot;, results);
+
+    return results;
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-method-retrieveChangedDate'>  /**
+</span>   * @private
+   * Retrieves an objects last changed date.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Date}
+   */
+  retrieveChangedDate: function (sord) {
+    return sol.common.DateUtils.isoToDate(sord.TStamp + &quot;&quot;);
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-method-retrieveOldestChildrenChangedDate'>  /**
+</span>   * @private
+   * Retrieves the most current last changed date of all children.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Date}
+   */
+  retrieveOldestChildrenChangedDate: function (sord) {
+    var me = this,
+        findOptions = new FindOptions(),
+        changedDate = null,
+        children;
+
+    findOptions.orderBy = &quot;objtstamp DESC&quot;;
+    findOptions.totalCount = 1;
+
+    children = sol.common.RepoUtils.findChildren(sord.id, {
+      includeFolders: true,
+      includeDocuments: true,
+      sordZ: SordC.mbLean,
+      recursive: true,
+      level: -1,
+      findOptions: findOptions
+    });
+
+    if (children &amp;&amp; (children.length === 1)) {
+      changedDate = me.retrieveChangedDate(children[0]);
+      me.logger.debug([&quot;latest changed child: objId={0}; name={1}, changed={2}&quot;, children[0].id, children[0].name, changedDate]);
+    }
+    return changedDate;
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-method-calculateNextCheck'>  /**
+</span>   * @private
+   * Calculates the date on which the next check should occur using {@link #retention} and `latestChange`.
+   * @param {de.elo.ix.client.Sord} sord Used to determine the retention (if it depends on indexfields)
+   * @param {Date} latestChange The most current change of the object (or any child)
+   * @param {Boolean} [resultWithoutTime=false] (optional) Defines, if the resutling ISO string should contain tzhe time or not
+   * @return {String}
+   */
+  calculateNextCheck: function (sord, latestChange, resultWithoutTime) {
+    var me = this,
+        distance = sol.common_monitoring.as.MonitorUtils.evalDateUnitConfig(sord, me.retention),
+        checkDate;
+
+    checkDate = sol.common.DateUtils.shift(latestChange, distance.value, { unit: distance.unit });
+
+    return sol.common.DateUtils.dateToIso(checkDate, { withoutTime: resultWithoutTime });
+  },
+
+<span id='sol-common_monitoring-as-analyzers-RetentionAnalyzer-method-isObsolete'>  /**
+</span>   * @private
+   * Checks, if an date (`latestChange`) has exceeded the retention time.
+   * @param {de.elo.ix.client.Sord} sord Used to determine the retention (if it depends on indexfields)
+   * @param {Date} latestChange The most current change of the object (or any child)
+   * @return {Boolean}
+   */
+  isObsolete: function (sord, latestChange) {
+    var me = this,
+        nextCheck = me.calculateNextCheck(sord, latestChange);
+
+    me.logger.debug([&quot;check retention: object would expire at {0}&quot;, nextCheck]);
+
+    return nextCheck &lt; me._todayIso;
+  }
+
+});
+</pre>
+</body>
+</html>

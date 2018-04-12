@@ -1,0 +1,55 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>SSO Login Example</title>
+
+<!-- Include Indexserver JavaScript Library -->
+<script type="text/javascript" src="EloixClient.js"></script>
+
+<!-- Example code -->
+<script type="text/javascript">
+
+// Simplify namespace access 
+// (all ELOix symbols are member of de.elo.ix.client)
+var IX = de.elo.ix.client;
+
+// Indexserver URL 
+var ixUrl = "/ix-elo90/ix";
+
+// Login credentials
+var userName = "Administrator";
+var userPwd = "elo";
+
+// Indexserver connection
+var _conn;
+
+/**
+ * Returns the Indexserver connection.
+ * Creates a new connection, when called the first time. 
+ */
+function getConn() {  
+	  if (!_conn) {
+				var connFact = new IX.IXConnFactory(ixUrl, "SimpleSearch", "1.0");
+        		_conn = connFact.createSSO();
+	  }
+	  return _conn;
+};
+
+function onLogin() {
+	try {
+		var conn = getConn();
+		alert("Successfully logged in, ticket=" + conn.getLoginResult().clientInfo.ticket);
+	}
+	catch (ex) {
+		alert(ex);
+	}
+}
+
+</script>
+
+</head>
+<body>
+<input type="button" value="Login" onclick="onLogin()"></input>
+</body>
+</html>

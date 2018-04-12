@@ -1,0 +1,408 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="ArcPath" xml:space="preserve">
+    <value>Archiv Pfad</value>
+  </data>
+  <data name="BtnCancel" xml:space="preserve">
+    <value>Abbrechen</value>
+  </data>
+  <data name="BtnOK" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="CreateBy" xml:space="preserve">
+    <value>Ersteller</value>
+  </data>
+  <data name="CreateDate" xml:space="preserve">
+    <value>Erstellt am</value>
+  </data>
+  <data name="DocMask" xml:space="preserve">
+    <value>Verschlagwortungsmaske</value>
+  </data>
+  <data name="DocumentDate" xml:space="preserve">
+    <value>Datum</value>
+  </data>
+  <data name="Error.Indexing.View" xml:space="preserve">
+    <value>Fehler beim Anzeigen der Verschlagwortung für einen ausgewählten Ordner/Dokument.</value>
+  </data>
+  <data name="FilingDate" xml:space="preserve">
+    <value>Ablagedatum</value>
+  </data>
+  <data name="FormKeywordList" xml:space="preserve">
+    <value>Stichwort auswählen</value>
+  </data>
+  <data name="FormSelectUserCaption" xml:space="preserve">
+    <value>Anwender und Gruppen auswählen</value>
+  </data>
+  <data name="FormSelectUserSearch" xml:space="preserve">
+    <value>Suchen</value>
+  </data>
+  <data name="Group" xml:space="preserve">
+    <value>Gruppe</value>
+  </data>
+  <data name="Groups" xml:space="preserve">
+    <value>Gruppen</value>
+  </data>
+  <data name="ID" xml:space="preserve">
+    <value>ID</value>
+  </data>
+  <data name="InfoMessage.Title" xml:space="preserve">
+    <value>ELO Info</value>
+  </data>
+  <data name="InputBoxCaption" xml:space="preserve">
+    <value>Input</value>
+  </data>
+  <data name="KeywordAlreadyExists" xml:space="preserve">
+    <value>Das Stichwort existiert bereits</value>
+  </data>
+  <data name="Message.InvalidIndexingFields.Text" xml:space="preserve">
+    <value>Die Verschlagwortung kann nicht abgeschlossen werden,
+da Sie nicht alle Indexfelder richtig ausgefüllt haben.</value>
+  </data>
+  <data name="MsgBoxConfirm" xml:space="preserve">
+    <value>Bestätigen</value>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NewFolderName" xml:space="preserve">
+    <value>Neuer Ordner</value>
+  </data>
+  <data name="NewKeyword" xml:space="preserve">
+    <value>Neues Stichwort</value>
+  </data>
+  <data name="Onwer" xml:space="preserve">
+    <value>Eigentümer</value>
+  </data>
+  <data name="Priority" xml:space="preserve">
+    <value>Priorität</value>
+  </data>
+  <data name="PriorityHigh" xml:space="preserve">
+    <value>Hoch</value>
+  </data>
+  <data name="PriorityLow" xml:space="preserve">
+    <value>Niedrig</value>
+  </data>
+  <data name="PriorityMedium" xml:space="preserve">
+    <value>Mittel</value>
+  </data>
+  <data name="QueryDelete" xml:space="preserve">
+    <value>Möchten Sie den Eintrag wirklich löschen?</value>
+  </data>
+  <data name="QuerySaveModifiedKeywordList" xml:space="preserve">
+    <value>Die Stichwortliste wurde geändert. Änderungen speichern?</value>
+  </data>
+  <data name="Size" xml:space="preserve">
+    <value>Größe</value>
+  </data>
+  <data name="TaskDate" xml:space="preserve">
+    <value>Datum</value>
+  </data>
+  <data name="TaskMemo" xml:space="preserve">
+    <value>Beschreibung</value>
+  </data>
+  <data name="TaskType" xml:space="preserve">
+    <value>Aufgabe</value>
+  </data>
+  <data name="TaskTypeActivity" xml:space="preserve">
+    <value>Aktivität</value>
+  </data>
+  <data name="TaskTypeReminder" xml:space="preserve">
+    <value>Wiedervorlage</value>
+  </data>
+  <data name="TaskTypeWorkflow" xml:space="preserve">
+    <value>Workflow</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>Typ</value>
+  </data>
+  <data name="User" xml:space="preserve">
+    <value>Anwender</value>
+  </data>
+  <data name="Users" xml:space="preserve">
+    <value>Anwender</value>
+  </data>
+  <data name="Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Error.SelectSordType" xml:space="preserve">
+    <value>Ein Fehler ist bei der Auswahl des SordTyps aufgetreten.</value>
+  </data>
+  <data name="Error.Indexing.ChangeDocMask.EditInfoNull" xml:space="preserve">
+    <value>Das Ändern der Verschlagwortungsmaske ist nicht richtig erfolgt.EditInfo ist null.</value>
+  </data>
+  <data name="Error.Indexing.DocMasks.NoConnection" xml:space="preserve">
+    <value>Die Liste der Verschlagwortungsmasken konnten nicht angezeigt werden, da die Verbindung zum Indexserver nicht vorhanden ist</value>
+  </data>
+  <data name="Error.Indexing.DocMaskView.SordNull" xml:space="preserve">
+    <value>Die Verschlagwortungsmaske kann nicht angezeigt werden. Die Referenz auf sord ist null.</value>
+  </data>
+  <data name="Error.Indexing.IndexingFields.DocMaskNull" xml:space="preserve">
+    <value>Die Eingabefelder der Verschlagwortungsmaske konnten nicht angezeigt werden. Die Referenz auf docMask is null.</value>
+  </data>
+  <data name="Error.Indexing.LoadImageForObjectType" xml:space="preserve">
+    <value>Fehler beim Laden des Bildes für den Objekttyp.</value>
+  </data>
+  <data name="Error.Indexing.SelectDocMask" xml:space="preserve">
+    <value>Fehler bei Auswahl der Verschlagwortungsmaske.</value>
+  </data>
+  <data name="Error.Indexing.SetDocMaskValues" xml:space="preserve">
+    <value>Beim Setzen der Werte der Verschlagwortungsmaske ist ein Fehler aufgetreten.</value>
+  </data>
+  <data name="Error.Indexing.SetISODate" xml:space="preserve">
+    <value>Fehler beim Setzen von ISO Datum</value>
+  </data>
+  <data name="Error.Indexing.SetObjectType" xml:space="preserve">
+    <value>Fehler beim Setzen des Objekttyps.</value>
+  </data>
+  <data name="Error.Indexing.ShortDescription.BelowMinLength" xml:space="preserve">
+    <value>Das Feld Kurzbezeichnung muss mindestens ein Zeichen enthalten
+und darf nicht mit einem Leerzeichen oder einem '.' beginnen.</value>
+  </data>
+  <data name="Error.Indexing.TextChanged" xml:space="preserve">
+    <value>Die Behandlung des Events 'TextChanged' hat einen Fehler verursacht.</value>
+  </data>
+  <data name="Error.Indexing.TransferDocMaskChanges" xml:space="preserve">
+    <value>Beim Übernehmen der Änderungen aus der Verschlagwortungsmaske ist ein Fehler aufgetreten.</value>
+  </data>
+  <data name="Error.Indexing.UnknownError.DocMaskView" xml:space="preserve">
+    <value>Aufgrund eines unerwarteten Fehlers kann die Verschlagwortungsmaske nicht angezeigt werden.</value>
+  </data>
+  <data name="Error.Indexing.UnknownError.IndexingFields" xml:space="preserve">
+    <value>Aufgrund eines unbekannten Fehlers, können nicht alle Indexfelder der Maske angezeigt werden.</value>
+  </data>
+  <data name="Error.Indexing.UnknownError.Process" xml:space="preserve">
+    <value>Bei Durchführung der Verschlagwortung trat ein unerwateter Fehler auf.</value>
+  </data>
+  <data name="Error.Indexing.UnknownError.SetDocMask" xml:space="preserve">
+    <value>Unerwarteter Fehler ist beim Setzen der Verschlagwortungsmaske augetreten.</value>
+  </data>
+  <data name="Error.MaxLength" xml:space="preserve">
+    <value>Maximale Länge beträgt {0} Zeichen.</value>
+  </data>
+  <data name="Error.MinLength" xml:space="preserve">
+    <value>Minimale Länge beträgt {0} Zeichen.</value>
+  </data>
+  <data name="Exception.Indexing.CreateKeywordTextBox.Message" xml:space="preserve">
+    <value>Beim Erstellen des Controls KeywordTextBox tratt ein unerwarteter Fehler auf.</value>
+  </data>
+  <data name="Exception.Indexing.GetIndexFieldControlNullRef.Message" xml:space="preserve">
+    <value>Es wurde eine Referenz auf null für DocMaskLine an die Methode GetIndexFieldControl übergeben.</value>
+  </data>
+  <data name="Exception.Indexing.LoadDocMasks.Message" xml:space="preserve">
+    <value>Beim Laden der Liste der Verschlagwortungsmasken ist ein Fehler aufgetreten.</value>
+  </data>
+  <data name="Exception.Indexing.NoConnectionOrPanelRef.Message" xml:space="preserve">
+    <value>Verbindung zum Indexserver oder Referenz zum TableLayoutPanel sind null</value>
+  </data>
+  <data name="Exception.Indexing.RegEx.Fraction" xml:space="preserve">
+    <value>Die Anzahl der Nachkommastellen muss größer 0 sein.</value>
+  </data>
+  <data name="Exception.Indexing.RegEx.MinMaxChar.Message" xml:space="preserve">
+    <value>Fehler. MinCharLength/MaxCharLength müssen größer sein. MaxCharLength muss größer sein als MinCharLength.</value>
+  </data>
+  <data name="Exception.Indexing.SetNewDocMaskNullRef.Message" xml:space="preserve">
+    <value>Es wurde eine Referenz auf Null für docMask an die Methode SetNewDockMask übergeben</value>
+  </data>
+  <data name="Message.ExceptionErrorMessage" xml:space="preserve">
+    <value>Fehler: {0}</value>
+  </data>
+  <data name="Message.Indexing.ChangeDocMask" xml:space="preserve">
+    <value>Die aktuelle Verschlagwortungsmaske enthält
+Indexfelder, die in der neu gewählten Maske
+vorhanden sind. Die eingegebenen Daten in diesen
+Zeilen werden beim Maskenwechsel gelöscht.
+
+Wollen Sie auf die neue Maske wechseln?</value>
+  </data>
+  <data name="Message.Indexing.ChangeDocMask.InsufficentRights" xml:space="preserve">
+    <value>Sie haben nicht das Recht zur Änderung der Verschlagwortungsmaske.</value>
+  </data>
+  <data name="Message.Indexing.KeySelectionError" xml:space="preserve">
+    <value>Bei der Auswahl des Schlüssels ist ein Fehler aufgetreten.
+Mögliche Ursachen:
+Es wurde kein für das Indexfeld gültiger Schlüssel ausgewählt.</value>
+  </data>
+  <data name="Message.Indexing.TransferDocMaskChangesError" xml:space="preserve">
+    <value>Beim Übernehmen der Änderungen aus der Verschlagwortungsmaske, ist ein Fehler aufgetreten.
+Die vorgenommenen Änderungen werden nicht übernommen.</value>
+  </data>
+  <data name="Message.Indexing.UnableToProcess.NoConnectionOrNoDoc" xml:space="preserve">
+    <value>Verschlagwortung nicht durchführbar, da kein Dokument
+ausgewählt wurde oder die Verbindung zum Indexserver nicht vorhanden ist.</value>
+  </data>
+  <data name="Message.Indexing.Validation.DoubleF1Field" xml:space="preserve">
+    <value>In das Indexfeld können nur Dezimalzahlen mit einer Nachkommastelle eingegeben werden.</value>
+  </data>
+  <data name="Message.Indexing.Validation.DoubleFxField" xml:space="preserve">
+    <value>In das Indexfeld können nur Dezimalzahlen mit {0} Nachkommastellen eingegeben werden.</value>
+  </data>
+  <data name="Message.Indexing.Validation.IntegerField" xml:space="preserve">
+    <value>In das Indexfeld können nur ganze Zahlen eingegeben werden.</value>
+  </data>
+  <data name="Message.Indexing.Validation.MaxLengthFailure" xml:space="preserve">
+    <value>Die Eingabe ist zu lang. Sie kann maximal {0} Zeichen enthalten. Momentane Textlänge: {1}</value>
+  </data>
+  <data name="Message.Indexing.Validation.MinLengthFailure" xml:space="preserve">
+    <value>Die Eingabe ist zu kurz. Sie muss mindestens {0} Zeichen enthalten. Momentane Textlänge: {1}</value>
+  </data>
+  <data name="Numbers.Four" xml:space="preserve">
+    <value>vier</value>
+  </data>
+  <data name="Numbers.Six" xml:space="preserve">
+    <value>sechs</value>
+  </data>
+  <data name="Numbers.Two" xml:space="preserve">
+    <value>zwei</value>
+  </data>
+  <data name="CheckBox.AddToFulltext.Text" xml:space="preserve">
+    <value>In den Volltext aufnehmen</value>
+  </data>
+  <data name="LockId" xml:space="preserve">
+    <value>Lock ID</value>
+  </data>
+  <data name="LockName" xml:space="preserve">
+    <value>Gesperrt von</value>
+  </data>
+  <data name="EncryptionPassword" xml:space="preserve">
+    <value>Verschlüsselungspasswort</value>
+  </data>
+  <data name="Error.PasswordMismatch" xml:space="preserve">
+    <value>Die Passwörter stimmen nicht überein!</value>
+  </data>
+  <data name="Password1.Label" xml:space="preserve">
+    <value>Passwort</value>
+  </data>
+  <data name="Password2.Label" xml:space="preserve">
+    <value>Passwort (Wiederholung)</value>
+  </data>
+  <data name="EncryptionDlg_EncryptedDoc" xml:space="preserve">
+    <value>Verschlüsseltes Dokument</value>
+  </data>
+  <data name="EncryptionDlg_PleasePutInPswd" xml:space="preserve">
+    <value>Bitte geben Sie das Passwort ein.</value>
+  </data>
+  <data name="EncryptedDocumentInstructionLabel.Text" xml:space="preserve">
+    <value>Das Dokument ist verschlüsselt.
+Bitte geben Sie das Passwort für den Schlüsselkreis {0} ein.</value>
+  </data>
+  <data name="QueryDeleteItemAndAllSubItems" xml:space="preserve">
+    <value>Sind Sie sicher, dass Sie diesen Eintrag und alle Untereinträge löschen möchten?</value>
+  </data>
+</root>

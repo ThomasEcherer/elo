@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common_monitoring-ix-MonitorUtils'>/**
+</span> * Utility methods for the monitoring modul.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.001
+ *
+ * @eloas
+ * @requires moment
+ * @requires sol.commom.SordUtils
+ * @requires sol.common.DateUtils
+ */
+sol.define(&quot;sol.common_monitoring.ix.MonitorUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common_monitoring-ix-MonitorUtils-property-queueId'>  // config for `registerUpdate`
+</span>  // Duplicates {@link sol.common_monitoring.as.MonitorUtils} due to compatibility reasons. All changes schould be reflected there.
+  queueId: &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/_global/Job queue&quot;,
+<span id='sol-common_monitoring-ix-MonitorUtils-property-timestampBufferValue'>  timestampBufferValue: -5,
+</span><span id='sol-common_monitoring-ix-MonitorUtils-property-timestampBufferUnit'>  timestampBufferUnit: &quot;s&quot;,
+</span>
+<span id='sol-common_monitoring-ix-MonitorUtils-method-registerUpdate'>  /**
+</span>   * Register object to be updated by the `JobQueue` rule.
+   * Registration will be skipped if element is in chaos cabinet.
+   *
+   * Duplicates {@link sol.common_monitoring.as.MonitorUtils} due to compatibility reasons. All changes schould be reflected there.
+   * @param {String} objId
+   * @param {String} wfTemplate
+   */
+  registerUpdate: function (objId, wfTemplate) {
+    var me = this,
+        qId, updatedSord, now, utcDate, isoDate, mapKeys;
+
+    qId = ixConnectAdmin.ix().checkoutSord(me.queueId, SordC.mbOnlyId, LockC.NO).id;
+    updatedSord = ixConnectAdmin.ix().checkoutSord(objId, SordC.mbMin, LockC.NO);
+
+    if (updatedSord.parentId !== 0) {
+      now = new Date();
+      utcDate = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+      isoDate = sol.common.DateUtils.shift(utcDate, me.timestampBufferValue, { unit: me.timestampBufferUnit });
+
+      mapKeys = [
+        new KeyValue(&quot;SOL_UPDATE_WF_TEMPLATE.&quot; + objId, wfTemplate),
+        new KeyValue(&quot;SOL_UPDATE_TIMESTAMP.&quot; + objId, sol.common.DateUtils.dateToIso(isoDate))
+      ];
+      ixConnectAdmin.ix().checkinMap(MapDomainC.DOMAIN_SORD, qId, qId, mapKeys, LockC.NO);
+
+      ixConnectAdmin.ix().refSord(null, qId, objId, -1);
+
+      me.logger.info([&quot;registered element for update (objId={0})&quot;, objId]);
+    } else {
+      me.logger.warn([&quot;element is in chaos cabinet; skip register element for update (objId={0})&quot;, objId]);
+    }
+
+  }
+
+});
+</pre>
+</body>
+</html>

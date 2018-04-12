@@ -1,0 +1,94 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Lists the name of active and finished workflows and workflow templates.
+	/// </summary>
+	public class ListWorkFlows
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// get templates
+				Logger.instance().log("get workflow templates...");
+				IndexServer.IdName[] idNames = ix.collectWorkFlows(ci, CONST.WORKFLOW_TYPE.TEMPLATE);
+				Logger.instance().log("  #workflows=" + idNames.Length);
+				for (int i = 0; i < idNames.Length; i++) 
+				{
+					Logger.instance().log("  id=" + idNames[i].id + ", name=" + idNames[i].name);
+				}
+				Logger.instance().log("get workflow templates OK");
+
+				// get active workflows
+				Logger.instance().log("get active workflows...");
+				idNames = ix.collectWorkFlows(ci, CONST.WORKFLOW_TYPE.ACTIVE);
+				Logger.instance().log("  #workflows=" + idNames.Length);
+				for (int i = 0; i < idNames.Length; i++) 
+				{
+					Logger.instance().log("  id=" + idNames[i].id + ", name=" + idNames[i].name);
+				}
+				Logger.instance().log("get active workflows OK");
+
+				// get finished workflows
+				Logger.instance().log("get finished workflows...");
+				idNames = ix.collectWorkFlows(ci, CONST.WORKFLOW_TYPE.FINISHED);
+				Logger.instance().log("  #workflows=" + idNames.Length);
+				for (int i = 0; i < idNames.Length; i++) 
+				{
+					Logger.instance().log("  id=" + idNames[i].id + ", name=" + idNames[i].name);
+				}
+				Logger.instance().log("get finished workflows OK");
+
+				// LOGOUT
+				ix.logout(ci);
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+	}
+}

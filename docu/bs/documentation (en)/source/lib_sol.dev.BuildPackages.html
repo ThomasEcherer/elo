@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_handlebars.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.FileUtils.js
+//@include lib_sol.common.AsyncUtils.js
+//@include lib_sol.common.SordTypeUtils.js
+//@include lib_sol.common.ZipUtils.js
+
+importPackage(java.io);
+
+<span id='sol-dev-BuildPackages'>/**
+</span> * Build packages
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ *
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.WfUtils
+ */
+sol.define(&quot;sol.dev.BuildPackages&quot;, {
+
+<span id='sol-dev-BuildPackages-cfg-objIds'>  /**
+</span>   * @cfg {Array} objIds
+   * Object IDs of the package folders
+   */
+
+<span id='sol-dev-BuildPackages-cfg-exportDirPath'>  /**
+</span>   * @cfg {String} exportDirPath
+   * Export directory path
+   */
+
+<span id='sol-dev-BuildPackages-cfg-debug'>  /**
+</span>   * @cfg {Boolean} debug
+   * Debug package
+   */
+
+  packageMask: &quot;ELO Business Solution&quot;,
+
+
+<span id='sol-dev-BuildPackages-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.dev.BuildPackages&quot; });
+  },
+
+<span id='sol-dev-BuildPackages-method-execute'>  execute: function () {
+</span>    var me = this,
+        objId, i, packageBuilder;
+
+    if (!me.objIds || (me.objIds.length == 0)) {
+      me.logger.info(&quot;Object IDs are empty&quot;);
+      return;
+    }
+
+    me.params = me.params || {};
+
+    me.exportDirPath = sol.create(&quot;sol.common.Template&quot;, { source: me.exportDirPath }).apply();
+
+    sol.common.FileUtils.makeDirectories(new File(me.exportDirPath));
+    if (me.cleanExportDir) {
+      sol.common.FileUtils.deleteFiles({ dirPath: me.exportDirPath, suffix: &quot;.eloinst&quot; });
+    }
+
+    for (i = 0; i &lt; me.objIds.length; i++) {
+      objId = me.objIds[i];
+      packageBuilder = sol.create(&quot;sol.dev.BuildPackage&quot;, { objId: objId, exportDirPath: me.exportDirPath });
+      packageBuilder.execute();
+    }
+  }
+});
+
+<span id='sol-dev-BuildPackage'>/**
+</span> * Build package
+ *
+ * @author Michael Weiler, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @elojc
+ *
+ * @requires  sol.sol.common.Json
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.ZipUtils
+ */
+sol.define(&quot;sol.dev.BuildPackage&quot;, {
+
+<span id='sol-dev-BuildPackage-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * Object ID of the package folders
+   */
+
+<span id='sol-dev-BuildPackage-cfg-exportDirPath'>  /**
+</span>   * @cfg {String} exportDirPath
+   * Export directory
+   */
+
+<span id='sol-dev-BuildPackage-cfg-debug'>  /**
+</span>   * @cfg {Boolean} debug
+   * Debug package
+   */
+
+  versionNoFieldName: &quot;BS_VERSION_NO&quot;,
+<span id='sol-dev-BuildPackage-property-buildNoFieldName'>  buildNoFieldName: &quot;BS_BUILD_NO&quot;,
+</span><span id='sol-dev-BuildPackage-property-setupNameSuffixFieldName'>  setupNameSuffixFieldName: &quot;BS_SETUP_NAME_SUFFIX&quot;,
+</span>
+<span id='sol-dev-BuildPackage-property-repoDataFileName'>  repoDataFileName: &quot;RepoData&quot;,
+</span>
+<span id='sol-dev-BuildPackage-method-execute'>  execute: function () {
+</span>    var me = this,
+        debugDstFileNamePart = &quot;&quot;,
+        buildNo, setupNameSuffix, repoDataFile, dstFile, debugOnFile,
+        datePos;
+
+    if (!me.objId) {
+      throw &quot;Object ID of the package folder is empty&quot;;
+    }
+
+    if (!me.exportDirPath) {
+      throw &quot;Export directory path is empty&quot;;
+    }
+
+    me.packageSord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAll, LockC.NO);
+
+    me.buildConfig = me.getBuildConfig();
+
+    me.setupFileRepoPaths = [
+      &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/common/All&quot;,
+      &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/common/All Rhino&quot;,
+      &quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/development/Package Installer&quot;
+    ];
+
+    if (me.buildConfig.exportRepoPath) {
+      me.exportRepoPath = me.buildConfig.exportRepoPath;
+    } else {
+      me.exportRepoPath = sol.common.RepoUtils.getPath(me.packageSord, true);
+    }
+
+    if (!me.eloInstRepoPath) {
+      me.eloInstRepoPath = sol.common.RepoUtils.getPath(me.packageSord, true) + &quot;/.eloinst&quot;;
+    }
+
+    if (!me.buildConfig.packageName) {
+      me.buildConfig.packageName = String(me.packageSord.name);
+    }
+
+    if (!me.installConfigRepoPath) {
+      me.installConfigRepoPath = sol.common.RepoUtils.getPath(me.packageSord, true) + &quot;/.eloinst/install&quot;;
+    }
+
+    if (!me.buildConfigRepoPath) {
+      me.buildConfigRepoPath = sol.common.RepoUtils.getPath(me.packageSord, true) + &quot;/.eloinst/build&quot;;
+    }
+
+    me.outputDirPath = sol.common.FileUtils.createTempDir({ prefix: &quot;Setup_Package&quot; });
+    me.outputDir = new File(me.outputDirPath);
+    me.outputDir.mkdirs();
+
+    me.zipDirPath = me.outputDirPath + File.separator + me.buildConfig.setupName;
+    me.zipDir = new File(me.zipDirPath);
+    me.zipDir.mkdirs();
+
+    me.manifestFilePath = me.zipDirPath + File.separator + &quot;MANIFEST.MF&quot;;
+
+    me.payloadDirPath = me.zipDirPath + File.separator + &quot;install.data&quot;;
+    me.payloadDir = new File(me.payloadDirPath);
+    me.payloadDir.mkdirs();
+
+    me.versionNoStr = (sol.common.SordUtils.getObjKeyValue(me.packageSord, me.versionNoFieldName) + &quot;&quot;) || &quot;1&quot;;
+    if (me.buildConfig.appendTimeStamp) {
+      datePos = me.versionNoStr.indexOf(&quot;_&quot;);
+      if (datePos &gt; -1) {
+        me.versionNoStr = me.versionNoStr.substring(0, datePos) + &quot;_&quot; + Packages.org.apache.commons.lang.time.DateFormatUtils.format(new java.util.Date(), &quot;yyyyMMddHHmmss&quot;);
+        sol.common.SordUtils.setObjKeyValue(me.packageSord, me.versionNoFieldName, me.versionNoStr, { silent: true });
+      }
+    }
+
+    me.versionNoStr = sol.create(&quot;sol.common.Template&quot;, { source: me.versionNoStr }).apply();
+
+    me.buildNoStr = sol.common.SordUtils.getObjKeyValue(me.packageSord, me.buildNoFieldName);
+    buildNo = me.buildNoStr ? parseInt(me.buildNoStr, 10) + 1 : 1;
+    me.buildNoStr = String(buildNo);
+    sol.common.SordUtils.setObjKeyValue(me.packageSord, me.buildNoFieldName, me.buildNoStr, { silent: true });
+    ixConnect.ix().checkinSord(me.packageSord, SordC.mbAll, LockC.NO);
+
+    try {
+      setupNameSuffix = sol.common.SordUtils.getObjKeyValue(me.packageSord, me.setupNameSuffixFieldName);
+      if (setupNameSuffix) {
+        me.buildConfig.setupName = me.buildConfig.setupName + &quot;_&quot; + setupNameSuffix;
+      }
+    } catch (e) { /* ignore, old mask definition */ }
+
+    me.deleteLogFileSords();
+
+    me.createManifestFile();
+
+    me.setupFileRepoPaths.push(me.installConfigRepoPath);
+    me.setupFileRepoPaths.push(me.buildConfigRepoPath);
+
+    me.setupFileRepoPaths.forEach(function (setupFileRepoPath) {
+      sol.common.FileUtils.downloadDocuments(setupFileRepoPath, me.zipDirPath, { makeDirectories: true });
+    });
+
+    me.prepareBranchForInstallExport(me.exportRepoPath);
+
+    repoDataFile = new File(me.payloadDirPath + File.separator + me.repoDataFileName + &quot;.zip&quot;);
+    sol.common.RepoUtils.exportRepoData(repoDataFile, { srcList: [me.exportRepoPath], exportDocs: true, exportKeywords: true, replaceRefWithOriginal: false });
+
+    me.buildConfig.workflowTemplatesDirPath = me.payloadDirPath + File.separator + &quot;workflowTemplates&quot;;
+    me.buildConfig.workflowTemplatesDir = new File(me.buildConfig.workflowTemplatesDirPath);
+
+    me.buildConfig.sordTypesDirPath = me.payloadDirPath + File.separator + &quot;Sord types&quot;;
+
+    if (me.debug) {
+      debugOnFile = new File(me.zipDirPath + File.separator + &quot;debug.on&quot;);
+      Packages.org.apache.commons.io.FileUtils.writeStringToFile(debugOnFile, &quot;debug.on&quot;, &quot;UTF-8&quot;);
+      debugDstFileNamePart = &quot;_debug&quot;;
+    }
+
+    if (me.buildConfig.workflowTemplates) {
+      me.buildConfig.workflowTemplatesDir.mkdirs();
+      me.buildConfig.workflowTemplates.forEach(function (workflowTemplateName) {
+        me.processWorkflowTemplateExport(workflowTemplateName);
+      });
+    }
+
+    if (me.buildConfig.sordTypes) {
+      sol.common.SordTypeUtils.exportSordTypes(me.buildConfig.sordTypes, me.buildConfig.sordTypesDirPath);
+    }
+
+    me.zipFile = new File(me.zipDirPath + &quot;.eloinst&quot;);
+    sol.common.ZipUtils.zipFolder(me.zipDir, me.zipFile);
+
+    dstFile = new File(me.exportDirPath + File.separator + (me.buildConfig.fileNamePrefix ? (me.buildConfig.fileNamePrefix + &quot;_&quot;) : &quot;&quot;) + me.buildConfig.setupName + &quot;_&quot; + me.versionNoStr + debugDstFileNamePart + &quot;.eloinst&quot;);
+
+    Packages.org.apache.commons.io.FileUtils.copyFile(me.zipFile, dstFile);
+
+    sol.common.FileUtils.delete(me.outputDirPath, { quietly: true });
+
+    me.logger.info(&quot;Package created: &quot; + dstFile.canonicalPath);
+  },
+
+<span id='sol-dev-BuildPackage-method-getBuildConfig'>  /**
+</span>   * @private
+   * Loads the build config
+   * @param {de.elo.ix.client.Sord} packageSord Package sord
+   * @return {Object}
+   */
+  getBuildConfig: function () {
+    var me = this,
+        buildConfigRepoPath, buildConfigObjId, configLoader;
+
+    buildConfigRepoPath = sol.common.RepoUtils.getPath(me.packageSord) + &quot;/.eloinst/build&quot;;
+    buildConfigObjId = sol.common.RepoUtils.getObjId(buildConfigRepoPath);
+    if (!buildConfigObjId) {
+      throw &quot;Build configuration not found: packageName=&quot; + me.packageSord.name + &quot;, configRepoPath=&quot; + buildConfigRepoPath;
+    }
+    configLoader = sol.create(&quot;sol.common.Config&quot;, { load: &quot;ARCPATH:&quot; + buildConfigRepoPath });
+    return configLoader.config;
+  },
+
+<span id='sol-dev-BuildPackage-method-deleteLogFileSords'>  /**
+</span>   * @private
+   * Delete log fils
+   */
+  deleteLogFileSords: function () {
+    var me = this,
+        logFileNamePart, logFileSords;
+
+    logFileNamePart = &quot;log_install_&quot; + me.buildConfig.packageName + &quot;_&quot;;
+
+    logFileSords = sol.common.RepoUtils.findChildren(me.eloInstRepoPath, { name: logFileNamePart, sordZ: SordC.mbMin });
+    logFileSords.forEach(function (logFileSord) {
+      me.logger.debug(&quot;Delete log file Sord: sord.id=&quot; + logFileSord.id + &quot;, sord.name=&quot; + logFileSord.name);
+      sol.common.RepoUtils.deleteSord(logFileSord.id);
+    });
+  },
+
+<span id='sol-dev-BuildPackage-method-createManifestFile'>  /**
+</span>   * Create manifest file
+   */
+  createManifestFile: function () {
+    var me = this,
+        content = [];
+    content.push(&quot;Setup-Name: &quot; + me.buildConfig.setupName);
+    content.push(&quot;Setup-Version: &quot; + me.versionNoStr + &quot; build &quot; + me.buildNoStr);
+    content.push(&quot;Created-At: &quot; + sol.common.FileUtils.getTimeStampString(&quot;yyyy-MM-dd&#39;T&#39;HH:mm:ssZZ&quot;));
+    content.push(&quot;Built-By: &quot; + ixConnect.loginResult.user.name);
+    sol.common.FileUtils.writeStringArrayToFile(me.manifestFilePath, content);
+  },
+
+<span id='sol-dev-BuildPackage-method-prepareBranchForInstallExport'>  /**
+</span>   * @private
+   * Prepares a branch for installation export
+   * @param {String} startId
+   */
+  prepareBranchForInstallExport: function (startId) {
+    var me = this,
+        sordZ, sords, startSord;
+    me.logger.enter(&quot;changeOwnerRecursively&quot;, arguments);
+
+    if (!startId) {
+      throw &quot;Start ID is empty&quot;;
+    }
+
+    sordZ = new SordZ(ObjDataC.mbOwnerId);
+    sordZ.add(ObjDataC.mbName);
+    sordZ.add(SordC.mbAclItems);
+    sordZ.add(ObjDataC.mbLockId);
+
+    startSord = sol.common.RepoUtils.getSord(startId, { sordZ: sordZ });
+    me.prepareSordForInstallExport(startSord);
+
+    sords = sol.common.RepoUtils.findChildren(startId, { sordZ: sordZ, recursive: true, level: 32 });
+    sords.forEach(function (sord) {
+      me.prepareSordForInstallExport(sord);
+    });
+    me.logger.exit(&quot;changeOwnerRecursively&quot;);
+  },
+
+<span id='sol-dev-BuildPackage-method-prepareSordForInstallExport'>  /**
+</span>   * @private
+   * Prepares a sord for installation export
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @param {Object} config Configuration
+   */
+  prepareSordForInstallExport: function (sord, config) {
+    var me = this,
+        newAclItems = [],
+        writeSord = false,
+        i, aclItem, sordZ, aclItemId, aclItemName;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+
+    me.ownerId = me.ownerId || 0;
+    me.buildConfig.preserveAclUserIds = me.buildConfig.preserveAclUserIds || [&quot;0&quot;, &quot;1&quot;, &quot;9999&quot;];
+    me.buildConfig.preserveAclUserNames = me.buildConfig.preserveAclUserNames || [];
+
+    if ((sord.lockId &gt; -1) &amp;&amp; (me.buildConfig.checkLocks != false) &amp;&amp; !me.debug) {
+      throw &quot;Sord is locked: sord.id=&quot; + sord.id + &quot;, sord.name=&quot; + sord.name + &quot;, sord.lockName=&quot; + sord.lockName;
+    }
+
+    if (sol.common.SordUtils.isFolder(sord) &amp;&amp; (sord.mask == 0)) {
+      sord = sol.common.SordUtils.changeMask(sord, &quot;1&quot;);
+    }
+
+    if (sord.ownerId != me.ownerId) {
+      sord.ownerId = me.ownerId;
+      writeSord = true;
+    }
+
+    for (i = 0; i &lt; sord.aclItems.length; i++) {
+      aclItem = sord.aclItems[i];
+      aclItemId = aclItem.id + &quot;&quot;;
+      aclItemName = aclItem.name + &quot;&quot;;
+      if ((me.buildConfig.preserveAclUserIds.indexOf(aclItemId) &gt; -1) || (me.buildConfig.preserveAclUserNames.indexOf(aclItemName) &gt; -1)) {
+        newAclItems.push(aclItem);
+      } else {
+        sord.aclItems = newAclItems;
+        writeSord = true;
+      }
+    }
+
+    if (writeSord) {
+      try {
+        sordZ = new SordZ(ObjDataC.mbOwnerId);
+        sordZ.add(SordC.mbAclItems);
+
+        ixConnect.ix().checkinSord(sord, sordZ, LockC.NO);
+      } catch (ex) {
+        throw &quot;Can&#39;t prepare sord for installation export: sord.id=&quot; + sord.id + &quot;, sord.name=&quot; + sord.name + &quot;, exception=&quot; + ex;
+      }
+    }
+  },
+
+<span id='sol-dev-BuildPackage-method-processWorkflowTemplateExport'>  /**
+</span>   * @private
+   * Processes the export of a workflow template
+   * @param {String} workflowTemplateName Name of the worklflow name
+   */
+  processWorkflowTemplateExport: function (workflowTemplateName) {
+    var me = this,
+        workflowTemplateFile, workflowTemplateFileName;
+
+    workflowTemplateFileName = sol.common.FileUtils.sanitizeFilename(workflowTemplateName);
+
+    workflowTemplateFile = new File(me.buildConfig.workflowTemplatesDirPath + File.separator + workflowTemplateFileName + &quot;.json&quot;);
+
+    sol.common.WfUtils.exportWorkflowTemplate(workflowTemplateName, workflowTemplateFile, { flowVersId: &quot;0&quot;, clearUsers: true, nameSubWorkflowTemplates: true });
+  }
+});
+
+</pre>
+</body>
+</html>

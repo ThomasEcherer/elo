@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">var dexRoot = &quot;c:\\temp\\&quot;;
+
+// start of namespace dex
+
+<span id='dex'>/**
+</span> * @class dex
+ * @singleton
+ */
+var dex = new Object();
+dex = {
+
+<span id='dex-method-processDoc'> /**
+</span>  * Liefert die ID des Document-Objekts des angegebenen Archiveintrags.
+  * 
+  * @param {Sord} Sord Verschlagwortung des Archiveintrags
+  * @return {String} ID des Document-Objekts
+  */
+  processDoc: function (Sord) {
+    log.debug(&quot;Status: &quot; + PDSTATUS + &quot;, Name: &quot; + NAME);
+
+    if (PDSTATUS == &quot;Aktiv: zur Löschung vorgesehen&quot;) {
+      return dex.deleteDoc(Sord);
+    } else if (PDSTATUS == &quot;Aktiv: Freigegeben&quot;) {
+      return dex.exportDoc(Sord);
+    }
+
+    return &quot;&quot;;
+  },
+
+<span id='dex-method-deleteDoc'> /**
+</span>  * Löscht den angegebenen Archiveintrag.
+  * 
+  * @param {type} Sord Verschlagwortung des Archiveintrags
+  * @return {Number} ID des Document-Objektes
+  */
+  deleteDoc: function (Sord) {
+    dex.deleteFile(PDPATH1);
+    dex.deleteFile(PDPATH2);
+    dex.deleteFile(PDPATH3);
+    dex.deleteFile(PDPATH4);
+    dex.deleteFile(PDPATH5);
+
+    PDSTATUS = &quot;Nicht mehr aktiv / Gelöscht&quot;;
+    return Sord.getDoc();
+  },
+
+<span id='dex-method-deleteFile'> /**
+</span>  * Löscht die angegebene Datei.
+  * 
+  * @param {String} destPath Dateipfad
+  */
+  deleteFile: function (destPath) {
+    if (destPath == &quot;&quot;) {
+      return;
+    }
+
+    var file = new File(dexRoot + destPath);
+    if (file.exists()) {
+      log.debug(&quot;Delete expired version: &quot; + dexRoot + destPath);
+      file[&quot;delete&quot;]();
+    }
+  },
+
+<span id='dex-method-exportDoc'> /**
+</span>  * Liefert die ID des Document-Objekts aus der angegebenen Verschlagwortung zurück.
+  * 
+  * @param {Sord} Sord Verschlagwortung eines Archivdokuments
+  * @return {Number} ID des Document-Objekt
+  */
+  exportDoc: function (Sord) {
+    var editInfo = ixConnect.ix().checkoutDoc(Sord.getId(), null, EditInfoC.mbSordDoc, LockC.NO);
+    var url = editInfo.document.docs[0].getUrl();
+    dex.copyFile(url, PDPATH1);
+    dex.copyFile(url, PDPATH2);
+    dex.copyFile(url, PDPATH3);
+    dex.copyFile(url, PDPATH4);
+    dex.copyFile(url, PDPATH5);
+
+    return Sord.getDoc();
+  },
+
+<span id='dex-method-copyFile'> /**
+</span>  * Kopiert das Archivdokument im angegebenen Pfad.
+  * 
+  * @param {String} url URL des Archivdokuments
+  * @param {String} destPath Pfad der Zieldatei
+  */
+  copyFile: function (url, destPath) {
+    if (destPath == &quot;&quot;) {
+      return;
+    }
+
+    log.debug(&quot;Path: &quot; + dexRoot + destPath);
+    var file = new File(dexRoot + destPath);
+    if (file.exists()) {
+      log.debug(&quot;Delete old version.&quot;);
+      file[&quot;delete&quot;]();
+    }
+
+    ixConnect.download(url, file);
+  },
+
+<span id='dex-method-asString'> /**
+</span>  * Liefert den Inhalt der angegebenen Datei als ein String zurück.
+  * 
+  * @param {String} sourcePath Dateipfad
+  * @return {String} Dateiinhalt
+  */
+  asString: function (sourcePath) {
+    var file = new File(dexRoot + sourcePath);
+    var text = FileUtils.readFileToString(file, &quot;UTF-8&quot;);
+    return text;
+  },
+
+<span id='dex-method-asFile'> /**
+</span>  * Erstellt eine Datei mit dem angegebenen Inhalt.
+  * 
+  * @param {String} destPath Dateipfad
+  * @param {String} data Dateiinhalt
+  * @param {String} encoding Kodierung
+  */
+  asFile: function(destPath, data, encoding) {
+    var file = new File(dexRoot + destPath);
+    FileUtils.write(file, data, encoding);
+  }
+  
+}
+// end of namespace dex</pre>
+</body>
+</html>

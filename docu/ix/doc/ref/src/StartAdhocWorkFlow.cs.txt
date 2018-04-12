@@ -1,0 +1,390 @@
+using System;
+using System.IO;
+
+namespace Examples
+{
+	/// <summary>
+	/// This example shows how to start an Ad Hoc Workflow.
+	/// 1. Uploads example workflow scripts
+	/// 2. Create 3 users: WFUser1, WFUser2, WFUser3
+	/// 3. Create a document
+	/// 4. Start Ad Hoc Workflow
+	/// 5. Forward all nodes
+	/// 6. Clean up
+	/// </summary>
+	public class StartAdhocWorkFlow
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		// [X] Finished script name
+		public String finishedScript = "WorkFlowScriptExample.js";
+
+		// The Finished Script includes some helper scripts. This member contains
+		// all scripts to upload to the server
+		public String[] workflowScripts;
+
+		// This is the server directory where the scripts are stored 
+		public String myServerScriptDir = "eloscripts";
+		
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			String[] userIds = null;
+			String objId = null;
+			int flowId = -1;
+			String[] userNames = new String[] {"WFUser1", "WFUser2", "WFUser3"};
+
+      workflowScripts = new String[] {finishedScript, 
+			                								"DumpWorkFlow.js", 
+                                      "DumpSord.js", 
+											                "Dump.js"};
+
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				//////////////////////////////////////////////////////////////
+				// 1. Upload example scripts 
+				internalCheckinScripts(ix, CONST, ci, workflowScripts);
+
+				//////////////////////////////////////////////////////////////
+				// 2. Create 3 users: WFUser1, WFUser2, WFUser3
+
+				Logger.instance().log("create users...");
+				userIds = internalCreateSomeUsers(ix, CONST, ci, userNames);
+				Logger.instance().log("create users OK");
+
+				//////////////////////////////////////////////////////////////
+				// 3. Create a document
+
+				Logger.instance().log("create document...");
+				objId = internalCreateDocument(ix, CONST, ci);
+				Logger.instance().log("create document OK, objId=" + objId);
+
+				//////////////////////////////////////////////////////////////
+				// 4. Start Ad Hoc Workflow
+
+				Logger.instance().log("start workflow...");
+				flowId = ix.startAdHocWorkFlow(ci, "C# Example AdHocWorkflow " + DateTime.Now, 
+					objId, userIds, "C# example Ad Hoc Workflow", false, true, 
+					"0", "canceled", "0", "Everyone has seen the document.", 
+					myServerScriptDir + "\\" + finishedScript
+					);
+				Logger.instance().log("start workflow OK, flowId=" + flowId);
+
+				// dump nodes, verify that userNames[0] got an active node
+				int testUserId = loginResult.user.id;
+				dumpWFNodes(ix, CONST, ci, flowId, testUserId, userIds);
+
+				//////////////////////////////////////////////////////////////
+				// 5. Forward all nodes
+
+				for (int i = 0; i < userIds.Length; i++) 
+				{
+					internalForwardNode(ix, CONST, flowId, userNames[i], "elo");
+					dumpWFNodes(ix, CONST, ci, flowId, testUserId, userIds);
+				}
+
+				// At this point the test user got the finished node
+				internalForwardNode(ix, CONST, flowId, userName, userPwd);
+				dumpWFNodes(ix, CONST, ci, flowId, testUserId, userIds);
+
+				// Check the sord description: the script should have stored some text in it.
+				IndexServer.Sord sord = ix.checkoutSord(ci, objId, CONST.EDIT_INFO.mbSord, CONST.LOCK.NO).sord;
+				Logger.instance().log("sord.desc=" + sord.desc);
+
+				//////////////////////////////////////////////////////////////
+				// 6. Clean up
+				
+				// delete document
+				bool isDeleteDocument = true;
+				if (isDeleteDocument) 
+				{
+					Logger.instance().log("delete document...");
+					ix.deleteSord(ci, null, objId, CONST.LOCK.NO, null);
+					Logger.instance().log("delete document OK");
+				}
+
+				// delete users
+				bool isDeleteUsers = false;
+				if (isDeleteUsers) 
+				{
+					Logger.instance().log("delete users ...");
+					ix.deleteUsers(ci, userIds, CONST.LOCK.NO);
+					Logger.instance().log("delete users OK");
+				}
+
+				// delete scripts
+				Logger.instance().log("delete scripts ...");
+				internalDeleteScripts(ix, CONST, ci, workflowScripts);
+				Logger.instance().log("delete scripts OK");
+
+				// LOGOUT
+				ix.logout(ci);
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Create users with given names if they do not already exist.
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="ci">Client information (ticket)</param>
+		/// <param name="userNames">Names of users to create</param>
+		/// <returns>User IDs as String array</returns>
+		private String[] internalCreateSomeUsers(IXClient ix, 
+			IndexServer.IXServicePortC CONST, IndexServer.ClientInfo ci, String[] userNames) 
+		{
+			String[] uids = new String[userNames.Length];
+
+			// Try to create users
+			IndexServer.UserInfo[] users = new IndexServer.UserInfo[userNames.Length];
+			try 
+			{
+				for (int i = 0; i < userNames.Length; i++) 
+				{
+					users[i] = ix.createUser(ci, "0");
+					users[i].name = userNames[i];
+					users[i].pwd = "elo";
+				}
+				ix.checkinUsers(ci, users, CONST.CHECKIN_USERS.WRITE_PASSWORD, CONST.LOCK.NO);
+			} 
+			catch (Exception e) 
+			{
+				Logger.instance().log("exception=" + e);
+			}
+
+			// checkout users to get their IDs
+			users = ix.checkoutUsers(ci, userNames, CONST.CHECKOUT_USERS.BY_IDS, CONST.LOCK.NO);
+			for (int i = 0; i < users.Length; i++) 
+			{
+				uids[i] = Convert.ToString(users[i].id);
+				Logger.instance().log("uids[" + i + "]=" + uids[i]);
+			}
+
+			return uids;
+		}
+
+		/// <summary>
+		/// Creates a Sord object. 
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="ci">Client information (ticket)</param>
+		/// <returns>Sord GUID</returns>
+		private String internalCreateDocument(IXClient ix, 
+			IndexServer.IXServicePortC CONST, IndexServer.ClientInfo ci) 
+		{
+			IndexServer.Sord sord = ix.createSord(ci, "1", null, CONST.EDIT_INFO.mbSord).sord;
+			sord.name = "C# Workflow example " + DateTime.Now;
+			ix.checkinSord(ci, sord, CONST.SORD.mbAll, CONST.LOCK.NO);
+			return sord.guid;
+		}
+
+		/// <summary>
+		/// Dumps the node information of the workflow to Logger object.
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="ci">Client information (ticket)</param>
+		/// <param name="flowId">Workflow ID</param>
+		/// <param name="testUserId">ID of user which started the test.</param>
+		/// <param name="wfUserIds">IDs of users which receive the workflow.</param>
+		private void dumpWFNodes(IXClient ix, 
+			IndexServer.IXServicePortC CONST, IndexServer.ClientInfo ci, 
+			int flowId, int testUserId, String[] wfUserIds) 
+		{
+			// add current user to userIds
+			String[] userIds = new String[wfUserIds.Length + 1];
+			userIds[0] = Convert.ToString(testUserId);
+			for (int i = 0; i < wfUserIds.Length; i++) 
+			{
+				userIds[i+1] = wfUserIds[i];
+			}
+
+			// collect nodes
+			IndexServer.WFCollectNode[] nodes = ix.collectWorkFlowNodes(ci, ""+flowId, 
+        CONST.WORKFLOW_TYPE.ACTIVE, null, CONST.WORKFLOW_NODE.TYPE_NOTHING, null,
+				null, null, userIds, false, false);
+
+			// dump
+			Logger.instance().log("Workflow Nodes, #nodes=" + nodes.Length);
+			for (int i = 0; i < nodes.Length; i++) 
+			{
+				Logger.instance().log("  " + 
+					(nodes[i].active ? "*" : " ") + 
+					"nodes[" + i + "]: id=" + nodes[i].nodeId + 
+					  ", name=" + nodes[i].nodeName + 
+					  ", userId=" + nodes[i].userId + 
+					  ", inUseDate=" + nodes[i].inUseDateIso);
+			}
+		}
+
+		/// <summary>
+		/// Forwards a node of a user. Logs in as user and edit the node.
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="flowId">Workflow ID</param>
+		/// <param name="userName">Name of user that forwards it's node.</param>
+		/// <param name="userPwd">User password</param>
+		private void internalForwardNode(IXClient ix, 
+			IndexServer.IXServicePortC CONST, int flowId, String userName, String userPwd)
+		{
+			Logger.instance().log("internalForwardNode(user=" + userName);
+
+			String okMessage = "OK from " + userName;
+
+			// login user
+			Logger.instance().log("  login...");
+			IndexServer.ClientInfo ci2 = new IndexServer.ClientInfo();
+			ci2.language = "de";
+			ci2.country = "DE";
+			ci2.callId = "WF" + userName; // for debug purposes
+			ci2 = ix.login(ci2, userName, userPwd, "mypc", null).clientInfo;
+			Logger.instance().log("  login OK");
+
+			// get active nodes (should be only one)
+			Logger.instance().log("  Get active nodes...");
+      IndexServer.FindTasksInfo fti = new IndexServer.FindTasksInfo();
+      fti.inclWorkflows = true;
+      IndexServer.FindResult findResult = ix.findFirstTasks(ci2, fti, 1000);
+      IndexServer.WFCollectNode node = findResult.tasks[0].wfNode;
+					
+			int nodeId = node.nodeId;
+			Logger.instance().log("  Forward node, nodeId=" + nodeId);
+
+			// begin edit node -> real world: show dialog to forward 
+			Logger.instance().log("    begin edit ...");
+			IndexServer.WFEditNode en = ix.beginEditWorkFlowNode(ci2, flowId, nodeId, CONST.LOCK.NO);
+			Logger.instance().log("    begin edit OK");
+
+			// select successor (only one for serial flow)
+			int [] succNodeIds = new int[en.succNodes.Length]; 
+			if (en.succNodes.Length > 0) succNodeIds[0] = en.succNodes[0].id;
+
+			// end edit node -> real world: user clicks OK button
+			Logger.instance().log("    end edit ...");
+			ix.endEditWorkFlowNode(ci2, flowId, node.nodeId, 
+				false,							// terminate
+				false,							// cancel
+				okMessage,						// name
+				"I don't mind " + userName,		// comment
+				succNodeIds						// nodes to forward to
+				);
+			Logger.instance().log("    end edit OK");
+
+			Logger.instance().log("  Forward node OK");
+
+			// logout
+			Logger.instance().log("  logout...");
+			ix.logout(ci2);
+			Logger.instance().log("  logout OK");
+
+			Logger.instance().log(")internalForwardNode");
+		}
+
+		/// <summary>
+		/// Checkin workflow scripts.
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="ci">Client information (ticket)</param>
+		/// <param name="scriptNames">Array of script names</param>
+		private void internalCheckinScripts(IXClient ix, 
+			IndexServer.IXServicePortC CONST, IndexServer.ClientInfo ci,
+			String[] scriptNames) 
+		{
+			Logger.instance().log("internalCheckinScripts(");
+
+			IndexServer.ConfigFile[] currentScripts = ix.checkoutConfigFiles(ci, 
+				new String[] {myServerScriptDir + "/*"}, CONST.CONFIG_FILE.mbNoFileData, CONST.LOCK.NO);
+
+			Logger.instance().log("read script files...");
+			IndexServer.ConfigFile[] ixScripts = new IndexServer.ConfigFile[scriptNames.Length];
+			for (int i = 0; i < ixScripts.Length; i++) 
+			{
+				ixScripts[i] = new IndexServer.ConfigFile();
+				ixScripts[i].name = scriptNames[i];
+				ixScripts[i].dir = myServerScriptDir;
+				
+				String fileName = "..\\..\\" + ixScripts[i].name;
+				FileStream fstrm = new FileStream(fileName, FileMode.Open, FileAccess.Read);
+				ixScripts[i].fileData = new IndexServer.FileData();
+        ixScripts[i].fileData.data = new byte[(int)fstrm.Length];
+				fstrm.Read(ixScripts[i].fileData.data, 0, (int)fstrm.Length);
+				fstrm.Close();
+			}
+			Logger.instance().log("read script files OK");
+				
+			Logger.instance().log("checkin...");
+			ix.checkinConfigFiles(ci, ixScripts, CONST.LOCK.NO);
+			Logger.instance().log("checkin OK");
+
+			currentScripts = ix.checkoutConfigFiles(ci, 
+				new String[] {myServerScriptDir + "/*"}, CONST.CONFIG_FILE.mbNoFileData, CONST.LOCK.NO);
+
+			Logger.instance().log(")internalCheckinScripts");
+		}
+
+		/// <summary>
+		/// Delets the example scripts
+		/// </summary>
+		/// <param name="ix">IndexServer connection</param>
+		/// <param name="CONST">IndexServer constants</param>
+		/// <param name="ci">Client information (ticket)</param>
+		/// <param name="scriptNames">Array of script names</param>
+		private void internalDeleteScripts(IXClient ix, 
+			IndexServer.IXServicePortC CONST, IndexServer.ClientInfo ci,
+			String[] scriptNames) 
+		{
+			String[] scriptPaths = new String[scriptNames.Length];
+			for (int i = 0; i < scriptNames.Length; i++) 
+			{
+				scriptPaths[i] = myServerScriptDir + "\\" + scriptNames[i];
+			}
+			ix.deleteConfigFiles(ci, scriptPaths, CONST.LOCK.NO);
+		}
+	}
+}

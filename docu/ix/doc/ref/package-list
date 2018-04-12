@@ -1,0 +1,16 @@
+de.elo.ix.client
+de.elo.ix.client.compatibility
+de.elo.ix.client.feed
+de.elo.ix.client.fio
+de.elo.ix.client.health
+de.elo.ix.client.imfs
+de.elo.ix.client.myelo
+de.elo.ix.client.notify
+de.elo.ix.client.search
+de.elo.ix.client.serverevents
+de.elo.ix.client.system
+de.elo.ix.client.webapp
+de.elo.ix.client.webapp.servlet
+de.elo.ix.jscript
+de.elo.utils
+de.elo.utils.webapp.status

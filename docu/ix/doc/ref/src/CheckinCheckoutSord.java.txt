@@ -1,0 +1,163 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.ObjKey;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.DocMask;
+import de.elo.ix.client.DocMaskLine;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ * This example shows how to checkin and checkout sord objects
+ * 
+ */
+     
+public class CheckinCheckoutSord {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop"; 
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static String parentId;
+    private static String maskId;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            insertSord();
+            insertChaosSord();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void insertSord() throws RemoteException {
+        
+        // Prepare a folder object in archive top level based on the Email mask 
+        // - the folder will not be inserted into the archive at this point.
+        parentId = "1"; // parentId = 1 is the top level in archive
+        maskId = "Email"; //Mask name or identifier
+        EditInfo ed = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbAll());
+        Sord sord = ed.getSord();
+        
+        // NOTE: using EDIT_INFO.mbAll constant results in the storage mask data 
+        // also being returned in addition to the sord data.
+        
+        // Assign a name, "New Folder"
+        sord.setName("New Folder " + (new Date()));
+        
+        // Assign index values to the sord object
+        DocMask docMask = ed.getMask();
+        for (int i = 0; i < docMask.getLines().length; i++){
+            
+            DocMaskLine dml = docMask.getLines()[i];
+            if (dml.getName().equals("From") ||
+                    dml.getKey().equals("ELOOUTL1")){
+                sord.getObjKeys()[i].setData(new String[] {"Mark_Miller@elo.com"});
+                
+            } else if (dml.getName().equals("To") ||
+                    dml.getKey().equals("ELOOUTL2")){
+                sord.getObjKeys()[i].setData(new String[] {"support@elo.com"}); 
+            }
+        }
+            
+        System.out.println("Index values assigned");    
+        
+        // Assign index values can also be assigned directly to the objKey object array
+        // ObjKey[] objKeys = sord.getObjKeys();
+        // objKeys[0].setData(new String[] {"Mark Miller"});
+        // objKeys[1].setData(new String[] {"support@elo.com"});
+                
+        // Checkin (store) folder object in archive 
+        int objId = ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()); 
+        System.out.println("Inserted sord: name=" + sord.getName() + ", id=" + objId + ", guid=" + sord.getGuid());
+        
+        // Checkout sord
+        String strObjId = Integer.toString(objId);
+        ed = ix.ix().checkoutSord(strObjId, EDIT_INFO.getMbSord(), LOCK.getNO());
+        sord = ed.getSord();
+        System.out.println("Checked out sord: name=" + sord.getName() + ", id=" + objId + ", guid=" + sord.getGuid());
+        
+        for (int i = 0; i < sord.getObjKeys().length; i++) {
+            
+            ObjKey okey = sord.getObjKeys()[i];
+            if (okey.getData().length != 0){
+                System.out.println("Okey group name=" + okey.getName() + " with data " + okey.getData()[0]);
+            }
+        }
+    }
+
+ public static Sord insertChaosSord() throws RemoteException {
+        
+        // Prepare a folder object in the chaos archive - the folder will not 
+        // be inserted into the archive at this point. Folders in the chaos 
+        // archive can only be found by searching and are not displayed in the normal archive!
+     
+        parentId = "0"; // parentId = 0 is the chaos archive
+        maskId = "0"; //Mask name or identifier 0 = Basic Entry mask
+        EditInfo ed = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        
+        // Assign a name, "Chaos Folder"
+        sord.setName("Chaos Folder " + (new Date()));
+        
+        // Assign index values
+        ObjKey[] objKeys = sord.getObjKeys();
+        // Further index values not required for a Basic Entry folder!
+                
+        //Store folder object in archive
+        int objId = ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO());
+        
+        System.out.println("Inserted chaos sord: name=" + sord.getName() + ", id=" + objId + ", guid=" + sord.getGuid());
+        return sord;
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

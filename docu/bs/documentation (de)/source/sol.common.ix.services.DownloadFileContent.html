@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.java.io);
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.DownloadFileContent&quot; });
+
+<span id='sol-common-ix-services-DownloadFileContent'>/**
+</span> * Downloads a small file content as text from a document that is stored in elo.
+ *
+ * This service is useful if information should be downloaded from web applications.
+ *
+ * # As IX service call
+ *
+ * Download content of work version:
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_service_DownloadFileContent&#39;, {
+ *       objId: &#39;123&#39;
+ *     });
+ *
+ * Download content of a specific version:
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_service_DownloadFileContent&#39;, {
+ *       docId: &#39;123&#39;
+ *     });
+ *
+ * Returns content as followed:
+ *
+ *     {
+ *       content: &quot; --- FILE CONTENT GOES HERE --- &quot;
+ *     }
+ *
+ * @author NM, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires  sol.common.RepoUtils
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.DownloadFileContent&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-DownloadFileContent-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   */
+
+<span id='sol-common-ix-services-DownloadFileContent-cfg-docId'>  /**
+</span>   * @cfg {String} docId
+   */
+
+<span id='sol-common-ix-services-DownloadFileContent-cfg-preserveBOM'>  /**
+</span>   * @cfg {Boolean} preserveBOM
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+    if (!me.objId &amp;&amp; !me.docId) {
+      throw &quot;IllegalArgumentException: &#39;sol.common.ix.services.DownloadFileContent&#39; needs either an objId or a docId&quot;;
+    }
+  },
+
+<span id='sol-common-ix-services-DownloadFileContent-method-process'>  process: function () {
+</span>    var me = this,
+        params, content;
+
+    if (me.preserveBOM === true) {
+      params = { preserveBOM: me.preserveBOM };
+    }
+
+    if (me.objId) {
+      content = sol.common.RepoUtils.downloadToString(me.objId, null, params);
+    } else if (me.docId) {
+      content = sol.common.RepoUtils.downloadToString(null, me.docId, params);
+    }
+
+    return {
+      content: content
+    };
+  }
+
+});
+
+<span id='sol-common-ix-services-DownloadFileContent-static-method-RF_sol_common_service_DownloadFileContent'>/**
+</span> * @member sol.common.ix.services.DownloadFileContent
+ * @method RF_sol_common_service_DownloadFileContent
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_DownloadFileContent(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_common_service_DownloadFileContent&quot;, args);
+  var params, service, result;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args);
+  service = sol.create(&quot;sol.common.ix.services.DownloadFileContent&quot;, params);
+  result = sol.common.JsonUtils.stringifyAll(service.process());
+
+  logger.exit(&quot;RF_sol_common_service_DownloadFileContent&quot;, result);
+
+  return result;
+}
+</pre>
+</body>
+</html>

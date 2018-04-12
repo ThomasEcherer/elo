@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='sol-common-Map'>/**
+</span> * Base class that represents map data
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.02.001
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ *
+ * @requires sol.common.ObjectUtils
+ */
+sol.define(&quot;sol.common.Map&quot;, {
+
+<span id='sol-common-Map-cfg-mapId'>  /**
+</span>   * @cfg {String} mapId
+   * Map ID
+   */
+
+<span id='sol-common-Map-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * Object ID
+   */
+
+<span id='sol-common-Map-cfg-asAdmin'>  /**
+</span>   * @cfg {Boolean} asAdmin
+   * If `true`, the copy process will run in administrator context
+   */
+  asAdmin: undefined,
+
+<span id='sol-common-Map-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: me.$className });
+    if (!me.mapId) {
+      throw &quot;Map ID is empty&quot;;
+    }
+    if (!me.objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    if (!me.mapDomain) {
+      throw &quot;Map domain is empty&quot;;
+    }
+    me.data = {};
+    me.newEntries = {};
+  },
+
+<span id='sol-common-Map-method-setValue'>  /**
+</span>   * Sets a map value of an ELO object.
+   * @param {String} key
+   * @param {String} value
+   */
+  setValue: function (key, value) {
+    var me = this;
+
+    if (!key) {
+      throw &quot;Key is empty&quot;;
+    }
+
+    key += &quot;&quot;;
+    value = String(value || &quot;&quot;);
+    me.data[key] = value;
+
+    key = new java.lang.String(key);
+    me.newEntries[key] = new KeyValue(key, value);
+  },
+
+<span id='sol-common-Map-method-setValues'>  /**
+</span>   * Set values
+   * @param {Object} map Map
+   */
+  setValues: function (map) {
+    var me = this,
+        key, value;
+
+    for (key in map) {
+      if (map.hasOwnProperty(key)) {
+        value = map[key];
+        me.setValue(key, value);
+      }
+    }
+  },
+
+<span id='sol-common-Map-method-write'>  /**
+</span>   * Writes the new map entries of an ELO object to the ix map database.
+   */
+  write: function () {
+    var me = this,
+        mapValues = [],
+        ixConn = (me.asAdmin === true) ? ixConnectAdmin : ixConnect,
+        key;
+
+    me.logger.enter(&quot;write&quot;, arguments);
+
+    for (key in me.newEntries) {
+      if (me.newEntries.hasOwnProperty(key)) {
+        mapValues.push(me.newEntries[key]);
+      }
+    }
+
+    if (mapValues.length &gt; 0) {
+      ixConn.ix().checkinMap(me.mapDomain, me.mapId, me.objId, mapValues, LockC.NO);
+    }
+
+    me.newEntries = {};
+
+    me.logger.exit(&quot;write&quot;);
+  },
+
+<span id='sol-common-Map-method-read'>  /**
+</span>   * Reads all map entries of an ELO object from the ix map database.
+   * @param {String[]} keynames Keynames keys to be read (optional)
+   * @return {Object}
+   */
+  read: function (keynames) {
+    var me = this,
+        result = {},
+        ixConn = (me.asAdmin === true) ? ixConnectAdmin : ixConnect,
+        items, keys, i, entry;
+    me.logger.enter(&quot;read&quot;, arguments);
+
+    me.data = {};
+    if (keynames) {
+      if (sol.common.ObjectUtils.isString(keynames)) {
+        keys = [keynames];
+        keynames = keys;
+      } else if (!sol.common.ObjectUtils.isArray(keynames)) {
+        keynames = null;
+      }
+    } else {
+      keynames = null;
+    }
+    items = ixConn.ix().checkoutMap(me.mapDomain, me.mapId, keynames, LockC.NO).items;
+    for (i = 0; i &lt; items.length; i++) {
+      entry = items[i];
+      me.data[entry.key] = entry.value;
+      result[entry.key] = entry.value;
+    }
+    me.logger.exit(&quot;read&quot;);
+
+    return result;
+  },
+
+<span id='sol-common-Map-method-getValue'>  /**
+</span>   * Gets a value from the map by a given key.
+   * @param {String} key
+   * @return {String}
+   */
+  getValue: function (key) {
+    var me = this;
+    if (me.data[key]) {
+      return String(this.data[key]);
+    }
+    return &quot;&quot;;
+  },
+
+<span id='sol-common-Map-method-getNumValue'>  /**
+</span>   * Returns a number value
+   * @param {type} key
+   * @returns {String}
+   */
+  getNumValue: function (key) {
+    var me = this,
+        value;
+
+    value = me.getValue(key).replace(&quot;,&quot;, &quot;.&quot;);
+    if ((value == &quot;&quot;) || isNaN(value)) {
+      return &quot;&quot;;
+    }
+    return parseFloat(value);
+  },
+
+<span id='sol-common-Map-method-setNumValue'>  /**
+</span>   * Sets a number value
+   * @param {String} key
+   * @param {String} value
+   */
+  setNumValue: function (key, value) {
+    var me = this;
+
+    value = String(value).replace(&quot;.&quot;, &quot;,&quot;);
+
+    me.setValue(key, value);
+  },
+
+<span id='sol-common-Map-method-keyAndValueExist'>  /**
+</span>   * Checks wether a key and value exists
+   * @param {String} key Key
+   * @return {Boolean}
+   */
+  keyAndValueExist: function (key) {
+    var me = this;
+    return !!me.data[key];
+  },
+
+<span id='sol-common-Map-method-forEachRow'>  /**
+</span>   * Iterates over a table.
+   * @param {String} endOfTableIndicatorColumnName Key name of a column to check wether the line exists
+   * @param {Function} func Callback function for the iteration
+   * @param {Object} ctx Execution context
+   */
+  forEachRow: function (endOfTableIndicatorColumnName, func, ctx) {
+    var me = this,
+        i = 1;
+    if (!endOfTableIndicatorColumnName) {
+      throw &quot;The end of table indicator column name is empty.&quot;;
+    }
+    if (!func) {
+      throw &quot;The function parameter is emtpy.&quot;;
+    }
+
+    while (me.keyAndValueExist(endOfTableIndicatorColumnName + i)) {
+      func.call(ctx, i++);
+    }
+  },
+
+<span id='sol-common-Map-method-getKwlKey'>  /**
+</span>   * Returns the keyword list key
+   * @param {String} key String
+   * @param {String} separator Separator
+   * @return {String}
+   */
+  getKwlKey: function (key, separator) {
+    var me = this,
+        str, separatorPos;
+    str = me.getValue(key);
+    if (!str) {
+      return &quot;&quot;;
+    }
+    separator = separator || &quot;-&quot;;
+    separatorPos = str.indexOf(separator);
+    if (separatorPos &lt; 0) {
+      return str;
+    }
+    return str.substring(0, separatorPos).trim();
+  }
+});
+
+<span id='sol-common-SordMap'>/**
+</span> * Represents the map data of an ELO object. This class utilizes reading and writing data to the map database.
+ *
+ *     var map = sol.create(&#39;sol.common.SordMap&#39;, {
+ *       objId: &#39;123&#39;
+ *     });
+ *
+ *     // read all map data from ix database
+ *     map.read();
+ *
+ *     // read a property
+ *     var zugferdImported = map.getValue(&#39;ZUGFERD_IMPORTED&#39;);
+ *
+ *     // change a property
+ *     map.setValue(&#39;ZUGFERD_IMPORTED&#39;, &#39;true&#39;);
+ *
+ *     // write map data to ix database
+ *     map.write();
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ */
+sol.define(&quot;sol.common.SordMap&quot;, {
+  extend: &quot;sol.common.Map&quot;,
+
+<span id='sol-common-SordMap-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * ID of the ELO object
+   */
+
+  initialize: function (config) {
+    var me = this;
+    if (!config.objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    me.mapId = config.objId;
+    me.objId = config.objId;
+    if (config.asAdmin) {
+      me.asAdmin = config.asAdmin;
+    }
+    me.mapDomain = MapDomainC.DOMAIN_SORD;
+    me.$super(&quot;sol.common.Map&quot;, &quot;initialize&quot;, [config]);
+  }
+});
+
+<span id='sol-common-WfMap'>/**
+</span> * Represents the map data of an active workflow.
+ *
+ *     var map = sol.create(&quot;sol.common.WfMap&quot;, {
+ *       flowId: &quot;111&quot;,
+ *       objId: &quot;222&quot;
+ *     });
+ *
+ *     // read all workflow map data from the database
+ *     map.read();
+ *
+ *     // read a property
+ *     var zugferdImported = map.getValue(&#39;ZUGFERD_IMPORTED&#39;);
+ *
+ *     // change a property
+ *     map.setValue(&#39;ZUGFERD_IMPORTED&#39;, &#39;true&#39;);
+ *
+ *     // write map data to database
+ *     map.write();
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ */
+sol.define(&quot;sol.common.WfMap&quot;, {
+  extend: &quot;sol.common.Map&quot;,
+
+<span id='sol-common-WfMap-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId
+   * ID of the ELO object
+   */
+
+<span id='sol-common-WfMap-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   */
+
+  initialize: function (config) {
+    var me = this;
+    if (!config.flowId) {
+      throw &quot;Flow ID is empty&quot;;
+    }
+    if (!config.objId) {
+      throw &quot;Object ID is empty&quot;;
+    }
+    me.mapId = config.flowId;
+    me.objId = config.objId;
+    me.mapDomain = MapDomainC.DOMAIN_WORKFLOW_ACTIVE;
+    me.$super(&quot;sol.common.Map&quot;, &quot;initialize&quot;, [config]);
+  }
+});
+
+<span id='sol-common-MapTable'>/**
+</span> * Represents map data as table
+ *
+ *     var sordMap = sol.create(&quot;sol.common.SordMap&quot;, { objId: objId });
+ *     var sordMapTable = sol.create(&quot;sol.common.MapTable&quot;, { map: sordMap, columnNames: [&quot;INVOICE_TAX_NET_AMOUNT&quot;, &quot;INVOICE_TAX_AMOUNT&quot;, &quot;INVOICE_TAX_RATE&quot;] });
+ *     if (sordMapTable.hasNextRow()) {
+ *       sordMapTable.nextRow();
+ *       var value = sordMapTable.getNumValue(&quot;INVOICE_TAX_RATE&quot;);
+ *       if (value == 0) {
+ *         sordMapTable.removeRow();
+ *       }
+ *     }
+ *     sordMapTable.write();
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ */
+sol.define(&quot;sol.common.MapTable&quot;, {
+
+<span id='sol-common-MapTable-cfg-map'>  /**
+</span>   * @cfg {sol.common.Map} map (required)
+   * Map object
+   */
+
+<span id='sol-common-MapTable-cfg-columnNames'>  /**
+</span>   * @cfg {Array} columnNames (required)
+   * Column names
+   */
+
+<span id='sol-common-MapTable-cfg-endOfTableIndicatorColumnName'>  /**
+</span>   * @cfg {String} endOfTableIndicatorColumnName (optional)
+   * End of table indicator column name
+   */
+
+<span id='sol-common-MapTable-cfg-initEmpty'>  /**
+</span>   * @cfg {String} initEmpty (optional)
+   * Provides an empty table
+   */
+
+<span id='sol-common-MapTable-cfg-read'>  /**
+</span>   * @cfg {String} [read=true] (optional)
+   * Read the map values
+   */
+
+<span id='sol-common-MapTable-cfg-reset'>  /**
+</span>   * @cfg {String} [reset=true] (optional)
+   * Reset the table iterator
+   */
+
+  initialize: function (config) {
+    var me = this,
+        i, j, lastLine, columnName, row;
+
+    me.logger = sol.create(&quot;sol.Logger&quot;, { scope: me.$className });
+
+    i = 0;
+    lastLine = false;
+
+    config = config || {};
+    config.read = (config.read == false) ? false : true;
+    config.initEmpty = (config.initEmpty == true) ? true : false;
+    config.reset = (config.reset == false) ? false : true;
+
+    if (!config.map) {
+      throw &quot;Map is empty&quot;;
+    }
+
+    if (!config.columnNames || (config.columnNames.length == 0)) {
+      throw &quot;Column names are empty&quot;;
+    }
+
+    me.map = config.map;
+
+    me.columnNames = config.columnNames;
+    me.data = [];
+
+    if (config.read || !config.initEmpty) {
+      me.map.read();
+    }
+
+    if (!config.initEmpty) {
+      do {
+        i++;
+        row = {};
+        for (j = 0; j &lt; me.columnNames.length; j++) {
+          columnName = me.columnNames[j];
+          row[columnName] = me.map.getValue(columnName + i);
+        }
+        if (me.endOfTableIndicatorColumnName) {
+          lastLine = !row[me.endOfTableIndicatorColumnName];
+        } else {
+          for (j = 0; j &lt; me.columnNames.length; j++) {
+            lastLine = true;
+            columnName = me.columnNames[j];
+            if (row[columnName]) {
+              lastLine = false;
+              break;
+            }
+          }
+        }
+        if (!lastLine) {
+          me.data.push(row);
+        }
+      } while (!lastLine);
+    }
+
+    me.writeRowsCount = i;
+    me.index = me.data.length - 1;
+
+    if (config.reset) {
+      me.reset();
+    }
+  },
+
+<span id='sol-common-MapTable-method-reset'>  /**
+</span>   * Resets the iterator
+   */
+  reset: function () {
+    var me = this;
+    me.index = -1;
+    me.illegalState = true;
+  },
+
+<span id='sol-common-MapTable-method-shift'>  /**
+</span>   * Removes the first row and resets the table
+   */
+  shift: function () {
+    var me = this;
+    me.data.shift();
+    me.reset();
+  },
+
+<span id='sol-common-MapTable-method-hasNextRow'>  /**
+</span>   * True if the table has a next row
+   * @return {Boolean}
+   */
+  hasNextRow: function () {
+    var me = this;
+    return ((me.data.length - 1) &gt; me.index);
+  },
+
+<span id='sol-common-MapTable-method-nextRow'>  /**
+</span>   * Moves the row pointer to the next row
+   * @return {Object}
+   */
+  nextRow: function () {
+    var me = this;
+    me.illegalState = false;
+    me.index++;
+    return me.data[me.index];
+  },
+
+<span id='sol-common-MapTable-method-getValue'>  /**
+</span>   * Returns a value
+   * @param {String} columnName Column name
+   * @return {String}
+   */
+  getValue: function (columnName) {
+    var me = this;
+    me.checkState();
+    if (me.columnNames.indexOf(columnName) &lt; 0) {
+      throw &quot;Key &#39;&quot; + columnName + &quot;&#39; hasn&#39;t been predefined as column name.&quot;;
+    }
+    return me.data[me.index][columnName] || &quot;&quot;;
+  },
+
+<span id='sol-common-MapTable-method-getDisplayIndex'>  /**
+</span>   * Returns the index number
+   * @return {Number}
+   */
+  getDisplayIndex: function () {
+    var me = this,
+        index;
+    me.checkState();
+    index = me.index + 1;
+    return index;
+  },
+
+<span id='sol-common-MapTable-method-getNumValue'>  /**
+</span>   * Returns a number value
+   * @param {String} columnName Column name
+   * @returns {String}
+   */
+  getNumValue: function (columnName) {
+    var me = this,
+        value;
+
+    value = me.getValue(columnName).replace(&quot;,&quot;, &quot;.&quot;);
+    if (isNaN(value)) {
+      return &quot;&quot;;
+    }
+    return parseFloat(value);
+  },
+
+<span id='sol-common-MapTable-method-checkState'>  /**
+</span>   * Checks the current row
+   */
+  checkState: function () {
+    var me = this;
+    if ((me.index &lt; 0) || me.illegalState) {
+      throw &quot;Illegal state: call nextRow()&quot;;
+    }
+  },
+
+<span id='sol-common-MapTable-method-setValue'>  /**
+</span>   * Sets a value
+   * @param {String} columnName Column name
+   * @param {String} value
+   */
+  setValue: function (columnName, value) {
+    var me = this;
+    me.checkState();
+    if (me.columnNames.indexOf(columnName) &lt; 0) {
+      throw &quot;Key &#39;&quot; + columnName + &quot;&#39; hasn&#39;t been predefined as column name.&quot;;
+    }
+    me.data[me.index][columnName] = value;
+  },
+
+<span id='sol-common-MapTable-method-setNumValue'>  /**
+</span>   * Sets a number value
+   * @param {String} columnName Column name
+   * @param {String} value
+   */
+  setNumValue: function (columnName, value) {
+    var me = this;
+
+    value = String(value).replace(&quot;.&quot;, &quot;,&quot;);
+
+    me.setValue(columnName, value);
+  },
+
+<span id='sol-common-MapTable-method-insertRow'>  /**
+</span>   * Inserts a row after the current row
+   */
+  insertRow: function () {
+    var me = this;
+    me.data.splice(me.index + 1, 0, {});
+    me.illegalState = true;
+  },
+
+<span id='sol-common-MapTable-method-removeRow'>  /**
+</span>   * Deletes the current row
+   */
+  removeRow: function () {
+    var me = this;
+    me.checkState();
+    me.data.splice(me.index, 1);
+    me.illegalState = true;
+    me.index--;
+  },
+
+<span id='sol-common-MapTable-method-appendRow'>  /**
+</span>   * Appends a row at the end of the table
+   */
+  appendRow: function () {
+    var me = this;
+    me.illegalState = false;
+    me.index = me.data.length - 1;
+    me.insertRow();
+    me.nextRow();
+  },
+
+<span id='sol-common-MapTable-method-getLength'>  /**
+</span>   * Returns the table length
+   * @return {Number}
+   */
+  getLength: function () {
+    var me = this,
+        length;
+
+    if (me.data) {
+      length = me.data.length;
+    }
+
+    return length;
+  },
+
+<span id='sol-common-MapTable-method-write'>  /**
+</span>   * Writes the data
+   */
+  write: function () {
+    var me = this,
+        i, j, columnName;
+    me.logger.enter(&quot;write&quot;, arguments);
+
+    for (i = 0; i &lt; me.data.length; i++) {
+      for (j = 0; j &lt; me.columnNames.length; j++) {
+        columnName = me.columnNames[j];
+        me.map.setValue(columnName + (i + 1), me.data[i][columnName] || &quot;&quot;);
+      }
+    }
+    if (me.initEmpty) {
+      me.writeRowsCount = i + 1;
+    }
+    // Add empty rows
+    for (; i &lt;= me.writeRowsCount; i++) {
+      for (j = 0; j &lt; me.columnNames.length; j++) {
+        columnName = me.columnNames[j];
+        me.map.setValue(columnName + (i + 1), &quot;&quot;);
+      }
+    }
+    me.map.write();
+    me.logger.exit(&quot;write&quot;);
+  }
+});
+
+</pre>
+</body>
+</html>

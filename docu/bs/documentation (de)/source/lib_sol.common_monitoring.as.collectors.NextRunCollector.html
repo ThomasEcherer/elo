@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-collectors-NextRunCollector'>/**
+</span> * Collects all elements with a due date.
+ *
+ * Retrospection: searches for next run dates in the past, so it doesn&#39;t miss any object in case, one or more executions went wrong.
+ *
+ * The search can be limited to a specific mask by configuration.
+ * The default retrospection time in days can be overridden by configuration.
+ * The default field containing the due date can be overridden by configuration.
+ *
+ *     var collector = sol.create(&quot;sol.common_monitoring.as.collectors.NextRunCollector&quot;, {
+ *       soltype: &quot;CONTRACT&quot;
+ *       mask: &quot;My Mask&quot;,
+ *       retrospection: 27,
+ *       nextRunField: &quot;MY_DUE_DATE&quot;
+ *     });
+ *
+ * @eloas
+ *
+ * @requires sol.common.SordUtils
+ * @requires sol.common.DateUtils
+ */
+sol.define(&quot;sol.common_monitoring.as.collectors.NextRunCollector&quot;, {
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-cfg-nextRunField'>  /**
+</span>   * @cfg {String} [nextRunField=&quot;NEXT_RUN&quot;] (optional) Spezifies, which field is used to search for the due items
+   */
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-cfg-retrospection'>  /**
+</span>   * @cfg {Number} [retrospection=365] (optional) Spezifies, how long the rule looks back for next_run dates from now (in days) (see also {@link #defaultRetrospectionTime})
+   */
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-cfg-mask'>  /**
+</span>   * @cfg {String} mask (optional) If set, due items will be filtered by mask
+   */
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-cfg-soltype'>  /**
+</span>   * @cfg {String} soltype (optional) If set, due items will be filtered by solution type (GRP-field `SOL_TYPE`)
+   */
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-property-defaultNextRunField'>  /**
+</span>   * @private
+   * @property {String} defaultNextRunField
+   */
+  defaultNextRunField: &quot;NEXT_RUN&quot;,
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-property-defaultRetrospectionTime'>  /**
+</span>   * @private
+   * @property {String} defaultRetrospectionTime
+   */
+  defaultRetrospectionTime: 365,
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-property-defaultSordZ'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.SordZ} defaultSordZ
+   */
+  defaultBatchSize: 1000,
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-property-defaultSordZ'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.SordZ} defaultSordZ
+   */
+  defaultSordZ: SordC.mbAllIndex,
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.nextRunField = (typeof me.nextRunField !== &quot;undefined&quot;) ? me.nextRunField : me.defaultNextRunField;
+    me.retrospection = (me.retrospection || (me.retrospection === 0)) ? me.retrospection : me.defaultRetrospectionTime;
+    me._sordZ = me.defaultSordZ;
+    me._batchSize = me.defaultBatchSize;
+    me._findInfo = me.createFindInfo();
+    me._hasMoreResults = true;
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-hasMoreResults'>  /**
+</span>   * Checks, if this collector has additional results.
+   * @return {Boolean}
+   */
+  hasMoreResults: function () {
+    var me = this;
+    return me._hasMoreResults;
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-getResults'>  /**
+</span>   * Retrieves the next batch of work items.
+   * @return {de.elo.ix.client.Sord[]}
+   */
+  getResults: function () {
+    var me = this;
+
+    me.logger.enter(&quot;getResults&quot;);
+
+    me._workingSet = [];
+    me._hasMoreResults = false;
+
+    try {
+      me.logger.debug([&quot;perform search: nextRunField={0}, lookupPeriod={1}, limitToMask={2}&quot;,
+        me._findInfo.findByIndex.objKeys[0].name, me._findInfo.findByIndex.objKeys[0].data[0], me._findInfo.findByIndex.maskId]);
+      if (!me._findResult) {
+        me._idx = 0;
+        me._findResult = ixConnect.ix().findFirstSords(me._findInfo, me._batchSize, me._sordZ);
+      } else {
+        me._findResult = ixConnect.ix().findNextSords(me._findResult.searchId, me._idx, me._batchSize, me._sordZ);
+      }
+
+      me._workingSet = me._findResult.sords;
+      me._hasMoreResults = me._findResult.moreResults;
+      me._idx += me._findResult.sords.length;
+
+    } finally {
+      if ((me._hasMoreResults === false) &amp;&amp; me._findResult) {
+        ixConnect.ix().findClose(me._findResult.searchId);
+        me._findResult = null;
+      }
+    }
+
+    me.logger.info([&quot;return result batch: found {0} entries (hasMoreResults={1})&quot;, me._workingSet.length, me._hasMoreResults]);
+    me.logger.exit(&quot;getResults&quot;);
+
+    return me._workingSet;
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-postProcess'>  /**
+</span>   * Checks, if a result set contains any instruction for further executions (`nextRun`) and updates a sord with the most recent.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object[]} results The result object returned by an `analyzer`
+   */
+  postProcess: function (sord, results) {
+    var me = this,
+        newNextRunDate = &quot;&quot;,
+        postprocessingRequired = false,
+        currentNextRunDate;
+
+    me.logger.enter(&quot;postProcess&quot;);
+
+    if (results &amp;&amp; (results.length &gt; 0)) {
+      results.forEach(function (r) {
+        if (r.nextRun) {
+          newNextRunDate = (!newNextRunDate) ? r.nextRun : ((newNextRunDate &lt; r.nextRun) ? newNextRunDate : r.nextRun);
+          postprocessingRequired = true;
+        }
+      });
+    }
+
+    if (postprocessingRequired &amp;&amp; me.nextRunField) {
+      currentNextRunDate = sol.common.SordUtils.getObjKeyValue(sord, me.nextRunField);
+      me.logger.debug([&quot;next runs: currentNextRunDate={0}, newNextRunDate={1}&quot;, currentNextRunDate, newNextRunDate]);
+
+      if (currentNextRunDate != newNextRunDate) {
+        sol.common.SordUtils.setObjKeyValue(sord, me.nextRunField, newNextRunDate);
+        ixConnect.ix().checkinSord(sord, me._sordZ, LockC.NO);
+        me.logger.info([&quot;update next run date(objId={0}, objKey={1}): oldValue=&#39;{2}&#39;, newValue=&#39;{3}&#39;&quot;, sord.id, me.nextRunField, currentNextRunDate, newNextRunDate]);
+      }
+    } else {
+      me.logger.debug(&quot;no &#39;nextRuns&#39; defined, skip post processing&quot;);
+    }
+
+    me.logger.exit(&quot;postProcess&quot;);
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-dispose'>  /**
+</span>   * Performes cleanup by closeing the search and removing the current working set.
+   */
+  dispose: function () {
+    var me = this;
+    if (me._findResult) {
+      ixConnect.ix().findClose(me._findResult.searchId);
+      me._findResult = null;
+    }
+    me._workingSet = null;
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-createFindInfo'>  /**
+</span>   * @private
+   * Creates a FindInfo object for the search using {@link #nextRunField}, {@link #getLookupPeriod} and {@link #mask}.
+   * @return {de.elo.ix.client.FindInfo}
+   */
+  createFindInfo: function () {
+    var me = this,
+        fi = new FindInfo(),
+        fbi = new FindByIndex(),
+        objKeys = [],
+        nextRunObjKey = new ObjKey(),
+        soltypeObjKey = new ObjKey();
+
+    if (me.nextRunField) {
+      nextRunObjKey.name = me.nextRunField;
+      nextRunObjKey.data = [me.getLookupPeriod()];
+      objKeys.push(nextRunObjKey);
+    }
+
+    if (me.mask) {
+      fbi.maskId = me.mask;
+    }
+
+    if (me.soltype) {
+      soltypeObjKey.name = &quot;SOL_TYPE&quot;,
+      soltypeObjKey.data = [me.soltype];
+      objKeys.push(soltypeObjKey);
+    }
+
+    fbi.objKeys = objKeys;
+    fi.findByIndex = fbi;
+    return fi;
+  },
+
+<span id='sol-common_monitoring-as-collectors-NextRunCollector-method-getLookupPeriod'>  /**
+</span>   * @private
+   * Calculates the lookup period for the search using {@link #retrospection}.
+   * The period String has the following form:
+   *
+   *     &quot;YYYYMMDD...YYYYMMDD&quot;
+   *
+   * where the second ISO string is always the current date.
+   * If {@link #retrospection} is set to 0, just the current date will be returned in ISO form.
+   *
+   * @return {String}
+   */
+  getLookupPeriod: function () {
+    var me = this,
+        isoPattern = &quot;YYYYMMDD&quot;,
+        isoNow = sol.common.DateUtils.format(new Date(), isoPattern),
+        retrospectionDays = me.retrospection,
+        isoFrom;
+
+    if (retrospectionDays === 0) {
+      return isoNow;
+    }
+
+    retrospectionDays = -Math.abs(retrospectionDays);
+    isoFrom = sol.common.DateUtils.shift(new Date(), retrospectionDays, { pattern: isoPattern });
+    return isoFrom + &quot;...&quot; + isoNow;
+  }
+
+});
+</pre>
+</body>
+</html>

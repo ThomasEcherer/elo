@@ -1,0 +1,900 @@
+using System;
+using System.Drawing;
+using System.Collections;
+using System.ComponentModel;
+using System.Windows.Forms;
+using System.Data;
+
+namespace Examples
+{
+	/// <summary>
+	/// Zusammenfassung für Form1.
+	/// </summary>
+	public class Form1 : System.Windows.Forms.Form
+	{
+		private System.Windows.Forms.Button bnClose;
+		private System.Windows.Forms.Button bnRun;
+		private System.Windows.Forms.TreeView tvExamples;
+		private System.Windows.Forms.Label lbURL;
+		private System.Windows.Forms.TextBox txURL;
+		private System.Windows.Forms.Button bnRunAll;
+		private System.Windows.Forms.Label label2;
+		private System.Windows.Forms.TextBox txUserName;
+		private System.Windows.Forms.Label label3;
+		private System.Windows.Forms.TextBox txUserPwd;
+		private System.Windows.Forms.RichTextBox rtxLog;
+		/// <summary>
+		/// Erforderliche Designervariable.
+		/// </summary>
+		private System.ComponentModel.Container components = null;
+
+		public Form1()
+		{
+			//
+			// Erforderlich für die Windows Form-Designerunterstützung
+			//
+			InitializeComponent();
+
+			//
+			// TODO: Fügen Sie den Konstruktorcode nach dem Aufruf von InitializeComponent hinzu
+			//
+
+			Logger.instance().init(rtxLog);
+		}
+
+		/// <summary>
+		/// Die verwendeten Ressourcen bereinigen.
+		/// </summary>
+		protected override void Dispose( bool disposing )
+		{
+			if( disposing )
+			{
+				if (components != null) 
+				{
+					components.Dispose();
+				}
+			}
+			base.Dispose( disposing );
+		}
+
+		#region Vom Windows Form-Designer generierter Code
+		/// <summary>
+		/// Erforderliche Methode für die Designerunterstützung. 
+		/// Der Inhalt der Methode darf nicht mit dem Code-Editor geändert werden.
+		/// </summary>
+		private void InitializeComponent()
+		{
+      System.Windows.Forms.TreeNode treeNode55 = new System.Windows.Forms.TreeNode("Standard login");
+      System.Windows.Forms.TreeNode treeNode56 = new System.Windows.Forms.TreeNode("Single-sign-on login");
+      System.Windows.Forms.TreeNode treeNode57 = new System.Windows.Forms.TreeNode("Lock archive with key");
+      System.Windows.Forms.TreeNode treeNode58 = new System.Windows.Forms.TreeNode("Login/Logout", new System.Windows.Forms.TreeNode[] {
+            treeNode55,
+            treeNode56,
+            treeNode57});
+      System.Windows.Forms.TreeNode treeNode59 = new System.Windows.Forms.TreeNode("Create Sord");
+      System.Windows.Forms.TreeNode treeNode60 = new System.Windows.Forms.TreeNode("Checkin/-out Sord");
+      System.Windows.Forms.TreeNode treeNode61 = new System.Windows.Forms.TreeNode("Change Keywording form");
+      System.Windows.Forms.TreeNode treeNode62 = new System.Windows.Forms.TreeNode("Move Sord");
+      System.Windows.Forms.TreeNode treeNode63 = new System.Windows.Forms.TreeNode("Create logical reference to Sord");
+      System.Windows.Forms.TreeNode treeNode64 = new System.Windows.Forms.TreeNode("Delete Sord");
+      System.Windows.Forms.TreeNode treeNode65 = new System.Windows.Forms.TreeNode("Checkout and unlock");
+      System.Windows.Forms.TreeNode treeNode66 = new System.Windows.Forms.TreeNode("Checkout by index attribute");
+      System.Windows.Forms.TreeNode treeNode67 = new System.Windows.Forms.TreeNode("Checkout by archive path");
+      System.Windows.Forms.TreeNode treeNode68 = new System.Windows.Forms.TreeNode("Sord performance");
+      System.Windows.Forms.TreeNode treeNode69 = new System.Windows.Forms.TreeNode("Access Control Lists");
+      System.Windows.Forms.TreeNode treeNode70 = new System.Windows.Forms.TreeNode("View + Edit Sord");
+      System.Windows.Forms.TreeNode treeNode71 = new System.Windows.Forms.TreeNode("Link Sords");
+      System.Windows.Forms.TreeNode treeNode72 = new System.Windows.Forms.TreeNode("Sord types (lables, icons, file extensions)");
+      System.Windows.Forms.TreeNode treeNode73 = new System.Windows.Forms.TreeNode("Indexing Information", new System.Windows.Forms.TreeNode[] {
+            treeNode59,
+            treeNode60,
+            treeNode61,
+            treeNode62,
+            treeNode63,
+            treeNode64,
+            treeNode65,
+            treeNode66,
+            treeNode67,
+            treeNode68,
+            treeNode69,
+            treeNode70,
+            treeNode71,
+            treeNode72});
+      System.Windows.Forms.TreeNode treeNode74 = new System.Windows.Forms.TreeNode("Checkin new document");
+      System.Windows.Forms.TreeNode treeNode75 = new System.Windows.Forms.TreeNode("Checkin one document version");
+      System.Windows.Forms.TreeNode treeNode76 = new System.Windows.Forms.TreeNode("Checkin many document versions");
+      System.Windows.Forms.TreeNode treeNode77 = new System.Windows.Forms.TreeNode("Checkin document + signature");
+      System.Windows.Forms.TreeNode treeNode78 = new System.Windows.Forms.TreeNode("Checkin attachment");
+      System.Windows.Forms.TreeNode treeNode79 = new System.Windows.Forms.TreeNode("Document performance");
+      System.Windows.Forms.TreeNode treeNode80 = new System.Windows.Forms.TreeNode("Small document performance");
+      System.Windows.Forms.TreeNode treeNode81 = new System.Windows.Forms.TreeNode("Document performance with CheckinDocsEnd");
+      System.Windows.Forms.TreeNode treeNode82 = new System.Windows.Forms.TreeNode("Checkin new encrypted");
+      System.Windows.Forms.TreeNode treeNode83 = new System.Windows.Forms.TreeNode("Checkin/-out documents", new System.Windows.Forms.TreeNode[] {
+            treeNode74,
+            treeNode75,
+            treeNode76,
+            treeNode77,
+            treeNode78,
+            treeNode79,
+            treeNode80,
+            treeNode81,
+            treeNode82});
+      System.Windows.Forms.TreeNode treeNode84 = new System.Windows.Forms.TreeNode("Find all (#-search)");
+      System.Windows.Forms.TreeNode treeNode85 = new System.Windows.Forms.TreeNode("Find-first, find-next");
+      System.Windows.Forms.TreeNode treeNode86 = new System.Windows.Forms.TreeNode("Find children (browse archive tree)");
+      System.Windows.Forms.TreeNode treeNode87 = new System.Windows.Forms.TreeNode("Find by index values");
+      System.Windows.Forms.TreeNode treeNode88 = new System.Windows.Forms.TreeNode("Find by index range");
+      System.Windows.Forms.TreeNode treeNode89 = new System.Windows.Forms.TreeNode("Find", new System.Windows.Forms.TreeNode[] {
+            treeNode84,
+            treeNode85,
+            treeNode86,
+            treeNode87,
+            treeNode88});
+      System.Windows.Forms.TreeNode treeNode90 = new System.Windows.Forms.TreeNode("Create/Delete user/group");
+      System.Windows.Forms.TreeNode treeNode91 = new System.Windows.Forms.TreeNode("List user names");
+      System.Windows.Forms.TreeNode treeNode92 = new System.Windows.Forms.TreeNode("List user rights");
+      System.Windows.Forms.TreeNode treeNode93 = new System.Windows.Forms.TreeNode("Create/Delete keys");
+      System.Windows.Forms.TreeNode treeNode94 = new System.Windows.Forms.TreeNode("Users/Keys", new System.Windows.Forms.TreeNode[] {
+            treeNode90,
+            treeNode91,
+            treeNode92,
+            treeNode93});
+      System.Windows.Forms.TreeNode treeNode95 = new System.Windows.Forms.TreeNode("Create, checkin, checkout, delete storage mask");
+      System.Windows.Forms.TreeNode treeNode96 = new System.Windows.Forms.TreeNode("Storage masks", new System.Windows.Forms.TreeNode[] {
+            treeNode95});
+      System.Windows.Forms.TreeNode treeNode97 = new System.Windows.Forms.TreeNode("List basic data");
+      System.Windows.Forms.TreeNode treeNode98 = new System.Windows.Forms.TreeNode("Basic data", new System.Windows.Forms.TreeNode[] {
+            treeNode97});
+      System.Windows.Forms.TreeNode treeNode99 = new System.Windows.Forms.TreeNode("Checkin/-out report options");
+      System.Windows.Forms.TreeNode treeNode100 = new System.Windows.Forms.TreeNode("Find report entries");
+      System.Windows.Forms.TreeNode treeNode101 = new System.Windows.Forms.TreeNode("Report", new System.Windows.Forms.TreeNode[] {
+            treeNode99,
+            treeNode100});
+      System.Windows.Forms.TreeNode treeNode102 = new System.Windows.Forms.TreeNode("List workflows");
+      System.Windows.Forms.TreeNode treeNode103 = new System.Windows.Forms.TreeNode("List WF nodes");
+      System.Windows.Forms.TreeNode treeNode104 = new System.Windows.Forms.TreeNode("Start AdHoc Workflow");
+      System.Windows.Forms.TreeNode treeNode105 = new System.Windows.Forms.TreeNode("Workflow", new System.Windows.Forms.TreeNode[] {
+            treeNode102,
+            treeNode103,
+            treeNode104});
+      System.Windows.Forms.TreeNode treeNode106 = new System.Windows.Forms.TreeNode("Select Keyword");
+      System.Windows.Forms.TreeNode treeNode107 = new System.Windows.Forms.TreeNode("Checkin/out, cook Keywords");
+      System.Windows.Forms.TreeNode treeNode108 = new System.Windows.Forms.TreeNode("Keyword", new System.Windows.Forms.TreeNode[] {
+            treeNode106,
+            treeNode107});
+      this.bnRun = new System.Windows.Forms.Button();
+      this.bnClose = new System.Windows.Forms.Button();
+      this.tvExamples = new System.Windows.Forms.TreeView();
+      this.lbURL = new System.Windows.Forms.Label();
+      this.txURL = new System.Windows.Forms.TextBox();
+      this.bnRunAll = new System.Windows.Forms.Button();
+      this.label2 = new System.Windows.Forms.Label();
+      this.txUserName = new System.Windows.Forms.TextBox();
+      this.label3 = new System.Windows.Forms.Label();
+      this.txUserPwd = new System.Windows.Forms.TextBox();
+      this.rtxLog = new System.Windows.Forms.RichTextBox();
+      this.SuspendLayout();
+      // 
+      // bnRun
+      // 
+      this.bnRun.Location = new System.Drawing.Point(8, 8);
+      this.bnRun.Name = "bnRun";
+      this.bnRun.Size = new System.Drawing.Size(56, 23);
+      this.bnRun.TabIndex = 1;
+      this.bnRun.Text = "Run";
+      this.bnRun.Click += new System.EventHandler(this.bnRun_Click);
+      // 
+      // bnClose
+      // 
+      this.bnClose.Location = new System.Drawing.Point(568, 8);
+      this.bnClose.Name = "bnClose";
+      this.bnClose.Size = new System.Drawing.Size(56, 23);
+      this.bnClose.TabIndex = 2;
+      this.bnClose.Text = "Close";
+      this.bnClose.Click += new System.EventHandler(this.bnClose_Click);
+      // 
+      // tvExamples
+      // 
+      this.tvExamples.HideSelection = false;
+      this.tvExamples.Location = new System.Drawing.Point(8, 48);
+      this.tvExamples.Name = "tvExamples";
+      treeNode55.Name = "";
+      treeNode55.Text = "Standard login";
+      treeNode56.Name = "";
+      treeNode56.Text = "Single-sign-on login";
+      treeNode57.Name = "";
+      treeNode57.Text = "Lock archive with key";
+      treeNode58.Name = "";
+      treeNode58.Text = "Login/Logout";
+      treeNode59.Name = "";
+      treeNode59.Text = "Create Sord";
+      treeNode60.Name = "";
+      treeNode60.Text = "Checkin/-out Sord";
+      treeNode61.Name = "";
+      treeNode61.Text = "Change Keywording form";
+      treeNode62.Name = "";
+      treeNode62.Text = "Move Sord";
+      treeNode63.Name = "";
+      treeNode63.Text = "Create logical reference to Sord";
+      treeNode64.Name = "";
+      treeNode64.Text = "Delete Sord";
+      treeNode65.Name = "";
+      treeNode65.Text = "Checkout and unlock";
+      treeNode66.Name = "";
+      treeNode66.Text = "Checkout by index attribute";
+      treeNode67.Name = "";
+      treeNode67.Text = "Checkout by archive path";
+      treeNode68.Name = "";
+      treeNode68.Text = "Sord performance";
+      treeNode69.Name = "";
+      treeNode69.Text = "Access Control Lists";
+      treeNode70.Name = "";
+      treeNode70.Text = "View + Edit Sord";
+      treeNode71.Name = "";
+      treeNode71.Text = "Link Sords";
+      treeNode72.Name = "";
+      treeNode72.Text = "Sord types (lables, icons, file extensions)";
+      treeNode73.Name = "";
+      treeNode73.Text = "Indexing Information";
+      treeNode74.Name = "";
+      treeNode74.Text = "Checkin new document";
+      treeNode75.Name = "";
+      treeNode75.Text = "Checkin one document version";
+      treeNode76.Name = "";
+      treeNode76.Text = "Checkin many document versions";
+      treeNode77.Name = "";
+      treeNode77.Text = "Checkin document + signature";
+      treeNode78.Name = "";
+      treeNode78.Text = "Checkin attachment";
+      treeNode79.Name = "";
+      treeNode79.Text = "Document performance";
+      treeNode80.Name = "";
+      treeNode80.Text = "Small document performance";
+      treeNode81.Name = "";
+      treeNode81.Text = "Document performance with CheckinDocsEnd";
+      treeNode82.Name = "Knoten0";
+      treeNode82.Text = "Checkin new encrypted";
+      treeNode83.Name = "";
+      treeNode83.Text = "Checkin/-out documents";
+      treeNode84.Name = "";
+      treeNode84.Text = "Find all (#-search)";
+      treeNode85.Name = "";
+      treeNode85.Text = "Find-first, find-next";
+      treeNode86.Name = "";
+      treeNode86.Text = "Find children (browse archive tree)";
+      treeNode87.Name = "";
+      treeNode87.Text = "Find by index values";
+      treeNode88.Name = "";
+      treeNode88.Text = "Find by index range";
+      treeNode89.Name = "";
+      treeNode89.Text = "Find";
+      treeNode90.Name = "";
+      treeNode90.Text = "Create/Delete user/group";
+      treeNode91.Name = "";
+      treeNode91.Text = "List user names";
+      treeNode92.Name = "";
+      treeNode92.Text = "List user rights";
+      treeNode93.Name = "";
+      treeNode93.Text = "Create/Delete keys";
+      treeNode94.Name = "";
+      treeNode94.Text = "Users/Keys";
+      treeNode95.Name = "";
+      treeNode95.Text = "Create, checkin, checkout, delete storage mask";
+      treeNode96.Name = "";
+      treeNode96.Text = "Storage masks";
+      treeNode97.Name = "";
+      treeNode97.Text = "List basic data";
+      treeNode98.Name = "";
+      treeNode98.Text = "Basic data";
+      treeNode99.Name = "";
+      treeNode99.Text = "Checkin/-out report options";
+      treeNode100.Name = "";
+      treeNode100.Text = "Find report entries";
+      treeNode101.Name = "";
+      treeNode101.Text = "Report";
+      treeNode102.Name = "";
+      treeNode102.Text = "List workflows";
+      treeNode103.Name = "";
+      treeNode103.Text = "List WF nodes";
+      treeNode104.Name = "";
+      treeNode104.Text = "Start AdHoc Workflow";
+      treeNode105.Name = "";
+      treeNode105.Text = "Workflow";
+      treeNode106.Name = "";
+      treeNode106.Text = "Select Keyword";
+      treeNode107.Name = "";
+      treeNode107.Text = "Checkin/out, cook Keywords";
+      treeNode108.Name = "";
+      treeNode108.Text = "Keyword";
+      this.tvExamples.Nodes.AddRange(new System.Windows.Forms.TreeNode[] {
+            treeNode58,
+            treeNode73,
+            treeNode83,
+            treeNode89,
+            treeNode94,
+            treeNode96,
+            treeNode98,
+            treeNode101,
+            treeNode105,
+            treeNode108});
+      this.tvExamples.Size = new System.Drawing.Size(264, 216);
+      this.tvExamples.TabIndex = 4;
+      this.tvExamples.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.tvExamples_AfterSelect);
+      // 
+      // lbURL
+      // 
+      this.lbURL.Location = new System.Drawing.Point(8, 280);
+      this.lbURL.Name = "lbURL";
+      this.lbURL.Size = new System.Drawing.Size(40, 23);
+      this.lbURL.TabIndex = 5;
+      this.lbURL.Text = "URL";
+      // 
+      // txURL
+      // 
+      this.txURL.Location = new System.Drawing.Point(56, 280);
+      this.txURL.Name = "txURL";
+      this.txURL.Size = new System.Drawing.Size(216, 20);
+      this.txURL.TabIndex = 6;
+      this.txURL.Text = "http://localhost:8084/ix/ix";
+      // 
+      // bnRunAll
+      // 
+      this.bnRunAll.Location = new System.Drawing.Point(80, 8);
+      this.bnRunAll.Name = "bnRunAll";
+      this.bnRunAll.Size = new System.Drawing.Size(56, 23);
+      this.bnRunAll.TabIndex = 7;
+      this.bnRunAll.Text = "Run all";
+      this.bnRunAll.Click += new System.EventHandler(this.bnRunAll_Click);
+      // 
+      // label2
+      // 
+      this.label2.Location = new System.Drawing.Point(8, 320);
+      this.label2.Name = "label2";
+      this.label2.Size = new System.Drawing.Size(100, 23);
+      this.label2.TabIndex = 8;
+      this.label2.Text = "Name";
+      // 
+      // txUserName
+      // 
+      this.txUserName.Location = new System.Drawing.Point(120, 320);
+      this.txUserName.Name = "txUserName";
+      this.txUserName.Size = new System.Drawing.Size(152, 20);
+      this.txUserName.TabIndex = 9;
+      this.txUserName.Text = "Administrator";
+      // 
+      // label3
+      // 
+      this.label3.Location = new System.Drawing.Point(8, 360);
+      this.label3.Name = "label3";
+      this.label3.Size = new System.Drawing.Size(100, 23);
+      this.label3.TabIndex = 10;
+      this.label3.Text = "Password";
+      // 
+      // txUserPwd
+      // 
+      this.txUserPwd.Location = new System.Drawing.Point(120, 360);
+      this.txUserPwd.Name = "txUserPwd";
+      this.txUserPwd.Size = new System.Drawing.Size(152, 20);
+      this.txUserPwd.TabIndex = 11;
+      this.txUserPwd.Text = "elo";
+      // 
+      // rtxLog
+      // 
+      this.rtxLog.Font = new System.Drawing.Font("Courier New", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+      this.rtxLog.Location = new System.Drawing.Point(288, 48);
+      this.rtxLog.Name = "rtxLog";
+      this.rtxLog.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.ForcedBoth;
+      this.rtxLog.Size = new System.Drawing.Size(336, 400);
+      this.rtxLog.TabIndex = 13;
+      this.rtxLog.Text = "";
+      this.rtxLog.WordWrap = false;
+      this.rtxLog.TextChanged += new System.EventHandler(this.rtxLog_TextChanged);
+      // 
+      // Form1
+      // 
+      this.AutoScaleBaseSize = new System.Drawing.Size(5, 13);
+      this.ClientSize = new System.Drawing.Size(632, 453);
+      this.Controls.Add(this.rtxLog);
+      this.Controls.Add(this.txUserPwd);
+      this.Controls.Add(this.txUserName);
+      this.Controls.Add(this.txURL);
+      this.Controls.Add(this.label3);
+      this.Controls.Add(this.label2);
+      this.Controls.Add(this.bnRunAll);
+      this.Controls.Add(this.lbURL);
+      this.Controls.Add(this.tvExamples);
+      this.Controls.Add(this.bnClose);
+      this.Controls.Add(this.bnRun);
+      this.Name = "Form1";
+      this.Text = "Run examples";
+      this.ResumeLayout(false);
+      this.PerformLayout();
+
+    }
+		#endregion
+
+		/// <summary>
+		/// Der Haupteinstiegspunkt für die Anwendung.
+		/// </summary>
+		[STAThread]
+		static void Main() 
+		{
+			Application.Run(new Form1());
+		}
+
+		private void bnClose_Click(object sender, System.EventArgs e)
+		{
+			this.Close();
+		}
+
+		private void tvExamples_AfterSelect(object sender, System.Windows.Forms.TreeViewEventArgs e)
+		{
+		}
+
+		public void assertTrue(String msg, bool failIfFalse) 
+		{
+			if (!failIfFalse)
+			{
+				fail(msg, null);
+			}
+		}
+
+		public void fail(String msg, Exception ex) 
+		{
+			throw new InvalidOperationException(msg, ex);
+		}
+
+		private void dispatchCommand(String cmd) 
+		{
+			Logger.instance().log("---- begin " + cmd);
+      if (cmd.IndexOf("Standard login") >= 0) 
+      {
+        Logger.instance().log("**** refer to StandardLogin.cs");
+        StandardLogin example = new StandardLogin();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      } 
+      else if (cmd.IndexOf("Single-sign-on login") >= 0) 
+      {
+        Logger.instance().log("**** refer to SingleSignOnLogin.cs");
+        SingleSignOnLogin example = new SingleSignOnLogin();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.runAs = txUserName.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Lock archive with key") >= 0) 
+      {
+        Logger.instance().log("**** refer to LockArchive.cs");
+        LockArchive example = new LockArchive();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.lockKey = "0";
+        example.run();
+      }
+      else if (cmd.IndexOf("Create Sord") >= 0) 
+      {
+        Logger.instance().log("**** refer to CreateSord.cs");
+        CreateSord example = new CreateSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin/-out Sord") >= 0) 
+      {
+        Logger.instance().log("**** refer to CheckinOutSord.cs");
+        CheckinOutSord example = new CheckinOutSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Change Keywording form") >= 0) 
+      {
+        Logger.instance().log("**** refer to ChangeSordMask.cs");
+        ChangeSordMask example = new ChangeSordMask();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Move Sord") >= 0) 
+      {
+        Logger.instance().log("**** refer to MoveSord.cs");
+        MoveSord example = new MoveSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Create logical reference to Sord") >= 0)
+      {
+        Logger.instance().log("**** refer to CopySord.cs");
+        CopySord example = new CopySord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Delete Sord") >= 0) 
+      {
+        Logger.instance().log("**** refer to DeleteSord.cs");
+        DeleteSord example = new DeleteSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkout and unlock") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckoutAndUnlock.cs");
+        CheckoutAndUnlock example = new CheckoutAndUnlock();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkout by index attribute") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckoutByIndex.cs");
+        CheckoutByIndex example = new CheckoutByIndex();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkout by archive path") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckoutByArcPath.cs");
+        CheckoutByArcPath example = new CheckoutByArcPath();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Access Control Lists") >= 0)
+      {
+        Logger.instance().log("**** refer to SordACL.cs");
+        SordACL example = new SordACL();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Sord performance") >= 0)
+      {
+        Logger.instance().log("**** refer to SordPerformance.cs");
+        SordPerformance example = new SordPerformance();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("View + Edit Sord") >= 0)
+      {
+        Logger.instance().log("**** refer to ViewAndEditSord.cs");
+        ViewAndEditSord example = new ViewAndEditSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Link Sords") >= 0)
+      {
+        Logger.instance().log("**** refer to LinkSord.cs");
+        LinkSord example = new LinkSord();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin new document") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinNewDocument.cs");
+        CheckinNewDocument example = new CheckinNewDocument();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin new encrypted") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinOutDocEncrypted.cs");
+        CheckinOutDocEncrypted example = new CheckinOutDocEncrypted();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin one document version") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinNewDocVersion.cs");
+        CheckinNewDocVersion example = new CheckinNewDocVersion();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin many document versions") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinManyDocVersions.cs");
+        CheckinManyDocVersions example = new CheckinManyDocVersions();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin document + signature") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinNewDocAndSig.cs");
+        CheckinNewDocAndSig example = new CheckinNewDocAndSig();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin attachment") >= 0)
+      {
+        Logger.instance().log("**** refer to CheckinAttachment.cs");
+        CheckinAttachment example = new CheckinAttachment();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Document performance") >= 0)
+      {
+        Logger.instance().log("**** refer to DocPerformance.cs");
+        DocPerformance example = new DocPerformance();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Document performance with CheckinDocsEnd") >= 0)
+      {
+        Logger.instance().log("**** refer to DocPerformance2.cs");
+        DocPerformance2 example = new DocPerformance2();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Small document performance") >= 0)
+      {
+        Logger.instance().log("**** refer to DocPerformanceSmall.cs");
+        DocPerformanceSmall example = new DocPerformanceSmall();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find all (#-search)") >= 0)
+      {
+        Logger.instance().log("**** refer to FindAll.cs");
+        FindAll example = new FindAll();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find-first, find-next") >= 0)
+      {
+        Logger.instance().log("**** refer to FindFirstFindNext.cs");
+        FindFirstFindNext example = new FindFirstFindNext();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find children (browse archive tree)") >= 0)
+      {
+        Logger.instance().log("**** refer to FindChildren.cs");
+        FindChildren example = new FindChildren();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find by index values") >= 0)
+      {
+        Logger.instance().log("**** refer to FindByIndexValues.cs");
+        FindByIndexValues example = new FindByIndexValues();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find by index range") >= 0)
+      {
+        Logger.instance().log("**** refer to FindByIndexRange.cs");
+        FindByIndexRange example = new FindByIndexRange();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      } 
+      else if (cmd.IndexOf("List user names") >= 0) 
+      {
+        Logger.instance().log("**** refer to ListUserNames.cs");
+        ListUserNames example = new ListUserNames();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("List user rights") >= 0) 
+      {
+        Logger.instance().log("**** refer to ViewUserRights.cs");
+        ViewUserRights example = new ViewUserRights();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Create/Delete user/group") >= 0) 
+      {
+        Logger.instance().log("**** refer to CreateDeleteUser.cs");
+        CreateDeleteUser example = new CreateDeleteUser();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Create/Delete keys") >= 0) 
+      {
+        Logger.instance().log("**** refer to CreateDeleteKeys.cs");
+        CreateDeleteKeys example = new CreateDeleteKeys();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Create, checkin, checkout, delete storage mask") >= 0) 
+      {
+        Logger.instance().log("**** refer to CreateStorageMask.cs");
+        CreateStorageMask example = new CreateStorageMask();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("List basic data") >= 0) 
+      {
+        Logger.instance().log("**** refer to ListBasicData.cs");
+        ListBasicData example = new ListBasicData();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin/-out report options") >= 0) 
+      {
+        Logger.instance().log("**** refer to ReportOptions.cs");
+        ReportOptions example = new ReportOptions();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Find report") >= 0) 
+      {
+        Logger.instance().log("**** refer to FindReport.cs");
+        FindReport example = new FindReport();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("List workflows") >= 0) 
+      {
+        Logger.instance().log("**** refer to ListWorkFlows.cs");
+        ListWorkFlows example = new ListWorkFlows();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("List WF nodes") >= 0) 
+      {
+        Logger.instance().log("**** refer to ListWorkFlowNodes.cs");
+        ListWorkFlowNodes example = new ListWorkFlowNodes();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Start AdHoc Workflow") >= 0) 
+      {
+        Logger.instance().log("**** refer to StartAdhocWorkFlow.cs");
+        StartAdhocWorkFlow example = new StartAdhocWorkFlow();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Select Keyword") >= 0) 
+      {
+        Logger.instance().log("**** refer to SelectKeyword.cs");
+        SelectKeyword example = new SelectKeyword();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Checkin/out, cook Keywords") >= 0) 
+      {
+        Logger.instance().log("**** refer to CheckinKeywords.cs");
+        CheckinKeywords example = new CheckinKeywords();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+      else if (cmd.IndexOf("Sord types (lables, icons, file extensions)") >= 0) 
+      {
+        Logger.instance().log("**** refer to CheckinSordTypes.cs");
+        CheckinSordTypes example = new CheckinSordTypes();
+        example.url = txURL.Text;
+        example.userName = txUserName.Text;
+        example.userPwd = txUserPwd.Text;
+        example.run();
+      }
+
+
+      Logger.instance().log("---- end " + cmd);
+
+			
+		}
+
+		private void bnRun_Click(object sender, System.EventArgs e)
+		{
+			rtxLog.Clear();
+
+			try 
+			{
+				if (tvExamples.SelectedNode == null) return;
+				
+				String cmd = tvExamples.SelectedNode.Text;
+				dispatchCommand(cmd);
+			} 
+			catch (Exception ex) 
+			{
+				System.Windows.Forms.MessageBox.Show(ex.ToString(), "Exception");
+			}
+			finally 
+			{
+			}
+		}
+
+		private void bnRunAll_Click(object sender, System.EventArgs e)
+		{
+			rtxLog.Clear();
+
+			try 
+			{
+				foreach (TreeNode i in tvExamples.Nodes) 
+				{
+					foreach (TreeNode j in i.Nodes) 
+					{
+						dispatchCommand(j.Text);
+					}
+				}
+			} 
+			finally 
+			{
+			}
+		}
+
+		private void rtxLog_TextChanged(object sender, System.EventArgs e)
+		{
+		
+		}
+
+	}
+}

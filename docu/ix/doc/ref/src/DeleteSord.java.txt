@@ -1,0 +1,148 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.ObjKey;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ * This example demonstrates the use of deleteSord()
+ * 
+ */
+public class DeleteSord {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static String parentId;
+    private static String maskId;
+    private static int objId1;
+    private static int objId2;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            createSords();
+
+            // delete the folders    
+            deleteSord();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void createSords() throws RemoteException {
+        
+        // Prepare a folder object in archive top level - the folder will not 
+        // be inserted into the archive at this point.
+        parentId = "1"; // parentId = 1 is the top level in archive
+        maskId = "Basic Entry"; //Mask name or identifier
+        EditInfo ed1 = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbSord());
+        Sord sord1 = ed1.getSord();
+        
+        // Assign a name, "New Folder"
+        sord1.setName("New Folder 1" + (new Date()));
+        
+        // Assign index values
+        ObjKey[] objKeys1 = sord1.getObjKeys();
+        
+                
+        //Store folder object in archive
+        objId1 = ix.ix().checkinSord(sord1, SORD.getMbAll(), LOCK.getNO());
+        
+        // Second Folder - insert in first folder
+        parentId = Integer.toString(objId1);
+        EditInfo ed2 = ix.ix().createSord(parentId, maskId, EDIT_INFO.getMbSord());
+        Sord sord2 = ed2.getSord();
+        
+        // Assign a name, "New Sub-folder"
+        sord2.setName("New Sub-folder" + (new Date()));
+        
+        // Assign index values
+        ObjKey[] objKeys2 = sord2.getObjKeys();
+        
+                
+        //Store folder object in archive
+        
+        objId2 = ix.ix().checkinSord(sord2, SORD.getMbAll(), LOCK.getNO());
+        
+        // Display new folder names
+        System.out.println("inserted sord: name=" + 
+                            sord1.getName() + ", id=" + 
+                            objId1 + ", guid=" + 
+                            sord1.getGuid());
+        System.out.println("inserted sord: name=" + 
+                            sord2.getName() + ", id=" + 
+                            objId2 + ", guid=" + 
+                            sord2.getGuid());
+ 
+    }
+     
+    public static void deleteSord() throws RemoteException {
+        
+        
+       // Delete folder containing sub-folder
+        parentId = "1"; //toplevel folder(archive)
+        String objId = Integer.toString(objId1);
+        DeleteOptions delOpts = new DeleteOptions();
+        delOpts.setDeleteFinally(false);
+        //Delete logically
+        ix.ix().deleteSord(parentId, objId, LOCK.getNO(), null);
+        
+        // Delete permanently
+        ix.ix().deleteSord(parentId, objId, LOCK.getNO(), delOpts);
+        
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

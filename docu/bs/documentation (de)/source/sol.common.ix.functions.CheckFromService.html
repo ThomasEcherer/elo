@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.CheckFromService&quot; });
+
+<span id='sol-common-ix-functions-CheckFromService'>/**
+</span> * Checks if a workflow was started by a service.
+ *
+ * To perform the check, this class uses {@link sol.common.WfUtils#isServiceWf}
+ *
+ * Can be used as node exit script. It updates the ELO_WF_STATUS field as configured.
+ *
+ * # As workflow node
+ *
+ * Following configuration can be applied to the comments field.
+ *
+ *     {
+ *       &quot;wfStatus&quot;: { &quot;fromService&quot;: &quot;CREATED_FROM_SERVICE&quot;, &quot;noneService&quot;: &quot;NOT_CREATED_FROM_SERVICE&quot; }
+ *     }
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.1
+ *
+ * @eloix
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.CheckFromService&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-CheckFromService-cfg-requiredConfig'>  requiredConfig: [&quot;wfDiagram&quot;],
+</span>
+<span id='sol-common-ix-functions-CheckFromService-cfg-wfDiagram'>  /**
+</span>   * @cfg {de.elo.ix.client.WFDiagram} wfDiagram (required)
+   * The workflow which should be checked.
+   */
+
+<span id='sol-common-ix-functions-CheckFromService-cfg-wfStatus'>  /**
+</span>   * @cfg {Object} wfStatus
+   *
+   *     &quot;wfStatus&quot;: { &quot;fromService&quot;: &quot;yaaay&quot;, &quot;noneService&quot;: &quot;ohNooo&quot; }
+   *
+   * This object can override the default workflow states which will be set after the check, if ths was used in a workflow node.
+   * If the is `undefined`, the unction will throw an exception in case the checke fails.
+   *
+   * - `fromService`: set as ELO_WF_STATUS after a successfull check
+   * - `noneService`: set as ELO_WF_STATUS after a check failure
+   */
+
+<span id='sol-common-ix-functions-CheckFromService-property-DEFAULT_PASSED_STATUS'>  /**
+</span>   * @private
+   * @property {String} [DEFAULT_PASSED_STATUS=&quot;FROM_SERVICE&quot;] Default workflow status in case of a successful check
+   */
+  DEFAULT_PASSED_STATUS: &quot;FROM_SERVICE&quot;,
+
+<span id='sol-common-ix-functions-CheckFromService-property-DEFAULT_FAILED_STATUS'>  /**
+</span>   * @private
+   * @property {String} [DEFAULT_FAILED_STATUS=&quot;FROM_USER&quot;] Default workflow status in case of a check failure
+   */
+  DEFAULT_FAILED_STATUS: &quot;FROM_USER&quot;,
+
+<span id='sol-common-ix-functions-CheckFromService-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-CheckFromService-method-process'>  /**
+</span>   * Performs the check.
+   */
+  process: function () {
+    var me = this,
+        isServiceWf, status;
+
+    isServiceWf = sol.common.WfUtils.isServiceWf(me.wfDiagram);
+
+    if (isServiceWf) {
+      status = (me.wfStatus &amp;&amp; me.wfStatus.fromService) ? me.wfStatus.fromService : me.DEFAULT_PASSED_STATUS;
+    } else {
+      status = (me.wfStatus &amp;&amp; me.wfStatus.noneService) ? me.wfStatus.noneService : me.DEFAULT_FAILED_STATUS;
+    }
+
+    sol.common.WfUtils.setWorkflowStatus(me.wfDiagram, status);
+  }
+
+});
+
+
+<span id='sol-common-ix-functions-CheckFromService-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.CheckFromService
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_FromServiceCheck&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.wfDiagram = wFDiagram;
+  module = sol.create(&quot;sol.common.ix.functions.CheckFromService&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_FromServiceCheck&quot;);
+}
+</pre>
+</body>
+</html>

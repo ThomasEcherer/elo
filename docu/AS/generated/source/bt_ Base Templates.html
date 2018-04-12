@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">var Sords = new Array();
+var showVersion = true;
+
+// start namespace bt
+<span id='bt'>/**
+</span> * @class bt
+ * @singleton
+ */
+var bt = new Object();
+
+<span id='bt-method-btExecuteRuleset'>/**
+</span> * Führt die Regel mit den angegebenen Parametern aus.
+ * 
+ * @param {String} name Regelname
+ * @param {Number} num Regelnummer
+ * @param {String} userid Benutzer ID
+ * @param {String} param1 Erstes Parameter
+ * @param {String} param2 Zweites Parameter
+ * @param {String} param3 Drittes Parameter
+ * @return {String} Ergebnis der Regelausführung
+ */
+function btExecuteRuleset(name, num, userid, param1, param2, param3) {
+  return bt.executeRuleset(name, num, userid, param1, param2, param3);
+}
+
+bt = {
+    
+<span id='bt-method-executeRuleset'>  /**
+</span>   * Führt die Regel mit den angegebenen Parametern aus.
+   *   
+   * @param {String} name Name der Regel
+   * @param {Number} num Regelnummer
+   * @param {String} userid Benutzer ID
+   * @param {String} param1 Erstes Parameter
+   * @param {String} param2 Zweites Parameter
+   * @param {String} param3 Drittes Parameter
+   * @return {String} Ergebnis der Regelausführung
+   */  
+  executeRuleset: function (name, num, userid, param1, param2, param3) {
+    if (showVersion) {
+      log.info(&quot;Start processing, Lib Version: &quot; + EM_VERSION_NO);
+      showVersion = false;
+    }
+        
+    if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+      log.info(&quot;executeRuleset interrupted &quot; + ruleset.getStop());
+      return;
+    }
+
+
+    EM_USERID = userid;
+
+    if (param1 != &quot;&quot;) {
+      EM_SEARCHVALUE = param1;
+    }
+
+    EM_PARAM1 = param1;
+    EM_PARAM2 = param2;
+    EM_PARAM3 = param3;
+    EM_TREE_STATE = 1;
+
+    try {
+      log.debug(&quot;Execute &quot; + EM_SEARCHNAME);
+
+      onStart();
+      if (EM_SEARCHNAME == &quot;TREEWALK&quot;) {
+        bt.doTreeWalk();
+      } else if (EM_SEARCHNAME == &quot;WORKFLOW&quot;) {
+        bt.doWorkflow();
+      } else if (EM_SEARCHNAME == &quot;DIRECT&quot;) {
+        bt.doDirect();
+      } else if (EM_SEARCHNAME.indexOf(&quot;MAILBOX&quot;) == 0) {
+        bt.doMail();
+      } else {
+        bt.executeSearch();
+        elo.processResultSet();
+      }
+      onEnd();
+    } catch (ex) {
+      log.info(&quot;Error exceuteRuleset: &quot; + ex);
+    }
+
+    log.info(&quot;Stop status: &quot; + (ruleset.getStop &amp;&amp; ruleset.getStop()));
+    sysExitRuleset();
+
+    return &quot;Idle...&quot;;
+  },
+
+<span id='bt-method-exitRuleset'>  /**
+</span>   * Diese Funktion loggt das Verlassen des Moduls.
+   */
+  exitRuleset: function () {
+    log.debug(&quot;Exit Base Templates&quot;);
+  },
+
+<span id='bt-method-doDirect'>  /**
+</span>   * Führt die aktuelle direkte Regel aus.
+   */
+  doDirect: function () {
+    var sord;
+
+    if (EM_SEARCHVALUE != &quot;&quot;) {
+      var members = (EM_WITH_LOCK) ? EditInfoC.mbSordLean : EditInfoC.mbAll;
+      var items = EM_SEARCHVALUE.split(&quot;,&quot;);
+      for (var i = 0; i &lt; items.length; i++) {
+        EM_SEARCHVALUE = items[i];
+        var editInfo = ixConnect.ix().checkoutSord(EM_SEARCHVALUE,members, LockC.NO);
+        sord = editInfo.getSord();
+        bt.processObject(sord);
+      }
+    } else {
+      sord = new Sord();
+      sys.processRules(sord);
+    }
+
+  },
+
+<span id='bt-method-doMail'>  /**
+</span>   * Versendet eine neue E-Mail.
+   */
+  doMail: function () {
+    try {
+      var conName = EM_SEARCHNAME.substring(8);
+      mail.connectImap(conName);
+      while (mail.nextMessage()) {
+        if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+          log.info(&quot;doMail interrupted&quot;);
+          return;
+        }
+        
+        var editInfo = ixConnect.ix().createDoc(EM_SEARCHVALUE, EM_SEARCHMASK, null, EditInfoC.mbAll);
+        var sord = editInfo.getSord();
+        sord.name = MAIL_MESSAGE.getSubject();
+        bt.processObject(sord);
+      }
+      mail.closeImap();
+    } catch (ex) {
+      log.error(&quot;Error collecting mails: &quot; + ex);
+      return;
+    }
+  },
+
+<span id='bt-method-doWorkflow'>  /**
+</span>   * Arbeitet die vorhandenen Workflows ab.
+   */
+  doWorkflow: function () {
+    var result = null;
+    
+    try {
+      var fTI = new FindTasksInfo();
+      fTI.setInclWorkflows(true);
+      fTI.setLowestPriority(2);
+      fTI.setHighestPriority(0);
+      var result = ixConnect.ix().findFirstTasks(fTI, EM_SEARCHCOUNT);
+      var idx = 0;
+      for (;;) {
+        if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+          log.info(&quot;doWorkflow interrupted&quot;);
+          return;
+        }
+        
+        EM_TASKLIST = result.getTasks();
+        
+        try {
+          bt.processTaskList();
+        } catch (ex2) {
+          log.error(&quot;Error processing task list: &quot; + ex2);
+        }
+      
+        if (!result.moreResults) {
+          break;
+        }
+        
+        idx += EM_TASKLIST.length;
+        result = ixConnect.ix().findNextTasks( result.searchId, idx, EM_SEARCHCOUNT );
+      }
+    } catch (ex) {
+      log.error(&quot;Error collection task list: &quot; + ex);
+      return;
+    } finally {
+      if (result) {
+        ixConnect.ix().findClose(result.searchId);
+      }
+    }
+  },
+
+<span id='bt-method-processTaskList'>  /**
+</span>   * Arbeitet die Workflows in der Aufgabenliste ab.
+   */
+  processTaskList: function () {
+    var members = (EM_WITH_LOCK) ? EditInfoC.mbSordLean : EditInfoC.mbAll;
+    for (var i = 0; i &lt; EM_TASKLIST.length; i++) {
+      if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+        log.info(&quot;processTaskList interrupted&quot;);
+        return;
+      }
+      
+      var node = EM_TASKLIST[i].getWfNode();
+      if (node) {
+        if (EM_WF_FILTER_NAME &amp;&amp; (EM_WF_FILTER_NAME != node.nodeName)) {
+          log.debug(&quot;Filter - ignore task: &quot; + node.nodeName);
+          continue;
+        }
+          
+        try {
+          var objId = node.getObjId();
+          var editInfo = ixConnect.ix().checkoutSord(objId, members, LockC.NO);
+          var sord = editInfo.getSord();
+          
+          if (sord &amp;&amp; (EM_ALLOWALLMASKS || (sord.getMask() == EM_SEARCHMASK))) {
+            EM_WF_NEXT = &quot;&quot;;
+            EM_WF_NODE = node;
+            EM_WF_STATUS = node.flowStatus;
+            bt.processObject(sord);
+            bt.processNextWf(node);
+          }
+        
+        } catch(e) {
+          log.warn(&quot;Error processing task item: &quot; + e);
+        }
+      }
+    }
+
+    ruleset.setStatusMessage(&quot;Wait.&quot;);
+  },
+
+<span id='bt-method-processNextWf'>  /**
+</span>   * Arbeitet den nächsten Workflowknoten ab.
+   * 
+   * @param {WFNode} node Workflow-Knoten
+   */
+  processNextWf: function (node) {
+    if (EM_WF_NEXT != &quot;&quot;) {
+      var succList = new Array();
+
+      try {
+        var wfNode = ixConnect.ix().beginEditWorkFlowNode(node.getFlowId(), node.getNodeId(), LockC.YES);
+        var nodeName = wfNode.getNode().getName();
+        var succNodes = wfNode.getSuccNodes();
+        var parts = EM_WF_NEXT.split(&quot;¶&quot;);
+        for (var p = 0; p &lt; parts.length; p++) {
+          var part = parts[p];
+          var succNo = Number(part);
+          if (isFinite(succNo) &amp;&amp; (succNo &gt;= 0) &amp;&amp; (succNo &lt; succNodes.length)) {
+            succList.push(succNodes[succNo].getId());
+          } else {
+            for (var i = 0; i &lt; succNodes.length; i++) {
+              if (part == succNodes[i].getName()) {
+                succList.push(succNodes[i].getId());
+                break;
+              }
+            }
+          }
+        }
+
+        var comment = wfNode.node.comment;
+        if (comment) {
+          comment = comment + &quot;\n\nprocessed by ELOas&quot;;
+        } else {
+          comment = &quot;processed by ELOas&quot;;
+        }
+        
+        ixConnect.ix().endEditWorkFlowNode(node.getFlowId(), node.getNodeId(), false, false, nodeName, comment, succList);
+
+        if (EM_WF_STATUS != node.flowStatus) {
+          var workflow = wf.readWorkflow(node.flowId, true);
+          var nodes = workflow.nodes;
+          for(var n = 0; n &lt; nodes.length; n++) {
+            var root = nodes[n];
+            if (root.id == 0) {
+              root.yesNoCondition = EM_WF_STATUS;
+              break;
+            }
+          }
+          wf.writeWorkflow(workflow);
+        }
+      } catch (ex) {
+        log.error(&quot;Confirm Workflow Node exception: &quot; + ex);
+        var wfdiag = wf.readWorkflow(node.getFlowId(), false);
+        try {
+          ixConnect.ix().checkinWorkFlow(wfdiag, WFDiagramC.mbOnlyLock, LockC.YES);
+        } catch (ex2) {
+          log.error(&quot;Cannot unlock Workflow: &quot; + ex2);
+        }
+      }
+    }
+  },
+
+<span id='bt-method-doTreeWalk'>  /**
+</span>   * Läuft einen Teilbaum durch und arbeitet die Einträge ab.
+   */
+  doTreeWalk: function () {
+    try {
+      EM_SAVE_TREE_ROOT = false;
+      EM_TREE_ABORT_WALK = false;
+      EM_TREE_MAX_LEVEL = 32;
+      var editInfo = ixConnect.ix().checkoutSord(EM_SEARCHVALUE, EditInfoC.mbAll, LockC.NO);
+      var name = editInfo.sord.name;
+      log.debug(&quot;Process tree: &quot; + name);
+      EM_ROOT_SORD = editInfo.sord;
+      bt.walkLevel(0, editInfo.sord);
+      if (EM_SAVE_TREE_ROOT) {
+        ixConnect.ix().checkinSord(editInfo.sord, SordC.mbAll, LockC.NO);
+      }
+      log.debug(&quot;Exit process tree&quot;);
+    } catch (ex) {
+      log.warn(&quot;Cannot process tree &quot; + EM_SEARCHVALUE + &quot; : &quot; + ex);
+    }
+  },
+
+<span id='bt-method-walkLevel'>  /**
+</span>   * Läuft den angegebenen Level durch und arbeitet die Einträge ab. 
+   * 
+   * @param {Object} actLevel Level
+   * @param {Sord} parentSord Übergeordneter Archiveintrag
+   */
+  walkLevel: function (actLevel, parentSord) {
+    if ((actLevel &gt; EM_TREE_MAX_LEVEL) || EM_TREE_ABORT_WALK) {
+      log.debug(&quot;Tree walk aborted: &quot; + actLevel + &quot; : &quot; + EM_TREE_MAX_LEVEL + &quot; : &quot; + EM_TREE_ABORT_WALK);
+      return;
+    }
+
+    var findInfo = new FindInfo();
+    var findChildren = new FindChildren();
+    findChildren.setParentId(parentSord.getId());
+    findChildren.setMainParent(EM_TW_MAINPARENT);
+    findInfo.setFindChildren(findChildren);
+
+    var members = (EM_WITH_LOCK) ? SordC.mbMin : SordC.mbAll;
+    var findResult = ixConnect.ix().findFirstSords(findInfo, EM_SEARCHCOUNT, members);
+    var idx = 0;
+
+    if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+      log.info(&quot;walkLevel 1 interrupted&quot;);
+      return;
+    }
+    
+    // Read all entries before processing of the subitems because of the search timeout
+    var sords = findResult.sords;
+    while (findResult.isMoreResults()) {
+      if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+        log.info(&quot;walkLevel 3 interrupted&quot;);
+        break;
+      }
+      
+      idx = sords.length;
+      findResult = ixConnect.ix().findNextSords(findResult.getSearchId(), idx, EM_SEARCHCOUNT, members);
+      sords = ArrayUtils.addAll(sords, findResult.sords);
+    }
+    
+    ixConnect.ix().findClose(findResult.getSearchId());
+    log.debug(&quot;Process Sord list, length: &quot; + sords.length);
+
+    // process item list.
+    var i;
+    for (i = 0; i &lt; sords.length; i++) {
+      log.info(&quot;TW Interrupt status: &quot; + (ruleset.getStop &amp;&amp; ruleset.getStop()) + &quot;, id: &quot; + Thread.currentThread().id);
+      if (EM_TREE_ABORT_WALK) {
+        log.debug(&quot;Tree walk aborted&quot;);
+        break;
+      }
+
+      if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+        log.info(&quot;walkLevel 2 interrupted&quot;);
+        break;
+      }
+      
+      log.debug(&quot;Process Sord: &quot; + sords[i].name);
+
+      EM_TREE_STATE = 0;
+      EM_TREE_LEVEL = actLevel;
+      EM_PARENT_SORD = parentSord;
+      EM_TREE_EVAL_CHILDREN = true;
+      bt.processObject(sords[i]);
+
+      if (EM_TREE_EVAL_CHILDREN) {
+        bt.walkLevel(actLevel + 1, sords[i]);
+      } else {
+        log.debug(&quot;Tree walk, eval children suppressed&quot;);
+      }
+
+      EM_TREE_STATE = 1;
+      EM_TREE_LEVEL = actLevel;
+      EM_PARENT_SORD = parentSord;
+      bt.processObject(sords[i]);
+    }
+  },
+
+<span id='bt-method-executeSearch'>  /**
+</span>   * Führt eine Suche aus.
+   */
+  executeSearch: function () {
+    log.info(&quot;Start Execute Search&quot;);
+    try {
+      if (EM_FIND_RESULT == null) {
+        bt.startNewSearch();
+      } else {
+        bt.continueSearch();
+      }
+    } catch (ex) {
+      log.info(&quot;Search aborted: &quot; + ex);
+      EM_FIND_RESULT = null;
+    }
+  },
+
+<span id='bt-method-startNewSearch'>  /**
+</span>   * Startet eine neue Suche nach einer Objekt ID oder nach einem Index.
+   */
+  startNewSearch: function () {
+    if (EM_SEARCHNAME == &quot;OBJIDS&quot;) {
+      return bt.startNewSearchObjIds();
+    } else {
+      return bt.startNewSearchIndex();
+    }
+  },
+
+<span id='bt-method-startNewSearchObjIds'>  /**
+</span>   * Startet eine neue Suche nach Objekt IDs.
+   */
+  startNewSearchObjIds: function () {
+    ruleset.setStatusMessage(&quot;Loading objids...&quot;);
+    var findInfo = new FindInfo();
+    var findByIndex = new FindByIndex();
+
+    var objKey = new ObjKey();
+    var keyData = new Array(1);
+    keyData[0] = &quot;&quot;;
+    objKey.setName(&quot;*&quot;);
+    objKey.setData(keyData);
+
+    var objKeys = new Array(1);
+    objKeys[0] = objKey;
+
+    findByIndex.setObjKeys(objKeys);
+    findInfo.setFindByIndex(findByIndex);
+
+    var findOptions = FindOptions();
+    var ids = EM_SEARCHVALUE.split(&quot;,&quot;);
+    findOptions.setObjIds(ids);
+    findInfo.setFindOptions(findOptions);
+
+    var members = (EM_WITH_LOCK) ? SordC.mbMin : SordC.mbAll;
+    EM_FIND_RESULT = ixConnect.ix().findFirstSords(findInfo, EM_SEARCHCOUNT, members);
+    EM_START_INDEX = 0;
+    bt.getSearchResult();
+  },
+
+<span id='bt-method-startNewSearchIndex'>  /**
+</span>   * Startet eine neue Suche nach einem Index.
+   */
+  startNewSearchIndex: function () {
+    ruleset.setStatusMessage(&quot;Searching...&quot;);
+    var findInfo = new FindInfo();
+    var findByIndex = new FindByIndex();
+
+    if (EM_SEARCHNAME == &quot;ELOTIMESTAMP&quot;) {
+      findByIndex.name = &quot;*&quot;;
+      var findOptions = new FindOptions();
+      findOptions.TStamp = EM_SEARCHVALUE;
+      findInfo.findOptions = findOptions;
+    } else {
+      var values = EM_SEARCHVALUE.split(&quot;¶&quot;);
+      var names = EM_SEARCHNAME.split(&quot;¶&quot;);
+      var cnt = (values.length &lt; names.length) ? values.length : names.length;
+      
+      var objKeys = new Array();
+      for (var k = 0; k &lt; cnt; k++) {
+        var objKey = new ObjKey();
+        objKey.name = names[k];
+        objKey.data = [values[k]];
+        objKeys.push(objKey);
+      }
+
+      findByIndex.setObjKeys(objKeys);
+    }
+
+    findByIndex.setMaskId(EM_SEARCHMASK);
+
+    if ((EM_XDATEFROM != &quot;&quot;) || (EM_XDATETO != &quot;&quot;)) {
+      var xdate = elo.decodeDate(EM_XDATEFROM) + &quot;...&quot; + elo.decodeDate(EM_XDATETO);
+      findByIndex.setXDateIso(xdate);
+      log.debug(&quot;Find by XDate: &quot; + xdate);
+    }
+
+    if ((EM_IDATEFROM != &quot;&quot;) || (EM_IDATETO != &quot;&quot;)) {
+      var idate = elo.decodeDate(EM_IDATEFROM) + &quot;...&quot; + elo.decodeDate(EM_IDATETO);
+      findByIndex.setIDateIso(idate);
+      log.debug(&quot;Find by IDate: &quot; + idate);
+    }
+
+    findInfo.setFindByIndex(findByIndex);
+
+    var members = (EM_WITH_LOCK) ? SordC.mbMin : SordC.mbAll;
+    EM_FIND_RESULT = ixConnect.ix().findFirstSords(findInfo, EM_SEARCHCOUNT, members);
+    EM_START_INDEX = 0;
+    bt.getSearchResult();
+  },
+
+<span id='bt-method-continueSearch'>  /**
+</span>   * Arbeitet den weiteren Teil der Suchergebnisse ab.
+   */
+  continueSearch: function () {
+    var members = (EM_WITH_LOCK) ? SordC.mbMin : SordC.mbAll;
+    EM_FIND_RESULT = ixConnect.ix().findNextSords(EM_FIND_RESULT.getSearchId(), EM_START_INDEX, EM_SEARCHCOUNT, members);
+    bt.getSearchResult();
+  },
+
+<span id='bt-method-getSearchResult'>  /**
+</span>   * Liefert das Suchergebnis zurück.
+   */
+  getSearchResult: function () {
+    Sords = EM_FIND_RESULT.getSords();
+    ruleset.setMoreResults(EM_FIND_RESULT.isMoreResults());
+    log.debug(&quot;More results available: &quot; + EM_FIND_RESULT.isMoreResults());
+
+    if (EM_FIND_RESULT.isMoreResults()) {
+      EM_START_INDEX += Sords.length;
+    } else {
+      ixConnect.ix().findClose(EM_FIND_RESULT.getSearchId());
+      EM_FIND_RESULT = null;
+      EM_START_INDEX = 0;
+    }
+
+    log.info(&quot;Execute Search done, &quot; + Sords.length + &quot; entries found.&quot;);
+    ruleset.setStatusMessage(Sords.length + &quot; entries found&quot;);
+  },
+
+<span id='bt-method-processObject'>  /**
+</span>   * Arbeitet den angegebenen Archiveintrag ab.
+   * 
+   * @param {Sord} Sord Archiveintrag
+   */
+  processObject: function(Sord) {
+    if (ruleset.getStop &amp;&amp; ruleset.getStop()) {
+      log.info(&quot;processObject interrupted&quot;);
+      return;
+    }
+    
+    if (EM_WITH_LOCK) {
+      if (Sord.lockId &lt; 99990) {
+        var lockedSord;
+
+        try {
+          lockedSord = ixConnect.ix().checkoutSord(Sord.id, EditInfoC.mbAll, LockC.YES).sord;
+          bt.processObjectLocal(lockedSord);
+        } catch(e) {
+          log.info(&quot;Lock conflict, item ignored: &quot; + Sord.id + &quot; : &quot; + Sord.name + &quot; : Reason: &quot; + e);
+        } finally {
+          if (lockedSord) {
+            ixConnect.ix().checkinSord(lockedSord, SordC.mbOnlyUnlock, LockC.YES);
+          }
+        }
+      } else {
+        log.debug(&quot;Locked item ignored: &quot; + Sord.id + &quot; : &quot; + Sord.name);
+      }
+    } else {
+      bt.processObjectLocal(Sord);
+    }
+  },
+
+<span id='bt-method-processObjectLocal'>  /**
+</span>   * Arbeitet den angegebenen Archiveintrag ab.
+   * 
+   * @param {Sord} Sord Archiveintrag
+   */
+  processObjectLocal: function(Sord) {
+    EM_ACT_SORD = Sord;
+    elo.loadBaseData(Sord);
+    log.info(&quot;Sord: &quot; + NAME + &quot;   State: &quot; + EM_TREE_STATE);
+    ruleset.setStatusMessage(&quot;Process: &quot; + NAME);
+
+    try {
+      EM_MASK_LOADED = -1;
+      sys.loadIndexLines(Sord);
+      EM_INDEX_LOADED = EM_MASK_LOADED &gt;= 0;
+    } catch (ex) {
+      EM_INDEX_LOADED = false;
+    }
+
+    if (EM_TREE_STATE == 1) {
+      EM_NEW_DESTINATION = new Array();
+    } else {
+      EM_NEW_DESTINATION = undefined;
+    }
+
+    EM_WRITE_CHANGED = false;
+    sys.processRules(Sord);
+    log.debug(&quot;EM_WRITE_CHANGED: &quot; + EM_WRITE_CHANGED);
+
+    try {
+      elo.storeBaseData(Sord);
+      if (EM_INDEX_LOADED) {
+        sys.storeIndexLines(Sord);
+      }
+
+      if (EM_TREE_STATE == 1) {
+        bt.moveFinally(Sord);
+
+        if (EM_WRITE_CHANGED) {
+          var members = SordC.mbAll;
+          members.sub(SordC.mbReplSet);
+          members.sub(SordC.mbReplNames);
+          ixConnect.ix().checkinSord(Sord, members, LockC.NO);
+        }
+      }
+    } catch (e) {
+      EM_ERROR = e;
+      log.info(&quot;Error on store or move: &quot; + EM_ERROR);
+      try {
+        sys.finalErrorRule(Sord);
+        elo.storeBaseData(Sord);
+        sys.storeIndexLines(Sord);
+        if (EM_TREE_STATE == 1) {
+          bt.moveFinally(Sord);
+          var members = SordC.mbAll;
+          members.sub(SordC.mbReplSet);
+          members.sub(SordC.mbReplNames);
+          ixConnect.ix().checkinSord(Sord, members, LockC.NO);
+        }
+      } catch (e) {
+        log.error(&quot;Error in Error Rule: &quot; + e);
+      }
+    }
+  },
+
+<span id='bt-method-moveTo'>  /**
+</span>   * Verschiebt den Archiveintrag im angegebenen Ordner.
+   * 
+   * @param {Sord} Sord Archiveintrag
+   * @param {String} destination Zielordner
+   */
+  moveTo: function (Sord, destination) {
+    if (destination != &quot;*&quot;) {
+      log.debug(&quot;MoveTo &quot; + destination);
+      destination = EM_FOLDERMASK + &quot;¶¶¶.&quot; + destination;
+    } else {
+      log.debug(&quot;MoveTo: Keep actual position.&quot;);
+    }
+
+    EM_NEW_DESTINATION.push(destination);
+  },
+
+<span id='bt-method-moveFinally'>  /**
+</span>   * Verschiebt den angegebenen Archiveintrag endgültig im ersten vorhandenen 
+   * Zielpfad.
+   * 
+   * @param {Sord} Sord Verschlagwortung eines Archiveintrags
+   */
+  moveFinally: function (Sord) {
+    if (EM_NEW_DESTINATION.length &gt; 0) {
+      var destPath = EM_NEW_DESTINATION[0];
+      if (destPath != &quot;*&quot;) {
+        var destId = elo.preparePath(destPath);
+        log.debug(&quot;Dest: &quot; + destId + &quot;   Source: &quot; + Sord.getParentId());
+
+        if ((destId &gt; 0) &amp;&amp; (destId != Sord.getParentId())) {
+          ixConnect.ix().copySord(destId, Sord.getGuid(), null, CopySordC.MOVE);
+          Sord.setParentId(destId);
+        }
+      }
+
+      var i;
+      for (i = 1; i &lt; EM_NEW_DESTINATION.length; i++) {
+        var destId = elo.preparePath(EM_NEW_DESTINATION[i]);
+        log.debug(&quot;Add. Ref: Dest: &quot; + destId + &quot;   Source: &quot; + Sord.getParentId());
+
+        if ((destId &gt; 0) &amp;&amp; (destId != Sord.getParentId())) {
+          ixConnect.ix().copySord(destId, Sord.getGuid(), null, CopySordC.REFERENCE);
+        }
+      }
+    }
+  }
+
+  // end of namespace bt
+}</pre>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.Template.js
+
+<span id='sol-dev-jc-Versions'>/**
+</span> * Version check and reporting.
+ * 
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.0
+ * 
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;sol.dev.jc.Versions&quot;, {
+  singleton: true,
+  
+<span id='sol-dev-jc-Versions-property-htmlReport'>  /**
+</span>   * @private
+   * @property
+   */
+  htmlReport: undefined,
+
+<span id='sol-dev-jc-Versions-property-fileName'>  /**
+</span>   * @private
+   * @property
+   */
+  fileName: &quot;&quot;,
+
+<span id='sol-dev-jc-Versions-method-generateReport'>  /**
+</span>   * Generates a Version Script List in JSON-Format into a document.
+   */
+  generateReport: function () {
+    var me = this,
+        arcPath, scriptVersionList, strScriptVersionList, element;
+
+    arcPath = &quot;ARCPATH[1]:\\Administration\\Business Solutions&quot;;
+    element = workspace.activeView.firstSelected;
+    if (!element) {
+      workspace.showInfoBox(me.getText(&quot;sol.dev.Versions.titleCancel&quot;), me.getText(&quot;sol.dev.Versions.msgNoArchiveFolderSelected&quot;));
+      return;
+    }
+    arcPath = &quot;ARCPATH[1]:&quot; + element.sord.refPaths[0].pathAsString + &quot;\\&quot; + element.sord.name;
+    arcPath = me.replaceAll(&quot;¶&quot;, &quot;\\&quot;, arcPath);
+    scriptVersionList = sol.common.IxUtils.execute(&quot;RF_sol_common_service_ScriptVersionReportCreate&quot;, {
+      arcPath: arcPath
+    });
+    strScriptVersionList = sol.common.JsonUtils.stringifyAll(scriptVersionList, { tabStop: 2 });
+    me.saveTextToFile(strScriptVersionList, element.sord.name + &quot;.json&quot;, me.getText(&quot;sol.dev.Versions.titleSave&quot;));
+  },
+
+<span id='sol-dev-jc-Versions-method-validateReport'>  /**
+</span>   * Validates the report Version Script List in JSON-Format.
+   */
+  validateReport: function () {
+    var me = this,
+        result, strScriptVersionList, strFileName, jsonScriptVersionList, jsonScriptModifiedVersionList;
+
+    result = me.readTextFromFile(&quot;BusinessSolutions.json&quot;, me.getText(&quot;sol.dev.Versions.titleLoad&quot;));
+    strScriptVersionList = null;
+    strFileName = null;
+    if (result) {
+      strScriptVersionList = result.StrText;
+      strFileName = result.FileName;
+      me.fileName = strFileName.substr(0, strFileName.lastIndexOf(&quot;.&quot;));
+    }
+
+    jsonScriptVersionList = null;
+    if (strScriptVersionList) {
+      try {
+        jsonScriptVersionList = JSON.parse(strScriptVersionList);
+
+        jsonScriptModifiedVersionList = sol.common.IxUtils.execute(&quot;RF_sol_common_service_ScriptVersionReportValidate&quot;, {
+          jsonScriptVersionList: jsonScriptVersionList
+        });
+        me.createHtmlReport(jsonScriptModifiedVersionList);
+      } catch (e) {
+        jsonScriptVersionList = null;
+        jsonScriptModifiedVersionList = null;
+        workspace.showAlertBox(&quot;function validateReport() catch (e)&quot;, &quot;name:&quot; + e.name + &quot;\nmessage:&quot; + e.message);
+      }
+    }
+  },
+  
+<span id='sol-dev-jc-Versions-method-replaceAll'>  /**
+</span>   * @private
+   * Replace all
+   * @param {String} find Value, that will be replaced overall.
+   * @param {String} replace New Value to replace the old value.
+   * @param {String} str String to operate.
+   * @return {String} String after replacing.   
+   */
+  replaceAll: function (find, replace, str) {
+    return str.replace(new RegExp(find, &quot;g&quot;), replace);
+  },
+
+<span id='sol-dev-jc-Versions-method-saveTextToFile'>  /**
+</span>   * @private
+   * Saves text to file
+   * @param {String} strText Text content to save in file.
+   * @param {String} strFileName Default file name.
+   * @param {String} strDialogTitle Title of FileChooserDialog.
+   */
+  saveTextToFile: function (strText, strFileName, strDialogTitle) {
+    var file;
+
+    file = workspace.showFileChooserDialog(strDialogTitle, true, true, strFileName);
+    if (file) {
+      FileUtils.writeStringToFile(file[0], strText, &quot;UTF-8&quot;);
+    }
+  },
+
+<span id='sol-dev-jc-Versions-method-readTextFromFile'>  /**
+</span>   * @private
+   * Read text from file
+   * @param {String} strFileName Default file name.
+   * @param {String} strDialogTitle Title of FileChooserDialog.
+   * @return {Object} Text content read from file, file name.
+   */
+  readTextFromFile: function (strFileName, strDialogTitle) {
+    var file, strText, fileName, result;
+
+    strText = null;
+    fileName = null;
+    result = null;
+    file = workspace.showFileChooserDialog(strDialogTitle, false, true, strFileName);
+    if (file) {
+      try {
+        strText = FileUtils.readFileToString(file[0], &quot;UTF-8&quot;);
+        fileName = file[0].getName();
+        result = { StrText: strText, FileName: fileName };
+      } catch (e) {
+        strText = null;
+        fileName = null;
+        result = null;
+        workspace.showAlertBox(&quot;function readTextFromFile(strFileName, strDialogTitle) catch (e)&quot;, &quot;name:&quot; + e.name + &quot;\nmessage:&quot; + e.message);
+      }
+    }
+    return result;
+  },
+
+<span id='sol-dev-jc-Versions-method-dateFromIso'>  dateFromIso: function (isoDate) {
+</span>    var year, month, day, hours, minutes, seconds, milliseconds, timeDateJava;
+
+    year = isoDate.substr(0, 4);
+    month = isoDate.substr(4, 2);
+    month--;
+    day = isoDate.substr(6, 2);
+    hours = isoDate.substr(8, 2);
+    minutes = isoDate.substr(10, 2);
+    seconds = isoDate.substr(12, 2);
+    milliseconds = 0;
+    timeDateJava = new Date(year, month, day, hours, minutes, seconds, milliseconds);
+    return timeDateJava;
+  },
+
+<span id='sol-dev-jc-Versions-method-formatHtmlTableOutput'>  /**
+</span>   * @private
+   * Format HTML-Report from Version Script List in JSON-Format for Table-Output.
+   * @param {Object} scriptFiles Version Scriptfile List in JSON-Format.
+   * @return {Object} Modified Scriptfile List in JSON-Format with table format info
+   */
+  formatHtmlTableOutput: function (scriptFiles) {
+    var me = this,
+        i, fileentry, timeDateJava, f;
+
+    for (i = 0; i &lt; scriptFiles.length; i++) {
+      fileentry = scriptFiles[i];
+      if (i % 2 == 0) {
+        fileentry.td = &quot;td1&quot;;
+      } else {
+        fileentry.td = &quot;td2&quot;;
+      }
+      if (i == scriptFiles.length - 1) {
+        fileentry.td += &quot;b&quot;;
+      }
+      timeDateJava = me.dateFromIso(fileentry.date);
+      f = Packages.java.text.DateFormat.getDateTimeInstance(Packages.java.text.DateFormat.FULL, Packages.java.text.DateFormat.FULL, Packages.java.util.Locale.ENGLISH);
+      fileentry.date = f.format(timeDateJava);
+    }
+    return scriptFiles;
+  },
+
+<span id='sol-dev-jc-Versions-method-createHtmlReport'>  /**
+</span>   * @private
+   * Creates HTML-Report from Version Script List in JSON-Format.
+   * @param {Object} jsonScriptVersionList Version Script List in JSON-Format.
+   */
+  createHtmlReport: function (jsonScriptVersionList) {
+    var me = this,
+        modifiedScriptFiles, originalScriptFiles, scriptFiles, i, fileentry, 
+        tpl, titleReport, data, dlgBrowserReport, pnl, ctrBrowser, tempDir;
+
+    modifiedScriptFiles = [];
+    originalScriptFiles = [];
+    scriptFiles = jsonScriptVersionList.files;
+    for (i = 0; i &lt; scriptFiles.length; i++) {
+      fileentry = {};
+      fileentry.name = scriptFiles[i].name;
+      fileentry.editor = scriptFiles[i].editor;
+      fileentry.date = scriptFiles[i].date;
+      fileentry.guid = scriptFiles[i].guid;
+      fileentry.version = scriptFiles[i].version;
+      if (scriptFiles[i].modified) {
+        modifiedScriptFiles.push(fileentry);
+      } else {
+        originalScriptFiles.push(fileentry);
+      }
+    }
+    modifiedScriptFiles = me.formatHtmlTableOutput(modifiedScriptFiles);
+    originalScriptFiles = me.formatHtmlTableOutput(originalScriptFiles);
+
+    tpl = sol.create(&quot;sol.common.Template&quot;, {});
+    tpl.load(&quot;ARCPATH[(E10E1000-E100-E100-E100-E10E10E10E00)]:/Business Solutions/development/Configuration/Script Version List Templates/Default&quot;);
+    titleReport = &quot;ScriptVersionReport &quot; + me.fileName;
+    data = {
+      TitleReport: titleReport,
+      ModifiedScriptFiles: modifiedScriptFiles,
+      OriginalScriptFiles: originalScriptFiles
+    };
+    me.htmlReport = tpl.apply(data);
+
+    dlgBrowserReport = workspace.createGridDialog(titleReport, 30, 60);
+    pnl = dlgBrowserReport.gridPanel;
+    ctrBrowser = components.createBrowser();
+    pnl.addComponent(1, 1, 30, 58, ctrBrowser);
+
+    tempDir = workspace.directories.tempDir.path;
+    FileUtils.writeStringToFile(new File(tempDir + &quot;\\htmlreport.html&quot;), me.htmlReport, &quot;UTF-8&quot;);
+    ctrBrowser.navigate(&quot;file:///&quot; + tempDir + &quot;/htmlreport.html&quot;);
+    dlgBrowserReport.show(&quot;okEventDlgBrowserReport&quot;, &quot;closeEventDlgBrowserReport&quot;);
+  },
+
+<span id='sol-dev-jc-Versions-method-okEventDlgBrowserReport'>  /**
+</span>   * @private
+   * Event handler is called when &quot;OK&quot; is pressed in dialogue browser report.
+   * @return {Integer}
+   */
+  okEventDlgBrowserReport: function () {
+    var me = this;
+
+    me.saveTextToFile(me.htmlReport, me.fileName + &quot;.html&quot;, me.getText(&quot;sol.dev.Versions.titleHtmlSave&quot;));
+    return -1;
+  },
+
+<span id='sol-dev-jc-Versions-method-closeEventDlgBrowserReport'>  /**
+</span>   * @private
+   * Event handler is called when &quot;Cancel&quot; is pressed in dialogue browser report.
+   */
+  closeEventDlgBrowserReport: function () {
+    // workspace.showAlertBox(&quot;closeEventDlgBrowserReport&quot;, &quot;Cancel pressed&quot;);
+  },
+
+<span id='sol-dev-jc-Versions-method-getText'>  /**
+</span>   * @private
+   * Helper function to get a localized text of a specific key.
+   * @param {String} key Key for the text constant.
+   * @return {String} Localized text constant.
+   */
+  getText: function (key) {
+    return String(utils.getText(&quot;sol.dev.client&quot;, key));
+  }
+});
+
+// Register Java Client event listeners. //////////////////////////////////////////////////////////////////////////
+
+<span id=''>/**
+</span> * @override global.JavaClientEvents
+ */
+
+<span id='global-JavaClientEvents-method-okEventDlgBrowserReport'>/**
+</span> * @member global.JavaClientEvents
+ * @inheritdoc sol.dev.jc.Versions#okEventDlgBrowserReport
+ */
+function okEventDlgBrowserReport() {
+  return sol.dev.jc.Versions.okEventDlgBrowserReport();
+}
+
+<span id='global-JavaClientEvents-method-closeEventDlgBrowserReport'>/**
+</span> * @member global.JavaClientEvents
+ * @inheritdoc sol.common.jc.Functions#closeEventDlgBrowserReport
+ */
+function closeEventDlgBrowserReport() {
+  return sol.dev.jc.Versions.closeEventDlgBrowserReport();
+}
+
+</pre>
+</body>
+</html>

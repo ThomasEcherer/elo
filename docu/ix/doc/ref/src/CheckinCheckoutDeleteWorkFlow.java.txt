@@ -1,0 +1,129 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.examples.*;
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFDiagramC;
+import de.elo.ix.client.WFTypeC;
+import de.elo.ix.client.LockC;
+import java.util.Date;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+
+/**
+ *
+ * This example shows how the checkinWorkFlow, checkoutWorkFlow and delteWorkflow 
+ * methods are used. A template is created, checked in, checked out and then deleted.
+ */
+public class CheckinCheckoutDeleteWorkFlow {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static WFTypeC WF_TYPE;
+    private static WFDiagramC WF_DIAGRAM;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template then delete it
+            deleteTemplate();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+  
+    
+     /**
+     * Creates a workflow template used by the example code.
+     * The template is named "IX-Delete-Workflow-Demo". This template is then deleted.
+     */
+    private static void deleteTemplate() throws RemoteException {
+        
+        // Create three users without admin rights
+        String[] userNames = new String[] {"WF-User1", "WF-User2", "WF-User3"};
+        int[] userIds = new int[3];
+        for (int i = 0; i < userNames.length; i++){
+           userIds[i] = WFHelper.createNewUser(ix, userNames[i], "elo", false);
+        }
+        
+        // Prepare a workfow template. One node for each user - joined sequentially
+        String templateName = ("WF Delete Demo" + new Date());
+        // Create workflow template using WFHelper class
+        WFDiagram wfD = WFHelper.createSeqTemplateForUsers(ix, templateName, userNames);
+        System.out.println("Workflow created with name = " + wfD.getName() + " and workflow id = " + wfD.getId());
+        
+        // Checkout workflow
+        wfD = ix.ix().checkoutWorkFlow(wfD.getName(), WF_TYPE.getTEMPLATE(), WF_DIAGRAM.getMbAll(), LOCK.getYES());
+        
+        // Show some details
+        System.out.println("Workflow name = " + wfD.getName() + " and workflow id = " + wfD.getId());
+        System.out.println("Workflow is deleted = " + wfD.isDeleted());
+        
+        // The workflow template can at this stage be viewed in ELO by using an ELO client 
+        
+        // Checkin workflow
+        wfD.setId(ix.ix().checkinWorkFlow(wfD, WF_DIAGRAM.getMbAll(), LOCK.getYES()));
+        
+        // Delete workflow
+        ix.ix().deleteWorkFlow(templateName, WF_TYPE.getTEMPLATE(), LOCK.getYES());
+        System.out.println("Workflow deleted!");
+        
+        // Checkout workflow again
+        wfD = ix.ix().checkoutWorkFlow(wfD.getName(), WF_TYPE.getTEMPLATE(), WF_DIAGRAM.getMbAll(), LOCK.getYES());
+        // Show some details
+        System.out.println("Workflow name = " + wfD.getName() + " and workflow id = " + wfD.getId());
+        System.out.println("Workflow can still be checked out!");
+        if (wfD.isDeleted()){
+            System.out.println("Workflow is deleted = " + wfD.isDeleted());
+        } else {
+            System.out.println("Error - workflow isDeleted is set to " + wfD.isDeleted());
+        }
+        
+    }
+    
+
+    
+    
+     //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        WF_DIAGRAM = CONS.getWORKFLOW();
+        WF_TYPE = CONS.getWORKFLOW_TYPE();
+        LOCK = CONS.getLOCK();
+        
+    }
+    
+      // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

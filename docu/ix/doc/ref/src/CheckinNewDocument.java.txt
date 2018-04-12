@@ -1,0 +1,150 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXClient;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.ObjKey;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.io.File;
+import java.rmi.RemoteException;
+import java.util.Date;
+import java.util.Properties;
+
+/**
+ * This example shows how to checkin a document version
+ * 
+ * A sord object will be created
+ * A document version will be created 
+ * The document version will then be checked in
+ */
+public class CheckinNewDocument {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            Sord sordDoc = insertDoc();
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static Sord insertDoc() throws RemoteException {
+        
+        // Prepare a Sord object for a document (nothing is inserted into the archive at this point)
+        EditInfo ed = ix.ix().createDoc("1", "Email", null, EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        
+        // Assign a name
+        sord.setName("DocExample " + (new Date()));
+        
+        // Assign index values
+        ObjKey[] objKeys = sord.getObjKeys();
+        objKeys[0].setData(new String[] {"Markus Müller"});
+        objKeys[1].setData(new String[] {"support@elo.com"});
+                
+        // Select a file
+        File file = new File("C:\\IX-Workshop\\java\\project\\DocExample\\text1.txt");
+        
+        // Set original file name. 
+        // Must be appended to ObjKey Array
+        
+        ObjKey[] objKeys2 = new ObjKey[objKeys.length + 1];
+        System.arraycopy(objKeys, 0, objKeys2, 0, objKeys.length);
+        objKeys = objKeys2;
+        
+        ObjKey okeyFName = new ObjKey();
+        okeyFName.setId(CONS.getDOC_MASK_LINE().getID_FILENAME());
+        okeyFName.setName(CONS.getDOC_MASK_LINE().getNAME_FILENAME());
+        okeyFName.setData(new String[] {file.getName()});
+        
+        objKeys[objKeys.length-1] = okeyFName;
+        sord.setObjKeys(objKeys);
+        
+        // Supply the file extension in a DocVersion object.
+        // Uses helper function from the IXClient.
+        Document doc = new Document();
+        DocVersion dv = new DocVersion();
+        dv.setExt(IXClient.getFileExt(file.getAbsolutePath()));
+        dv.setPathId(sord.getPath());
+        doc.setDocs(new DocVersion[] {dv});
+        
+        // Step 2: Let IX create a upload URL
+        doc = ix.ix().checkinDocBegin(doc);
+        dv = doc.getDocs()[0];
+        
+        // Step 3: Upload document. Use helper function of IXClient.
+        String uploadResult = ix.upload(dv.getUrl(), file);
+        
+        // assign response to uploadResult - contains document ID 
+        dv.setUploadResult(uploadResult);
+        
+
+        // Step 4: Commit document.
+        dv.setVersion("1.0");
+        dv.setComment("First version");
+        doc = ix.ix().checkinDocEnd(sord, SORD.getMbAll(), doc, LOCK.getNO());
+        dv = doc.getDocs()[0];
+        
+        System.out.println("inserted doc: name=" + sord.getName() + 
+                ", id=" + doc.getObjId() + 
+                ", guid=" + sord.getGuid() + 
+                ", docId=" + dv.getId());
+        
+        return sord;
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

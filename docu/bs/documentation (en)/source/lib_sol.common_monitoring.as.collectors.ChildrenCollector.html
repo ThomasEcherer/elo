@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js"><span id='sol-common_monitoring-as-collectors-ChildrenCollector'>/**
+</span> * Collects all elements within a specified folder.
+ *
+ * In addition this collector provides a {@link #getContext} methode to deliver some context about the collector to the analyzers.
+ * Currently only a `parentMap` property of type {@link sol.common.SordMap} will be provided if {@link #readParentMap} is configured.
+ *
+ * # Example
+ * This collector will return all child elements in one batch and it is not possible to use paging.
+ *
+ *     var updateCollector = sol.create(&quot;sol.common_monitoring.as.collectors.ChildrenCollector&quot;, {
+ *       objId: &quot;ARCPATH:¶Job queues¶Updates&quot;
+ *     });
+ *
+ * # Post processing
+ * In post processing the references in the folder will be deleted if
+ *
+ * a) {@link #cleanupReferences} is set to `true` (priority over analyzer results)
+ *
+ * b) the analyzer returns at least one `result` with a property `cleanupRef` set to `true`
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.02.000
+ *
+ * @eloas
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Map
+ */
+sol.define(&quot;sol.common_monitoring.as.collectors.ChildrenCollector&quot;, {
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required) The folder which should be watched
+   */
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-findChildrenCfg'>  /**
+</span>   * @cfg {String} findChildrenCfg (optional) See {@link sol.common.RepoUtils#findChildren}. The default would be {@link #defaultFindChildrenCfg}.
+   */
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-readParentMap'>  /**
+</span>   * @cfg {String[]} readParentMap (optional)
+   * If This contains keys, all map fields from the parent map will be checked out, which start with those keys.
+   * The keys in the parent map must have an dot and the objId appended, otherwise they could not be mazched to the corresonding child element.
+   */
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-cleanupParentMap'>  /**
+</span>   * @cfg {Boolean} cleanupParentMap (optional) If `true`, all checked out parent map values will be deleted.
+   */
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-cfg-cleanupReferences'>  /**
+</span>   * @cfg {Boolean} cleanupReferences (optional) If `true`, all references will be deleted, regardless the results.
+   */
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-property-defaultFindChildrenCfg'>  /**
+</span>   * @private
+   * @property {de.elo.ix.client.SordZ} defaultFindChildrenCfg
+   */
+  defaultFindChildrenCfg: {
+    includeFolders: true,
+    includeDocuments: true,
+    includeReferences: true,
+    sordZ: SordC.mbAllIndex
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me._findChildrenCfg = config.findChildrenCfg || me.defaultFindChildrenCfg;
+    me._hasMoreResults = true;
+    me._parentMap = me.getParentMap();
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-hasMoreResults'>  /**
+</span>   * Checks, if this collector has additional results.
+   * @return {Boolean}
+   */
+  hasMoreResults: function () {
+    var me = this;
+    return me._hasMoreResults;
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-getResults'>  /**
+</span>   * Retrieves the next batch of work items.
+   * @return {de.elo.ix.client.Sord[]}
+   */
+  getResults: function () {
+    var me = this;
+
+    if (!me._workingSet) {
+      me.logger.debug(&quot;perform find children search&quot;);
+      me._workingSet = sol.common.RepoUtils.findChildren(me.objId, me._findChildrenCfg);
+      me._hasMoreResults = false;
+    } else {
+      me.logger.debug(&quot;use chached search result&quot;);
+    }
+    return me._workingSet;
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-getContext'>  /**
+</span>   * Returns a prefilled context object if {@link #readParentMap} defines at least one map key.
+   * @return {Object}
+   */
+  getContext: function () {
+    var me = this,
+        ctx = {};
+    if (me._parentMap) {
+      ctx.parentMap = me._parentMap;
+    }
+    return ctx;
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-postProcess'>  /**
+</span>   * This collector removes the references to a sord in the watched folder if {@link #cleanupReferences} is set to `true` or one of the `results` defines a `cleanupRef` flag.
+   * If {@link #cleanupParentMap} is set to `true` the parent map entries will be deleted (see {@link #readParentMap}).
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object[]} results The result object returned by an `analyzer`
+   * @param {Object} ctx Context object
+   */
+  postProcess: function (sord, results, ctx) {
+    var me = this;
+
+    me.logger.enter(&quot;postProcess&quot;);
+
+    if (me.cleanupReferences === true) {
+      me.deleteReference(sord);
+    } else if (results &amp;&amp; (results.length &gt; 0)) {
+      results.some(function (r) {
+        if (r.cleanupRef === true) {
+          me.deleteReference(sord);
+          return true; // break loop, if the first &#39;cleanupRef&#39; flag was found
+        }
+      });
+    }
+
+    if (me.cleanupParentMap === true) {
+      me.cleanupMap(sord);
+    }
+
+    me.logger.exit(&quot;postProcess&quot;);
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-dispose'>  /**
+</span>   * Performes cleanup by removing the current working set.
+   */
+  dispose: function () {
+    var me = this;
+    me._workingSet = null;
+    me._hasMoreResults = true;
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-getParentMap'>  /**
+</span>   * @private
+   * Retrives the parent map if configured.
+   * @return {sol.common.SordMap}
+   */
+  getParentMap: function () {
+    var me = this,
+        parentMap = null,
+        mapKeys;
+    if (me.readParentMap &amp;&amp; (me.readParentMap.length &gt; 0)) {
+      parentMap = sol.create(&quot;sol.common.SordMap&quot;, { objId: sol.common.RepoUtils.getObjId(me.objId) });
+      mapKeys = me.readParentMap.map(function (key) {
+        return key + &quot;.*&quot;;
+      });
+      parentMap.read(mapKeys);
+    }
+    return parentMap;
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-deleteReference'>  /**
+</span>   * @private
+   * Deletes a Reference fron the watched folder.
+   * @param {de.elo.ix.client.Sord} sord
+   */
+  deleteReference: function (sord) {
+    var me = this,
+        parentId, isReference;
+    parentId = sol.common.RepoUtils.getObjId(me.objId);
+    isReference = (sord.parentId != parentId);
+    if (isReference) {
+      me.logger.debug([&quot;remove reference to &#39;{0}&#39; from folder &#39;{1}&#39;&quot;, sord.id, parentId]);
+      ixConnect.ix().deleteSord(parentId, sord.id, LockC.NO, null);
+    }
+  },
+
+<span id='sol-common_monitoring-as-collectors-ChildrenCollector-method-cleanupMap'>  /**
+</span>   * @private
+   * Removes all entries from the parent map if configured (see {@link #cleanupParentMap}).
+   * @param {de.elo.ix.client.Sord} sord
+   */
+  cleanupMap: function (sord) {
+    var me = this;
+    if (me._parentMap &amp;&amp; me.readParentMap &amp;&amp; (me.readParentMap.length &gt; 0)) {
+      me.readParentMap.forEach(function (key) {
+        me._parentMap.setValue(key + &quot;.&quot; + sord.id, &quot;&quot;);
+      });
+      me._parentMap.write();
+    }
+  }
+
+});
+</pre>
+</body>
+</html>

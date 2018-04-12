@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<link href="fileuploader.css" rel="stylesheet" type="text/css">	
+    <style>    	
+		body {font-size:13px; font-family:arial, sans-serif; width:700px; margin:100px auto;}
+    </style>	
+
+<!-- Include Indexserver JavaScript Library -->
+<script type="text/javascript" src="../EloixClient.js"></script>
+
+<!-- Example code -->
+<script type="text/javascript">
+
+// Simplify namespace access 
+// (all ELOix symbols are member of de.elo.ix.client)
+var IX = de.elo.ix.client;
+
+// Indexserver URL 
+var ixUrl = "/ix-elo80/ix";
+
+// Login credentials
+var userName = "Administrator";
+var userPwd = "elo";
+
+// Indexserver connection
+var _conn;
+
+/**
+ * Returns the Indexserver connection.
+ * Creates a new connection, when called the first time. 
+ */
+function getConn() {  
+	if (!_conn) {
+		var connFact = new IX.IXConnFactory(ixUrl, "SimpleSearch", "1.0");
+		_conn = connFact.create(userName, userPwd);
+	}
+	return _conn;
+};
+
+function Example_onComplete(id, fileName, responseJSON) {
+	try {
+		var conn = getConn();
+		var CONST = conn.getCONST();
+		
+		var ed = conn.ix().createDoc("1", "", "", CONST.EDIT_INFO.mbSordDocAtt);
+		ed.sord.name = fileName;
+		
+		ed.document.docs = [ new IX.DocVersion() ];
+		ed.document.docs[0].ext = fileName;
+
+		ed.document.docs[0].uploadResult = responseJSON.uploadResult;
+		
+		ed.document = conn.ix().checkinDocEnd(ed.sord, CONST.SORD.mbAll, ed.document, CONST.LOCK.NO);
+		
+		return true;
+	}
+	catch (ex) {
+		alert(ex);
+		return false;
+	}
+}
+
+</script>
+
+</head>
+<body>		
+    <p><a href="http://github.com/valums/file-uploader">Back to project page</a></p>
+    
+	<p>To upload a file, click on the button below. Drag-and-drop is supported in FF, Chrome.</p>
+	<p>Progress-bar is supported in FF3.6+, Chrome6+, Safari4+</p>
+	
+	<div id="file-uploader-demo1">		
+		<noscript>			
+			<p>Please enable JavaScript to use file uploader.</p>
+			<!-- or put a simple form for upload here -->
+		</noscript>         
+	</div>
+    
+    <script src="fileuploader.js" type="text/javascript"></script>
+    <script>        
+        function createUploader(){
+        	
+        	var conn = getConn();
+        	var actionUrl = conn.makeUploadUrl("&solution=valums");
+        	
+            var uploader = new qq.FileUploader({
+                element: document.getElementById('file-uploader-demo1'),
+                action: actionUrl,
+                debug: true,
+                onComplete: Example_onComplete
+                
+            });           
+        }
+        
+        // in your app create uploader as soon as the DOM is ready
+        // don't wait for the window to load  
+        window.onload = createUploader;     
+    </script>    
+</body>
+</html>

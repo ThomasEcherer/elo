@@ -1,0 +1,221 @@
+package de.elo.ix.workflowexamples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.WFDiagram;
+import de.elo.ix.client.WFNode;
+import de.elo.ix.client.WFNodeAssoc;
+import de.elo.ix.client.WFTypeZ;
+import de.elo.ix.client.UserName;
+import de.elo.ix.client.ConfigFile;
+import de.elo.ix.client.FileData;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.rmi.RemoteException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Date;
+import java.util.Properties;
+
+
+/**
+ *
+ * This class creates a simple template with one personal node.
+ * A script is assigned to personal node using setOnExit(). This script will be 
+ * executed when the node is exited an an active workflow.
+ * A start node is always created
+ */
+
+public class TemplateWithScript {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static ClientInfo ci;
+    private static IXConnection ix;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new workflow template
+            String templateName = "WF Script Template" + new Date();
+            String[] users = new  String[] {"WF-User1", "WF-User2"};
+            createTemplate(ix, templateName, users);
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+
+    /**
+     * Creates a workflow template with a personal nodes and 1 user.
+     * The template is named "WF-Template" + date if a name is not provided.
+     * 
+     * @param ix        IXConnection object
+     * @param ci        ClientInfo object
+     * @param flowName  Name of the workflow template
+     * @param userNames Name(s) of the users to be created
+     * @return
+     * @throws java.rmi.RemoteException
+     */
+    public static WFDiagram createTemplate(IXConnection ix, String flowName, String[] userNames) throws RemoteException {
+        
+        IXServicePortC CONS = ix.getCONST();
+        
+        // Checkin workflow scripts - these are standard scripts supplied with the project.
+        // The script paths may require changing to suit the project.
+        File fileScript = new File("D:\\java\\projekt\\EloixDocExamples\\scripts\\WorkFlowScriptExample.js");
+        if (fileScript.exists() == false) {
+            RemoteException re = new RemoteException("File: " + fileScript + " does not exist");
+            throw re;
+        }
+        checkinScript(ix, fileScript);
+        
+        fileScript = new File("D:\\java\\projekt\\EloixDocExamples\\scripts\\Dump.js");
+        if (fileScript.exists() == false) {
+            RemoteException re = new RemoteException("File: " + fileScript + " does not exist");
+            throw re;
+        }
+        checkinScript(ix, fileScript);
+        
+        fileScript = new File("D:\\java\\projekt\\EloixDocExamples\\scripts\\DumpSord.js");
+        if (fileScript.exists() == false) {
+            RemoteException re = new RemoteException("File: " + fileScript + " does not exist");
+            throw re;
+        }
+        checkinScript(ix, fileScript);
+        
+        fileScript = new File("D:\\java\\projekt\\EloixDocExamples\\scripts\\DumpWorkFlow.js");
+        if (fileScript.exists() == false) {
+            RemoteException re = new RemoteException("File: " + fileScript + " does not exist");
+            throw re;
+        }
+        checkinScript(ix, fileScript);
+        
+        // Call IX to prepare a workfow object.
+        // If flowName is provided use flowName otherwise set name to "WF-Template + Date"
+        if (flowName == null) {
+            flowName = "WF-Template " + (new Date());
+        }    
+        WFTypeZ wfType = CONS.getWORKFLOW_TYPE().getTEMPLATE();
+        WFDiagram wf = ix.ix().createWorkFlow(flowName, wfType);
+        
+        
+        int noOfNodes = (userNames.length + 1);
+        // Create an array of nodes.
+        WFNode[] nodes = new WFNode[noOfNodes];
+        // Create starter node
+        int posy =100; // y position of node
+        nodes[0] = WFHelper.createNode(ix, 0, CONS.getWORKFLOW_NODE().getTYPE_BEGINNODE(), 20, posy);
+        nodes[0].setName("Start Node");
+        nodes[0].setUserId(CONS.getWORKFLOW_NODE().getUSERID_OWNER());
+        
+        // Checkout users to get userNames
+        UserName[] un = ix.ix().getUserNames(userNames, CONS.getCHECKOUT_USERS().getBY_IDS());
+        
+        // Create personal nodes
+        for (int i = 1; i < noOfNodes; i++){
+            posy = posy + 100;
+            nodes[i] = WFHelper.createNode(ix, i, CONS.getWORKFLOW_NODE().getTYPE_PERSONNODE(), 20 , posy);
+            nodes[i].setName("Node " + i);
+            nodes[i].setUserId(un[i - 1].getId());
+            nodes[i].setUserName(un[i - 1].getName());
+            if (i == 1) nodes[i].setOnExit("WorkFlowScriptExample");
+            if (i == 2) nodes[i].setOnEnter("WorkFlowScriptExample");
+        }
+
+        // Assign nodes to workflow
+        wf.setNodes(nodes);
+        
+        // Create a matrix that describes how the nodes are connected to each other.
+        int noOfAssocs = noOfNodes - 1;
+        WFNodeAssoc[] assocs = new WFNodeAssoc[noOfAssocs];
+
+        
+        for (int i = 0; i < noOfAssocs; i++){
+            assocs[i] = new WFNodeAssoc();
+            assocs[i].setNodeFrom(i);
+            assocs[i].setNodeTo(i + 1);
+            assocs[i].setType(CONS.getWORKFLOW_NODE_ASSOC_TYPE().getALWAYS());
+        }
+        
+        // Assign connections to workflow
+        wf.getMatrix().setAssocs(assocs);
+        
+        // Checkin WF
+        int wfId = ix.ix().checkinWorkFlow(wf, CONS.getWORKFLOW().getMbAll(), CONS.getLOCK().getNO());
+        wf.setId(wfId);
+        
+        return wf;
+    }
+    
+    private static void checkinScript(IXConnection ix, File fileScript) 
+        throws RemoteException {
+        
+        IXServicePortC CONS = ix.getCONST();
+        FileInputStream fis = null;
+        
+        try {
+            
+            // Read file into memory
+            byte[] data = new byte[(int)fileScript.length()];
+            fis = new FileInputStream(fileScript);
+            fis.read(data);
+            
+            // Create a ConfigFile object with some useful information for IX.
+            ConfigFile cf = new ConfigFile();
+            cf.setDir(CONS.getCONFIG_FILE().getELO_SCRIPTS());
+            cf.setName(fileScript.getName());
+            FileData fd = new FileData();
+            fd.setData(data);
+            cf.setFileData(fd);
+            
+            // checkin
+            ix.ix().checkinConfigFiles(new ConfigFile[] {cf}, CONS.getLOCK().getNO());
+        }
+        catch (RemoteException e) {
+            throw e;
+        }
+        catch (IOException e) {
+            // e. g. file not found 
+            throw new IllegalStateException(e.toString());
+        }
+        finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                }
+                catch (IOException ignored) {}
+            }
+        }
+    }
+    
+     //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+    }
+    
+      // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

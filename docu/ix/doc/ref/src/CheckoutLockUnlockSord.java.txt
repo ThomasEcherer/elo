@@ -1,0 +1,193 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.UserInfo;
+import de.elo.ix.client.UserInfoC;
+import de.elo.ix.client.CheckoutUsersC;
+import de.elo.ix.client.CheckinUsersC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import java.rmi.RemoteException;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.util.Properties;
+
+/**
+ * This example shows how to checkin and lock sord objects
+ * 
+ * Create a Sord object under the current account
+ * Create a new user "Test User"
+ * Login as "Test User" 
+ * Test User locks Sord
+ * Try to lock with current account
+ * Try to get lock forced with current account
+ * Unlock
+ * Fritz deletes Sord
+ *
+ */
+public class CheckoutLockUnlockSord {
+    
+    private final static String IX_URL = "http://localhost:8084/ix/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnFactory connFact;
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static UserInfoC USER_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static CheckoutUsersC CHECKOUT_USERS;    
+    private static CheckinUsersC CHECKIN_USERS;
+    private static UserInfo ui;
+    private static UserInfo uiTestUser;
+
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert new folders 
+            try {createCheckoutLock();
+            
+        } catch (Exception e){
+            System.out.println(e.toString());
+        }     
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void createCheckoutLock() throws RemoteException, Exception {
+        
+        // Create a sord and a test user 
+         EditInfo ed = ix.ix().createSord("1", null, EDIT_INFO.getMbSord());
+         Sord sord = ed.getSord();
+         sord.setName("Test Sord");
+         sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+         System.out.println("Sord created Id = " + sord.getId());
+         
+         
+        // Create a test user 
+        // Lock users to avoid simultaneous changes!
+        ix.ix().checkoutUsers(null, CHECKOUT_USERS.getNOTHING(), LOCK.getYES());
+        System.out.println("Users locked");
+        
+        //Create the new user (with admin rights!)
+        ui = ix.ix().createUser("0");
+        ui.setType(USER_INFO.getTYPE_USER());
+        ui.setName("Test User");
+        ui.setPwd("elo");
+        int[] id = ix.ix().checkinUsers(
+                                      new UserInfo[] {ui}, 
+                                      CHECKIN_USERS.getWRITE(), 
+                                      LOCK.getNO());
+        ui.setId(id[0]);
+        System.out.println("User created Id = " + ui.getId() +
+                           " name = " + ui.getName());
+        
+        
+        //Re-connect to Index Server using new user
+        ClientInfo ciTestUser = new ClientInfo();
+        ciTestUser.setLanguage("en");
+        ciTestUser.setCountry("DE");
+        ciTestUser.setTimeZone("Europe/Berlin"); // "GMT+01:00"
+        IXConnection connTestUser = connFact.create(ciTestUser, 
+                "Test User", "elo", "IX-Test User", null);
+        
+        ciTestUser = connTestUser.getLogin().ci();                                   
+        uiTestUser = connTestUser.getLogin().lr().getUser();
+        System.out.println("Logged on with user Id = " + uiTestUser.getId() + 
+                           "  & name = " + uiTestUser.getName());
+        
+        // Lock sord with new user
+        EditInfo ed2 = connTestUser.ix().checkoutSord(
+                                          sord.getGuid(), 
+                                          EDIT_INFO.getMbSord(), 
+                                          LOCK.getYES());
+        sord = ed2.getSord();
+        System.out.println("Sord locked with lock id = " + sord.getLockId() + 
+                           ": Test User id =" + uiTestUser.getId());
+        
+        //Try to lock sord with original user
+        try{
+        ix.ix().checkoutSord(sord.getGuid(), 
+                           EDIT_INFO.getMbSord(), 
+                           LOCK.getYES());
+        throw new Exception("ERROR: User cannot lock sord!!!");
+        } catch (Exception e){
+            System.out.println("OK original user cannot lock sord: " + e.toString());
+        }
+        
+        // Try to force access to sord with original user
+        try {
+            ix.ix().checkoutSord(
+                               sord.getGuid(), 
+                               EDIT_INFO.getMbSord(), 
+                               LOCK.getFORCE());
+            System.out.println("OK original user is administrator " +
+                               "and can force access");
+        } catch (Exception e){
+            System.out.println("OK original user is not administrator " +
+                               "and cannot force access: " + e.toString());
+        }
+        
+        //Unlock the sord
+        ix.ix().checkinSord(sord, SORD.getMbOnlyLock(), LOCK.getYES());
+        System.out.println("Sord unlocked!");
+        
+        // Delete sord twice - first for logical delete in archive and
+        // second time to permanently delete the sord.
+        DeleteOptions delOpts = new DeleteOptions();
+        delOpts.setDeleteFinally(true);
+        ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+        ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+        System.out.println("Sord deleted");
+        
+        // delete new user
+        connTestUser.logout();
+        ix.ix().deleteUsers(new String[] {uiTestUser.getName()}, LOCK.getNO());
+    }
+    
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+         
+        // Fill constant values (cached by IXClient object)
+        EDIT_INFO = CONS.getEDIT_INFO();
+        USER_INFO = CONS.getUSER_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        CHECKOUT_USERS = CONS.getCHECKOUT_USERS();
+        CHECKIN_USERS = CONS.getCHECKIN_USERS();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+}

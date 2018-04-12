@@ -1,0 +1,214 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.DocVersion;
+import de.elo.ix.client.Document;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import de.elo.ix.client.DeleteOptions;
+import de.elo.ix.client.Sord;
+import de.elo.ix.client.SordC;
+import de.elo.ix.client.SordDetails;
+import de.elo.ix.client.ArchivingModeC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import java.io.File;
+import java.io.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * Theis example shows set a new document read-only
+ * 
+ * Create new document without an associated file
+ * Set Sord to read-only
+ * Checkout document
+ * Checkin a file as a new Version 
+ * Checkin document
+ * Try to check document out again
+ * 
+ * 
+ */
+public class SetDocumentReadOnly {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+    private static SordC SORD;
+    private static LockC LOCK;
+    private static ArchivingModeC ARCHIVING_MODE;
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            setReadOnly();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+    
+
+    // Create a document object
+    public static void setReadOnly() throws RemoteException {
+        
+        // Create a document without an associated file
+        EditInfo ed = ix.ix().createDoc("1", "0", null, EDIT_INFO.getMbSord());
+        Sord sord = ed.getSord();
+        sord.setName("Example Set read-only");
+        SordDetails sordD = new SordDetails();
+        sordD.setArchivingMode(ARCHIVING_MODE.getREADONLY());
+        sord.setDetails(sordD);
+        sord.setId(ix.ix().checkinSord(sord, SORD.getMbAll(), LOCK.getNO()));
+        System.out.println("Sord created with Id: " + sord.getId() + 
+                           " and name: " + sord.getName());
+                           
+       // Create test file
+       // Checkout document
+       ed = ix.ix().checkoutDoc(
+                              sord.getGuid(), 
+                              null, 
+                              EDIT_INFO.getMbSordDocAtt(), 
+                              LOCK.getYES());
+       sord = ed.getSord();
+       Document doc = ed.getDocument();
+       System.out.println("Checked out sord with Id: " + sord.getId() + 
+                          " and name: " + sord.getName());
+       
+       // The document is now locked and will only be unlocked by checkinEndDoc()
+       
+       // Checkin a file as new (first) version
+       String text = "Version 1";
+       File testFile = internalCreateTestFile(text, ".txt");
+       
+       // Supply the extension for the document
+       DocVersion dv = new DocVersion();
+       dv.setExt(ix.getFileExt(testFile.getName()));
+       doc.setDocs(new DocVersion[] {dv});
+       System.out.println("Document version created for " + testFile.getName());
+       
+       // The Index Server creates a URL where the document must be uploaded to
+       doc = ix.ix().checkinDocBegin(doc);
+       dv = doc.getDocs()[0];
+       System.out.println("Document checked in");
+       
+       // Upload document. Use helper function of IXClient.
+       String uploadResult = ix.upload(dv.getUrl(), testFile);
+       System.out.println("Document uploaded");
+        
+       // Assign response to uploadResult - contains document ID 
+       dv.setUploadResult(uploadResult);
+       System.out.println("UploadResult returned and set");
+
+       // Commit document with checkinDocEnd method.
+       // uploadResult contains the document information from the ELODM -
+       // this must be passed to the Index Server
+       dv.setVersion("1.0");
+       dv.setComment("First version of document");
+       
+         // NOTE: it is not necessary to supply a sord object when calling 
+         // checkinDocEnd if the index information is not to be changed. 
+         // The object id is taken from document.objId.
+       
+       doc = ix.ix().checkinDocEnd(null, null, doc, LOCK.getYES());
+       dv = doc.getDocs()[0];
+       System.out.println("Inserted document version:");
+       System.out.println("   objId = " + doc.getObjId());
+       System.out.println("   docId = " + dv.getId());
+       System.out.println("   doc Guid = " + dv.getGuid());
+       System.out.println("   doc url = " + dv.getUrl());
+       
+
+       // Check document out to create new version
+       // Exception should be thrown as the document is read-only!
+       try {ed = ix.ix().checkoutDoc(sord.getGuid(), null, EDIT_INFO.getMbSordDocAtt(), 
+                                        LOCK.getYES());
+            System.out.println("ERROR: The user should not be able to checkout sord");
+       
+       } catch (RemoteException re){
+           System.out.println("OK: The user is not allowed to checkout sord, exception = " + re.toString());
+       }  
+      
+      
+       // Delete sord if no longer required
+       // To delete set delete = true
+       boolean delete = false;
+       if (delete == true){
+           
+           DeleteOptions delOpts = new DeleteOptions();
+           delOpts.setDeleteFinally(true);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), null);
+           ix.ix().deleteSord(null, sord.getGuid(), LOCK.getNO(), delOpts);
+           System.out.println("Sord with Id: " + sord.getGuid() + " has been deleted!");
+       }
+    }
+    
+    
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+        SORD = CONS.getSORD();
+        LOCK = CONS.getLOCK();
+        ARCHIVING_MODE = CONS.getARCHIVING_MODE();
+    }
+    
+    // Write to temp file
+    public static File internalCreateTestFile(String text, String ext) {
+        File tempFile = null;
+        try{
+            tempFile = internalMakeTempFile(ext);
+            BufferedWriter out = new BufferedWriter(new FileWriter(tempFile));
+            out.write(text);
+            out.close();
+            
+        } catch (IOException ioe){
+            System.out.println(ioe.toString());
+        }
+        
+        return tempFile;
+    }
+    
+    
+    // Make file name and create temp file
+    public static File internalMakeTempFile(String ext) throws IOException {
+        
+        String tempFile = "Eloix";
+        File f = File.createTempFile(tempFile, ext);
+        System.out.println("File " + f.getName() + " created");
+        return f;
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

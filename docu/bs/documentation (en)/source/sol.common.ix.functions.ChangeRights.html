@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.AsyncUtils.js
+//@include lib_sol.common.UserUtils.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.ChangeRights&quot; });
+
+<span id='sol-common-ix-functions-ChangeRights'>/**
+</span> * Changes rights.
+ *
+ * Add rights based on a configuration. It can also perform a cleanup before setting the new rights.
+ *
+ * # Node configuration example:
+ *
+ *     {
+ *       &quot;users&quot;: [&quot;user1&quot;],      // user1 will get
+ *       &quot;rights&quot;: { &quot;r&quot;: true }, // read access
+ *       &quot;mode&quot;: &quot;SET&quot;            // while all other rights will be removed
+ *     }
+ *
+ *     {
+ *       &quot;users&quot;: [&quot;group2&quot;],     // group2 will get
+ *       &quot;rights&quot;: { &quot;w&quot;: true }, // write access
+ *       &quot;mode&quot;: &quot;ADD&quot;            // in addition to the other (already existing) rights
+ *     }
+ *
+ * Without configuration the current user will get full rights for the given
+ * object and it&#39;s children.
+ *
+ * # Extended configuration:
+ *
+ *     {
+ *       &quot;users&quot;: [
+ *         { &quot;name&quot;: &quot;Mustermann&quot; },                                          // user &#39;Mustermann&#39; gets the fallback rights
+ *         { &quot;name&quot;: &quot;Haenschenklein&quot;, &quot;rights&quot;: { &quot;r&quot;: true, &quot;w&quot;: true } },  // user &#39;Haenschenklein&#39; gets read and write access
+ *         { &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: &quot;MY_USER&quot; }                                // if there is a user configured in index field &#39;MY_USER&#39;, it gets the fallback rights
+ *       ],
+ *       andGroups: [
+ *         { groups: [&quot;GroupA&quot;, &quot;GroupB&quot;, { type: &quot;GRP&quot;, key: &quot;CONTRACT_RESPONSIBLE&quot; }] }, // and-group (containing three groups) with fallback rights
+ *         { groups: [&quot;GroupX&quot;, &quot;GroupY&quot;], rights: { r: true, w: true, l: true } }         // and-group (containing two groups) with read, write and list access
+ *       ],
+ *       &quot;rights&quot;: { &quot;r&quot;: true }
+ *     }
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ * @requires sol.common.SordUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Utils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.Template
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.ChangeRights&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-ChangeRights-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-objIds'>  /**
+</span>   * @cfg {String} objIds If the processing should be executed on more then one element. `objId` is still required, as base for the data.
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-users'>  /**
+</span>   * @cfg {String[]|Object[]} users
+   * Specifies, which users rights will be altered (see {@link sol.common.AclUtils} and especially {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}).
+   * Additionally the user object can have a `type` and a `key` property (see {@link sol.common.SordUtils#getValue}), which will be used to determine the user name.
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-andGroups'>  /**
+</span>   * @cfg {Object[]} andGroups
+   * An array with and-group definitions.
+   * See {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-rights'>  /**
+</span>   * @cfg {Object} rights
+   * Rights that will be set to the workflow object and it&#39;s children.
+   * See {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-mode'>  /**
+</span>   * @cfg {String} mode See {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-dontWait'>  /**
+</span>   * @cfg {Boolean} dontWait See {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-recursive'>  /**
+</span>   * @cfg {Boolean} recursive See {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-wfOwner'>  /**
+</span>   * @cfg {String} wfOwner
+   * This attribute will be used, if the cleanup specifies to remove rights of the `wfOwner`.
+   * If this function is used in a workflow, this will be set automatically.
+   */
+
+<span id='sol-common-ix-functions-ChangeRights-cfg-cleanup'>  /**
+</span>   * @cfg {Object} cleanup Configuration of a cleanup, before the new rights will be applied
+   * @cfg {String[]|Object[]} cleanup.users Specifies, which users rights will be removed (see {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}).
+   * @cfg {Boolean} cleanup.revokeWfOwnerRights If `true` and the property `wfOwner` is set, `wfOwner` loses all access rights
+   * @cfg {Object} cleanup.rights Specifies, which rights will be removed in case the user object does not state otherwise (see {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground}). If nothing is set, all rights will be removed.
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-ChangeRights-method-process'>  /**
+</span>   * Adds rights to an object or branch.
+   */
+  process: function () {
+    var me = this,
+        rightsConfig = {};
+
+    me.performCleanup();
+
+    if (me.inherit || me.users || me.andGoups) {
+      rightsConfig.inherit = me.inherit;
+      rightsConfig.users = me.users;
+      rightsConfig.andGroups = me.andGroups;
+      rightsConfig.rights = me.rights;
+      rightsConfig.mode = me.mode;
+      rightsConfig.dontWait = me.dontWait;
+      rightsConfig.recursive = me.recursive;
+  
+      me.performBackgroundAclJob(rightsConfig);
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRights-method-performCleanup'>  /**
+</span>   * @private
+   * Uses {@link sol.common.AclUtils#changeRightsInBackground changeRightsInBackground} to remove specific user rights.
+   */
+  performCleanup: function () {
+    var me = this,
+        removeRightsConfig = {},
+        fullRemove = { r: true, w: true, d: true, e: true, l: true };
+
+    if (me.cleanup &amp;&amp; me.mode != &quot;SET&quot;) { // cleanup is redundant, if mode is &quot;SET&quot;, because all previous rights will be overriden anyway
+      removeRightsConfig.users = (me.cleanup.users &amp;&amp; (me.cleanup.users.length &gt; 0)) ? me.cleanup.users : [];
+      removeRightsConfig.rights = (me.cleanup.rights) || fullRemove;
+      removeRightsConfig.mode = &quot;REMOVE&quot;;
+      removeRightsConfig.dontWait = me.dontWait;
+      removeRightsConfig.recursive = me.recursive;
+
+      if (me.wfOwner &amp;&amp; (me.cleanup.revokeWfOwnerRights === true)) {
+        removeRightsConfig.users.push({ name: me.wfOwner, rights: fullRemove });
+      }
+
+      if (removeRightsConfig.users.length &gt; 0) {
+        me.performBackgroundAclJob(removeRightsConfig);
+      }
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRights-method-performBackgroundAclJob'>  /**
+</span>   * @private
+   * Performs the background job to change the rights.
+   * @param {Object} rightsConfig
+   */
+  performBackgroundAclJob: function (rightsConfig) {
+    var me = this,
+        objId;
+
+    if (me.objIds) {
+      objId = me.objIds;
+      rightsConfig.srcObjId = rightsConfig.srcObjId || me.objId;
+    } else {
+      objId = me.objId;
+    }
+
+    sol.common.AclUtils.changeRightsInBackground(objId, rightsConfig);
+  }
+
+});
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper'>/**
+</span> * This is a wrapper class for {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+ *
+ * It supports the following modes:
+ *
+ * - single element
+ * - children (permission groups)
+ *
+ * # Single element
+ * The configuration will be passed to {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+ *
+ * ## Node configuration example:
+ * See {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+ *
+ * # Children (permission groups)
+ * Changes rights on the children (only first level) of an element.
+ *
+ * The script will read a permission group (or a list) from an index field of each individual child element.
+ * If there is a configuration for that permission group(s), it will adjust the rights of the child element by handing that configuration over to {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+ *
+ * ## Node configuration example:
+ *
+ *     {
+ *       &quot;processChildrenPermissions&quot;: true,
+ *       &quot;permissionGroupField&quot;: &quot;RIGHT_GROUP&quot;,
+ *       &quot;permissionGroups&quot;: [
+ *         { &quot;name&quot;: &quot;aclGroup1&quot;, &quot;config&quot;: { ... } },
+ *         { &quot;name&quot;: &quot;aclGroup1&quot;, &quot;config&quot;: { ... } },
+ *         ...
+ *       ]
+ *     }
+ *
+ * For the configuration of the single permission groups see {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+ * The name is used to determine which set of permissions should be applied on which child.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ * @requires sol.common.SordUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.Utils
+ * @requires sol.common.ObjectFormatter
+ * @requires sol.common.Template
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.ChangeRightsWrapper&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-cfg-processChildrenPermissions'>  /**
+</span>   * @cfg {Boolean} processChildrenPermissions
+   */
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-cfg-permissionGroupField'>  /**
+</span>   * @cfg {String} permissionGroupField The index field containing the permission group(s) for the child.
+   */
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-cfg-permissionGroups'>  /**
+</span>   * @cfg {Object[]} permissionGroups
+   * The configurations for the different permission groups. For configuration of each individual group see {@link sol.common.ix.functions.ChangeRights ChangeRights}.
+   * `objId` (and `objIds`) do not have to be configured, the wrapper will take care of those.
+   */
+
+  MODES: {
+    SINGLE: &quot;SINGLE&quot;,
+    CHILDREN: &quot;CHILDREN&quot;
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.$config = config;
+    me.$config.objId = me.objId;
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-process'>  /**
+</span>   * Performs the processing.
+   */
+  process: function () {
+    var me = this,
+        mode;
+
+    mode = me.determineMode();
+
+    switch (mode) {
+      case me.MODES.CHILDREN:
+        me.performChildrenRun();
+        break;
+      default:
+        me.performSingleRun();
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-determineMode'>  /**
+</span>   * @private
+   * Determines in which mode the function was executed.
+   * @return {String}
+   */
+  determineMode: function () {
+    var me = this;
+    if ((me.processChildrenPermissions === true) &amp;&amp; me.permissionGroupField &amp;&amp; me.permissionGroups) {
+      return me.MODES.CHILDREN;
+    }
+    return me.MODES.SINGLE;
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-performSingleRun'>  /**
+</span>   * @private
+   * Performs a standard change rights run.
+   */
+  performSingleRun: function () {
+    var me = this,
+        module;
+
+    module = sol.create(&quot;sol.common.ix.functions.ChangeRights&quot;, me.$config);
+    module.process();
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-performChildrenRun'>  /**
+</span>   * @private
+   * Performs a change rights run on all the children depending on the configured permission group per children.
+   */
+  performChildrenRun: function () {
+    var me = this,
+        execBuckets = {},
+        permissionGroup, startIds, permissionGrpCfg, module;
+
+    me.processChildren(execBuckets);
+
+    for (permissionGroup in execBuckets) {
+      if (execBuckets.hasOwnProperty(permissionGroup) &amp;&amp; execBuckets[permissionGroup] &amp;&amp; (execBuckets[permissionGroup].length &gt; 0)) {
+        startIds = execBuckets[permissionGroup].map(function (child) {
+          return child.id;
+        });
+        permissionGrpCfg = me.getPermissionConfig(permissionGroup);
+
+        if (permissionGrpCfg) {
+          permissionGrpCfg.objId = me.objId;
+          permissionGrpCfg.objIds = startIds;
+
+          module = sol.create(&quot;sol.common.ix.functions.ChangeRights&quot;, permissionGrpCfg);
+          module.process();
+
+          permissionGrpCfg = null;
+          module = null;
+        } else {
+          me.logger.warn([&quot;no config for permission group &#39;{0}&#39; found&quot;, permissionGroup]);
+        }
+      }
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-processChildren'>  /**
+</span>   * @private
+   * Processes all child elements on the first level.
+   * @param {Object} execBuckets
+   */
+  processChildren: function (execBuckets) {
+    var me = this,
+        children;
+
+    children = sol.common.RepoUtils.findChildren(me.objId, {
+      includeFolders: true,
+      includeDocuments: false,
+      includeReferences: false,
+      sordZ: SordC.mbAllIndex
+    });
+
+    if (children &amp;&amp; (children.length &gt; 0)) {
+      children.forEach(function (child) {
+        me.processChild(child, execBuckets);
+      });
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-processChild'>  /**
+</span>   * @private
+   * Determines the right groups for a child element and adds them to the execution buckets.
+   * @param {de.elo.ix.client.Sord} child
+   * @param {Object} execBuckets
+   */
+  processChild: function (child, execBuckets) {
+    var me = this,
+        permissionGroups;
+
+    permissionGroups = sol.common.SordUtils.getObjKeyValues(child, me.permissionGroupField);
+
+    if (permissionGroups &amp;&amp; (permissionGroups.length &gt; 0)) {
+      permissionGroups.forEach(function (permissionGroup) {
+        if (execBuckets[permissionGroup]) {
+          execBuckets[permissionGroup].push(child);
+        } else {
+          execBuckets[permissionGroup] = [child];
+        }
+      });
+    }
+  },
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-method-getPermissionConfig'>  /**
+</span>   * @private
+   * Loads the permission config for a specified group.
+   * @param {String} permissionGroup
+   * @return {Object}
+   */
+  getPermissionConfig: function (permissionGroup) {
+    var me = this,
+        permissionCfg = null;
+
+    if (me.permissionGroups &amp;&amp; (me.permissionGroups.length &gt; 0)) {
+      me.permissionGroups.some(function (pg) {
+        if (pg.name == permissionGroup) {
+          permissionCfg = pg.config;
+          return true;
+        }
+      });
+    }
+
+    return permissionCfg;
+  }
+
+});
+
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.ChangeRightsWrapper
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_ChangeRights&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+  params.wfOwner = wFDiagram.ownerName;
+  params.objIds = null;
+
+  module = sol.create(&quot;sol.common.ix.functions.ChangeRightsWrapper&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_ChangeRights&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.ChangeRightsWrapper
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_ChangeRights&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+
+  sol.common.WfUtils.checkMainAdminWf(wFDiagram);
+  params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId);
+  params.objId = wFDiagram.objId;
+  params.wfOwner = wFDiagram.ownerName;
+  params.objIds = null;
+
+  module = sol.create(&quot;sol.common.ix.functions.ChangeRightsWrapper&quot;, params);
+  module.process();
+
+  logger.exit(&quot;onExitNode_ChangeRights&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ChangeRightsWrapper-static-method-RF_sol_function_ChangeRights'>/**
+</span> * @member sol.common.ix.functions.ChangeRightsWrapper
+ * @method RF_sol_function_ChangeRights
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_ChangeRights(ec, args) {
+  var params, module;
+
+  logger.enter(&quot;RF_sol_function_ChangeRights&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;objId&quot;);
+  sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+
+  module = sol.create(&quot;sol.common.ix.functions.ChangeRightsWrapper&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_ChangeRights&quot;);
+}
+
+</pre>
+</body>
+</html>

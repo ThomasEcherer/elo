@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start namespace cal
+var EM_CALENDAR_BASE = &quot;ARCPATH:¶Sitzungen¶Kalender¶&quot;;
+
+// Unterhalb der Kalender-Basis können beliebige Ordner mit Kalendereinträge stehen.
+// Der Ordnernamen enthält dabei den Kalendernamen und der Zusatztext die Liste mit
+// den freien Tagen. Feiertage, die auf ein Wochenende fallen, dürfen nicht eingetragen
+// werden, andernfalls werden sie doppelt abgezogen.
+// Der Zusatztext enthält pro Zeile einen Feiertag in der Form:
+// &lt;Datum (ISO)&gt;:&lt;Faktor&gt;:&lt;Name&gt;
+//
+// Das Datum wird in der Form YYYYMMDD eingetragen um Probleme mit unterschiedlichen
+// Datumszonen zu vermeiden. Der Faktor kann einen Wert zwischen 0 und 1 einnehmen
+// (z.B. für einen halben Tag am 24.12 - 0.5). Der Name dient nur zur besseren
+// Übersicht, er wird nicht weiter ausgewertet.
+
+<span id='cal'>/**
+</span> * @class cal
+ * @singleton
+ */
+var cal = new Object();
+cal = {
+
+<span id='cal-method-getWorkDays'>/**
+</span> * Liefert die Anzahl der Arbeitstage zwischen zwei Datumsangaben unter Berücksichtigung 
+ * des Kalenders und der Wochenenden (Sa und So) zurück.
+ * 
+ * @param {String} calendarName Kalendername
+ * @param {String} fromDate Von-Datum
+ * @param {String} toDate Bis-Datum
+ * @return {Number} Anzahl der Arbeitstage
+ */
+getWorkDays: function(calendarName, fromDate, toDate) {
+  var dates = cal.getCalendar(calendarName);
+  log.debug(&quot;Anzahl Feiertage: &quot; + dates.length);
+  var fd = cal.getDateFromIso(fromDate);
+  var td = cal.getDateFromIso(toDate);
+  var workDays = cal.getNumberOfWorkDays(fd, td);
+  log.debug(&quot;Anzahl Wochentage: &quot; + workDays);
+
+  for (var i = 0; i &lt; dates.length; i++) {
+    if ((dates[i] &gt;= fd) &amp;&amp; (dates[i] &lt;= td)) {
+      workDays -= dates[i].factor;
+      log.debug(&quot;remove date: &quot; + dates[i] + &quot; : &quot; + dates[i].dayname);
+    }
+  }
+
+  log.debug(&quot;Anzahl Arbeitstage: &quot; + workDays);
+  return workDays;
+},
+
+<span id='cal-method-getCalendar'>/**
+</span> * Liefert eine Liste mit den Datumsangaben zu einem Kalender zurück.
+ * 
+ * @param {String} calendarName Kalendername
+ * @return {Array} Liste mit Datumsangaben
+ */
+getCalendar: function(calendarName) {
+  if (!calendarName) {
+    calendarName = &quot;Feiertage&quot;;
+  }
+
+  var calSord = ixConnect.ix().checkoutSord(EM_CALENDAR_BASE + calendarName, EditInfoC.mbSord, LockC.NO);
+  if (calSord) {
+    var desc = calSord.sord.desc;
+    var lines = desc.split(&quot;\\n&quot;);
+    var dates = new Array();
+    for (var i = 0; i &lt; lines.length; i++) {
+      var items = lines[i].split(&quot;:&quot;);
+      var iso = items[0];
+      var factor = items[1];
+      var name = items[2];
+      var nextDate = cal.getDateFromIso(iso);
+      var wday = nextDate.getDay();
+      log.debug(wday + &quot; : &quot; + nextDate);
+      if ((wday &gt; 0) &amp;&amp; (wday &lt; 6)) {
+        // keine Wochenend-Feiertage aufnehmen
+        nextDate.factor = factor;
+        nextDate.dayname = name;
+        dates.push(nextDate);
+      }
+    }
+
+    return dates;
+  } else {
+    return null;
+  }
+},
+
+<span id='cal-method-getDateFromIso'>/**
+</span> * Liefert ein Datumsobjekt aus dem angegebenen Datumsstring zurück (YYYYMMDD oder YYYY-MM-DD).
+ * 
+ * @param {String} isoDateString ISO-Datum
+ * @return {Date} Datumobjekt
+ */
+getDateFromIso: function(isoDateString) {
+   if (isoDateString.charAt(4) == 45) {
+     return new Date(isoDateString.substring(0,4), Number(isoDateString.substring(5,7)) - 1, isoDateString.substring(8,10));
+   } else {
+     return new Date(isoDateString.substring(0,4), Number(isoDateString.substring(4,6)) - 1, isoDateString.substring(6,8));
+   }
+},
+
+<span id='cal-method-getNumberOfWorkDays'>/**
+</span> * Liefert die Anzahl der Wochentage zwischen zwei Terminen zurück.
+ * 
+ * @param {String} fromDate Start-Datum
+ * @param {String} toDate Ende-Datum
+ * @return {Number} Anzahl der Wochentage
+ */
+getNumberOfWorkDays: function(fromDate, toDate) {
+  var days1 = Math.floor(fromDate.getTime() / 86400000);
+  var wday1 = fromDate.getDay();
+  var days2 = Math.floor(toDate.getTime() / 86400000);
+  var wday2 = toDate.getDay();
+
+  if (days1 &gt; days2) {
+    var temp = days2;
+    days2 = days1;
+    days1 = temp;
+    temp = wday2;
+    wday2 = wday1;
+    wday1 = temp;
+  }
+
+  var startOffset = (wday1 == 0) ? 1 : 0;
+  var endOffset = (wday2 == 6) ? 1 : 0;
+  var weekendDiff = 2 * Math.floor((days2 - days1 + wday1 - wday2) / 7);
+  var diff = days2 - days1 + 1 - startOffset - endOffset - weekendDiff;
+
+  return diff;
+}
+
+} // end of namespace cal
+</pre>
+</body>
+</html>

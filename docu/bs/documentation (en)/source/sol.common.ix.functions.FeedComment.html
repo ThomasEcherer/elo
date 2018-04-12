@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.de.elo.ix.client.feed);
+
+//@include lib_Class.js
+//@include lib_moment.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.DateUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.FeedComment&quot; });
+
+<span id='sol-common-ix-functions-FeedComment'>/**
+</span> * Writes a feed comment for an archive element.
+ *
+ * The comments will be read from a language `file` which has to be present in `ELOwfBase/Feed/Script Locales`.
+ * A `key` determines which value from the language file will be used. The feed comments in this file can contain placeholders.
+ * An additional `data` array contains the configuration on how the placeholders will be handled.
+ *
+ * # As workflow node
+ *
+ * `ObjId` is set based on the element that the workflow is attached to.
+ * Following configuration should be applied to the comments field.
+ *
+ *     {
+ *       &quot;file&quot;: &quot;sol.invoice.workflow&quot;,
+ *       &quot;key&quot;: &quot;WORKFLOW.INVOICE.APPROVAL.REJECTED&quot;,
+ *       &quot;data&quot;: [ &quot;INVOICE_NET_AMOUNT&quot;, &quot;INVOICE_CURRENCY_CODE&quot; ]
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the `objId` must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_ix_FeedComment&quot;, {
+ *       objId: &quot;4711&quot;,
+ *       file: &quot;sol.invoice.workflow&quot;,
+ *       key: &quot;WORKFLOW.INVOICE.APPROVAL.REJECTED&quot;,
+ *       data: [ &quot;INVOICE_NET_AMOUNT&quot;, &quot;INVOICE_CURRENCY_CODE&quot; ]
+ *     });
+ *
+ * # Placeholder
+ * The key in the property file can contain placeholders. Those are curly braces with an index (starting with zero): `{0}`
+ * These placeholders will be replaced with either Sord properties, indexing information, map entries or workflow map entries specified by the data array.
+ * Datasource is the object specified by `objId` or on which the workflow runs.
+ *
+ * By default, the index field names are used in the data array to determine the values to replace the placeholders:
+ *
+ *     data: [ &quot;MY_FIELD&quot; ]  // abbreviated form, will replace {0} with the value of the index field `MY_FIELD`
+ *
+ * Advanced placeholder configuration:
+ *
+ *     data: [ { type: &quot;SORD&quot;, key: &quot;name&quot; } ]  // will replace {0} with the name of the sord
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot; } ]  // will replace {0} with the value of the index field `MY_FIELD`
+ *     data: [ { type: &quot;MAP&quot;, key: &quot;MY_MAP&quot; } ]  // will replace {0} with the value of the map field `MY_MAP`
+ *     data: [ { type: &quot;WFMAP&quot;, key: &quot;MY_WFMAP&quot; } ]  // will replace {0} with the value of the workflow map field `MY_MAP` (only available in workflow functions)
+ *
+ * Both notations can be mixed.
+ *
+ * # Formating
+ * Values read from fields, can be formatted. An additional configuration will be needed for that.
+ *
+ * Currently `dateFormat`, and `eloFormat` is supported.
+ *
+ * The `dateFormat` has to be in [moment](http://momentjs.com/docs/#/parsing/string-format/) syntax.
+ *
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_DATE_FIELD&quot;, dateFormat: &quot;DD.MM.YYYY&quot; } ]  // will output the value of `MY_DATE_FIELD` in the given format e.g. &#39;30.05.2016&#39;
+ *
+ * The `eloFormat` currently supports the two values `hashtag` and `mention` (or the corresponding shortcuts `h` or `m`)
+ *
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, eloFormat: &quot;hashtag&quot; } ]  // will output the value of `MY_FIELD` as an elo hashtag
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, eloFormat: &quot;h&quot; } ]  // will output the value of `MY_FIELD` as an elo hashtag
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, eloFormat: &quot;mention&quot; } ]  // will output the value of `MY_FIELD` as an elo mention
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, eloFormat: &quot;m&quot; } ]  // will output the value of `MY_FIELD` as an elo mention
+ *
+ * `dateFormat` and `eloFormat` can be combined:
+ *
+ *     data: [ { type: &quot;GRP&quot;, key: &quot;MY_DATE_FIELD&quot;, dateFormat: &quot;YYYY[_Q]Q&quot;, eloFormat: &quot;h&quot; } ]  // will output the value of `MY_DATE_FIELD` as an elo hashtag, e.g. `#2016_Q2`
+ *
+ * If formatting should be used, the abbreviated placeholder configuration can not be used.
+ *
+ * # Using information boxes in feed comments
+ *
+ * HTML content is allowed if used within localization property files. In order to support colorized information boxes a set of div-containers and colors can be used.
+ *
+ * Following locale key will display a yellow box including some information after the message.
+ *
+ *     CONTRACT.SIGNED=signed the contract.&lt;div class=&quot;description yellow&quot;&gt;Information of the box...&lt;/div&gt;
+ *
+ * By default a set of colors can be used:
+ *
+ *     &lt;div class=&quot;description red&quot;&gt;red box&lt;/div&gt;
+ *     &lt;div class=&quot;description green&quot;&gt;green box&lt;/div&gt;
+ *     &lt;div class=&quot;description redpruple&quot;&gt;red purple box&lt;/div&gt;
+ *     &lt;div class=&quot;description yellow&quot;&gt;yellow box&lt;/div&gt;
+ *     &lt;div class=&quot;description orange&quot;&gt;orange box&lt;/div&gt;
+ *     &lt;div class=&quot;description pink&quot;&gt;pink box&lt;/div&gt;
+ *
+ * HTML-Tags must be used with care since that allows breaking the layout. The use of script tags is also forbidden.
+ *
+ * # Examples
+ *
+ * For defining new feed action events a language file should be placed in `\Administration\ELOwf Base\Feed\Script Locales`. It is recommended seperating language files by the solution.
+ * If a contract management solution is used define use a file name that includes a namespace. (e.g. `sol.contract` or `sol.contract_fr`)
+ *
+ * It is recommended using the default locale file (`sol.contract`) for the english translation if multiple language files should be supported.
+ * This will be used as a fallback for unsupported languages.
+ *
+ * ## Using property keys
+ *
+ * Contents of file `\Administration\ELOwf Base\Feed\Script Locales\sol.contract`:
+ *
+ *     CONTRACT.CREATED=created a new contract.
+ *
+ * Workflow node configuration:
+ *
+ *     {
+ *       &quot;file&quot;: &quot;sol.contract&quot;,
+ *       &quot;key&quot;: &quot;CONTRACT.CREATED&quot;
+ *     }
+ *
+ * ## Using data placeholders
+ *
+ * Contents of file `\Administration\ELOwf Base\Feed\Script Locales\sol.contract`:
+ *
+ *     CONTRACT.CREATED=created a new contract: {0}.
+ *
+ * Workflow node configuration:
+ *
+ *     {
+ *       &quot;file&quot;: &quot;sol.contract&quot;,
+ *       &quot;key&quot;: &quot;CONTRACT.CREATED&quot;,
+ *       &quot;data&quot;: [&quot;CONTRACT_NAME&quot;]
+ *     }
+ *
+ * ## Using information boxes and multiple data placeholders
+ *
+ * Contents of file `\Administration\ELOwf Base\Feed\Script Locales\sol.contract`:
+ *
+ *     CONTRACT.CONCLUDED=signed the contract.&lt;div class=&quot;description yellow&quot;&gt;Comments: {0}&lt;br/&gt;Resposible: {1}&lt;/div&gt;
+ *
+ * Workflow node configuration:
+ *
+ *     {
+ *       &quot;file&quot;: &quot;sol.contract&quot;,
+ *       &quot;key&quot;: &quot;CONTRACT.CREATED&quot;,
+ *       &quot;data&quot;: [{ &quot;type&quot;: &quot;GRP&quot;, &quot;key&quot;: CONTRACT_NAME&quot; }, { &quot;type&quot;: &quot;MAP&quot;, &quot;key&quot;: &quot;CONTRACT_RESPONSIBLE&quot; }]
+ *     }
+ *
+ * ## Using fixed text without localization info
+ *
+ * Workflow node configuration:
+ *
+ *     {
+ *       &quot;text&quot;: &quot;has created a document {0} with content {1}&quot;,
+ *       &quot;data&quot;: [&quot;Test&quot;, &quot;xyz&quot;]
+ *     }
+ *
+ * @author JHR, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ *
+ * @requires  sol.common.ObjectUtils
+ * @requires  sol.common.StringUtils
+ * @requires  sol.common.DateUtils
+ * @requires  sol.common.SordUtils
+ * @requires  sol.common.JsonUtils
+ * @requires  sol.common.WfUtils
+ * @requires  sol.common.ix.RfUtils
+ * @requires  sol.common.ix.FunctionBase
+ */
+sol.define(&quot;sol.common.ix.functions.FeedComment&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+<span id='sol-common-ix-functions-FeedComment-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   */
+  objId: undefined,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-file'>  /**
+</span>   * @cfg {String} file (required)
+   * Resource file from &#39;ELOwf Base\Feed\Script Locales&#39; (without locale extension, e.g. &#39;_de&#39;)
+   */
+  file: undefined,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-key'>  /**
+</span>   * @cfg {String} key (required)
+   * The property key for the message
+   */
+  key: undefined,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-text'>  /**
+</span>   * @cfg {String} text (required, if file and key are not set)
+   * The constant text for the message if locale extension is not used
+   */
+  text: undefined,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-data'>  /**
+</span>   * @cfg {String[]} data
+   * If the key requires additional data, this property should hold a list of group fields to hand over to the feed
+   */
+  data: undefined,
+
+<span id='sol-common-ix-functions-FeedComment-cfg-writeToParent'>  /**
+</span>   * @cfg {Boolean} [writeToParent=false]
+   * If true then the comment will be written to the parent of the element
+   */
+
+<span id='sol-common-ix-functions-FeedComment-cfg-writeToObjId'>  /**
+</span>   * @cfg {Number} [writeToObjId]
+   * If set the feed for the given object used used instead.
+   * This allows retrieving data from the current object and write feed actions to another object.
+   */
+
+<span id='sol-common-ix-functions-FeedComment-cfg-userGuid'>  /**
+</span>   * @cfg {String} [userGuid]
+   * If set the comment will be written under the given users name.
+   * This is only allowed if executing user has administrative privileges and cannot be used if used as onEnter or onExit node.
+   */
+
+<span id='sol-common-ix-functions-FeedComment-method-initialize'>  /**
+</span>   * @param {Object} config Config
+   */
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-process'>  /**
+</span>   * Writes the feed comment for the element.
+   */
+  process: function () {
+    var me = this,
+        values = [],
+        sord, action, dataString, feedObjId;
+
+    if (!me.text) {
+      if (!me.file) {
+        throw &quot;Parameter file is empty&quot;;
+      }
+      if (!me.key) {
+        throw &quot;Parameter key is empty&quot;;
+      }
+    }
+    if (me.text) {
+      if (!me.data) {
+        throw &quot;Parameter data is empty&quot;;
+      }
+    }
+    if (me.data &amp;&amp; me.data.length &gt; 0) {
+      if (!me.text) {
+        sord = ixConnect.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+        me.data.forEach(function (entry) {
+          var value;
+          value = (me.getValue(sord, entry) || &quot;&quot;) + &quot;&quot;;
+          values.push(value);
+        });
+      }
+    }
+
+    feedObjId = me.writeToObjId || me.objId;
+
+    if (me.writeToParent) {
+      sord = sord || sol.common.RepoUtils.getSord(me.objId);
+      feedObjId = sord.parentId;
+    }
+
+    action = ixConnect.feedService.createAction(EActionType.AutoComment, feedObjId);
+    dataString = JSON.stringify(values);
+
+    if (me.text) {
+      action.text = me.formatText(me.text, me.data);
+    } else {
+      action.text = &#39;{&quot;file&quot;: &quot;&#39; + me.file + &#39;&quot;, &quot;key&quot;: &quot;&#39; + me.key + &#39;&quot;, &quot;data&quot;: &#39; + dataString + &quot;}&quot;;
+    }
+
+    if (me.userGuid) {
+      action.userGuid = me.userGuid;
+    }
+
+    ixConnect.feedService.checkinAction(action, ActionC.mbAll);
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-formatText'>  /**
+</span>   * @private
+   * @param {String} text e.g.&quot;has created a document {0} with content {1}&quot;
+   * @param {Object} data e.g. [&quot;Test&quot;, &quot;xyz&quot;]
+   * @return {String} formmatted text &quot;has created a document Test with content &quot;xyz&quot;&quot;
+   */
+  formatText: function (text, data) {
+    var i;
+    for (i = 0; i &lt; data.length; i++) {
+      text = text.replace(new RegExp(&quot;\\{&quot; + i + &quot;\\}&quot;, &quot;g&quot;), data[i]);
+    }
+    return text;
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-getValue'>  /**
+</span>   * @private
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} dataConfig
+   * @return {String}
+   */
+  getValue: function (sord, dataConfig) {
+    var me = this,
+        wfMapValue, values, value;
+    if (!sol.common.ObjectUtils.isObject(dataConfig)) {
+      values = sol.common.SordUtils.getObjKeyValues(sord, dataConfig);
+      if (!values) {
+        value = &quot;&quot;;
+      } else {
+        value = values.join(&quot;, &quot;);
+      }
+      return value;
+    }
+    try {
+      wfMapValue = me.getWfMapValue(dataConfig);
+      if (wfMapValue) {
+        value = wfMapValue;
+      } else {
+        values = sol.common.SordUtils.getValues(sord, dataConfig);
+        values = me.formatValues(values, dataConfig);
+        if (!values) {
+          value = &quot;&quot;;
+        } else {
+          value = values.join(&quot;, &quot;);
+        }
+      }
+      return value;
+    } catch (ex) {
+      me.logger.warn([&quot;IllegalConfiguration: could not determine value for &#39;{0}&#39;&quot;, JSON.stringify(dataConfig)], ex);
+    }
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-getWfMapValue'>  /**
+</span>   * @private
+   * @param {Object} dataConfig
+   * @return {String}
+   */
+  getWfMapValue: function (dataConfig) {
+    var me = this,
+        wfMapitems;
+    if (dataConfig.type === &quot;WFMAP&quot; &amp;&amp; me.flowId) {
+      wfMapitems = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_WORKFLOW_ACTIVE, me.flowId, [dataConfig.key], LockC.NO).items;
+      if (wfMapitems &amp;&amp; wfMapitems.length &gt; 0) {
+        return wfMapitems[0].value;
+      }
+    }
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-formatValue'>  /**
+</span>   * @private
+   * @param {String} value
+   * @param {Object} dataConfig
+   * @return {String}
+   */
+  formatValue: function (value, dataConfig) {
+    var date;
+    if (dataConfig) {
+      if (dataConfig.dateFormat) {
+        date = sol.common.DateUtils.isoToDate(value);
+        value = sol.common.DateUtils.format(date, dataConfig.dateFormat);
+      }
+      if (value &amp;&amp; (dataConfig.eloFormat === &quot;hashtag&quot; || dataConfig.eloFormat === &quot;h&quot;)) {
+        value = &quot;#[&quot; + value + &quot;]&quot;;
+      }
+      if (value &amp;&amp; (dataConfig.eloFormat === &quot;mention&quot; || dataConfig.eloFormat === &quot;m&quot;)) {
+        value = &quot;@[&quot; + value + &quot;]&quot;;
+      }
+    }
+    return value;
+  },
+
+<span id='sol-common-ix-functions-FeedComment-method-formatValues'>  /**
+</span>   * @private
+   * @param {String[]} values
+   * @param {Object} dataConfig
+   * @return {String[]}
+   */
+  formatValues: function (values, dataConfig) {
+    var me = this,
+        i;
+
+    if (values &amp;&amp; values.length &gt; 0) {
+      for (i = 0; i &lt; values.length; i++) {
+        values[i] = me.formatValue(values[i], dataConfig);
+      }
+    }
+    return values;
+  }
+});
+
+<span id='sol-common-ix-functions-FeedComment-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.FeedComment
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_FeedComment&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+  params.userGuid = undefined;
+
+  params.objId = wFDiagram.objId;
+  params.flowId = wFDiagram.id;
+  module = sol.create(&quot;sol.common.ix.functions.FeedComment&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_FeedComment&quot;);
+}
+
+
+<span id='sol-common-ix-functions-FeedComment-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.FeedComment
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_FeedComment&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+  params.userGuid = undefined;
+
+  params.objId = wFDiagram.objId;
+  params.flowId = wFDiagram.id;
+  module = sol.create(&quot;sol.common.ix.functions.FeedComment&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_FeedComment&quot;);
+}
+
+
+<span id='sol-common-ix-functions-FeedComment-static-method-RF_sol_function_FeedComment'>/**
+</span> * @member sol.common.ix.functions.FeedComment
+ * @method RF_sol_function_FeedComment
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_FeedComment(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_function_FeedComment&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.FeedComment&quot;, params);
+
+  if (params.userGuid) {
+    sol.common.ix.RfUtils.checkMainAdminRights(iXSEContext.user, params);
+  }
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_FeedComment&quot;);
+}</pre>
+</body>
+</html>

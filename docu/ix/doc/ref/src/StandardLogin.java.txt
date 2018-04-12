@@ -1,0 +1,61 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.UserInfo;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This example shows the standard login to the Index Server
+ * 
+ */
+public class StandardLogin {
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    
+    public static void main(String[] args) {
+        
+        LoginResult loginResult = null;
+        ClientInfo ci = null;
+        IXConnection ix = null;
+        
+        try {
+            Properties connProps = IXConnFactory.createConnProps(IX_URL);
+            Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+            IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+            ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+
+            // LOGIN as Administrator with password elo.
+            loginResult = ix.getLogin().lr();
+            
+            // The login function returns a copy of the ClientInfo 
+            // object that contains a session ticket. Use this 
+            // ClientInfo in all subsequent functions.
+            ci = loginResult.getClientInfo();
+            
+            // Print some information returned from ix.login.
+            System.out.println("My session ticket is: " + 
+                               ci.getTicket() + ".");
+            System.out.println("It's valid for " + 
+                                loginResult.getTicketLifetime() + 
+                                " seconds.");
+
+
+            
+        }
+        catch (RemoteException e) {
+            System.out.println(e.toString());
+        }
+        finally {
+            
+            if (ix != null) {
+               ix.logout();
+            }
+        }
+    }
+}

@@ -1,0 +1,105 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.ClientInfo;
+import de.elo.ix.client.EditInfo;
+import de.elo.ix.client.EditInfoC;
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.IXServicePortC;
+import de.elo.ix.client.LockC;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This code demonstrates how createSord() can be used to retrieve basic data
+ * such as storage path names and mask names
+ * 
+ */
+
+public class ListBasicData {
+    
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+    private static IXConnection ix;
+    private static IXServicePortC CONS;
+    private static EditInfoC EDIT_INFO;
+
+    
+    public static void main(String[] args) {
+
+        try {
+            // Login
+            connectIx();
+            
+            // Insert a new document 
+            listBasicData();
+
+            
+        } catch (RemoteException e) {
+            System.out.println(e.toString());
+            
+        } finally {
+            
+            // logout from Index Server
+            disconnectIx();
+        }    
+    }
+    
+     public static void listBasicData() throws RemoteException {
+        
+        // Use createSord() to get mask names
+        EditInfo ed = ix.ix().createSord(null, null, EDIT_INFO.getMbBasicData());
+        System.out.println("Created sord");
+        
+        // Display mask names
+        System.out.println("Mask names:");
+        for (int i = 0; i < ed.getMaskNames().length; i++){
+            System.out.println("    name = " + ed.getMaskNames()[i].getName() + ", id = " + ed.getMaskNames()[i].getId());
+        }
+        
+        // Display marker names
+        System.out.println("Marker names:");
+        for (int i = 0; i < ed.getMarkerNames().length; i++){
+            System.out.println("    name = " + ed.getMarkerNames()[i].getName() + ", id = " + ed.getMarkerNames()[i].getId());
+        }
+        
+        // Display path names
+        System.out.println("Path names:");
+        for (int i = 0; i < ed.getPathNames().length; i++){
+            System.out.println("    name = " + ed.getPathNames()[i].getName() + ", id = " + ed.getPathNames()[i].getId());
+        }
+        
+        // Display replication set names
+        System.out.println("Replication set names:");
+        for (int i = 0; i < ed.getReplNames().length; i++){
+            System.out.println("    name = " + ed.getReplNames()[i].getName() + ", id = " + ed.getReplNames()[i].getId());
+        }
+        
+     
+    }
+
+ 
+    //Connect and login to IndexServer
+    public static void connectIx() throws RemoteException {
+        Properties connProps = IXConnFactory.createConnProps(IX_URL);
+        Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+        IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+        ix = connFact.create(LOGIN_NAME, LOGIN_PWD, CNN_NAME, null);
+        
+        // Get contstant values (cached by IXClient object)
+        CONS = ix.getCONST();
+        EDIT_INFO = CONS.getEDIT_INFO();
+    }
+    
+    
+    // Logout from IndexServer
+    public static void disconnectIx() {
+         if (ix != null) {
+           ix.logout();
+         }
+         System.out.println("Logged off");
+    }
+    
+}

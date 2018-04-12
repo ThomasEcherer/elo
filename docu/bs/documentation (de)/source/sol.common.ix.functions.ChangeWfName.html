@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.ObjectUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.ObjectFormatter.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.ChangeWfName&quot; }); // eslint-disable-line one-var
+
+<span id='sol-common-ix-functions-ChangeWfName'>/**
+</span> * Changes the workflow name
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ *
+ * Following configuration should be applied to the comments field for a field update:
+ *
+ * ## Example
+ *
+ *     {
+ *       &quot;name&quot;: &quot;{{sord.name}} - {{count &#39;MY_WF_COUNTER&#39;}}&quot;
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_ChangeWfName&quot;, {
+ *       flowId: &quot;222&quot;,
+ *       name: &quot;{{sord.name}} - {{count &#39;MY_WF_COUNTER&#39;}}&quot;
+ *     });
+ *
+ * @author MW, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.Logger
+ * @requires sol.common.SordUtils
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.ObjectUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.Template
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.ChangeWfName&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-ChangeWfName-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;],
+</span>
+
+<span id='sol-common-ix-functions-ChangeWfName-cfg-objId'>  /**
+</span>   * @cfg {string} objId (required)
+   * Object ID
+   */
+
+<span id='sol-common-ix-functions-ChangeWfName-cfg-flowId'>  /**
+</span>   * @cfg {string} flowId
+   * Flow ID
+   */
+
+<span id='sol-common-ix-functions-ChangeWfName-cfg-name'>  /**
+</span>   * @cfg {string} name
+   * Workflow name
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-ChangeWfName-method-process'>  /**
+</span>   * Changes the workflow name
+   */
+  process: function () {
+    var me = this,
+        wfName;
+
+    me.sord = sol.common.RepoUtils.getSord(me.objId, { sordZ: SordC.mbAllIndex });
+    me.tplSord = sol.common.SordUtils.getTemplateSord(me.sord);
+    wfName = sol.create(&quot;sol.common.Template&quot;, { source: me.name }).apply(me.tplSord);
+
+    if (!me.wfDiagram &amp;&amp; me.flowId) {
+      me.wfDiagram = sol.common.WfUtils.getWorkflow(me.flowId);
+    }
+
+    me.wfDiagram.name = wfName;
+    me.wfDiagram.nameTranslationKey = &quot;&quot;;
+  }
+});
+
+<span id='sol-common-ix-functions-ChangeWfName-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.ChangeWfName
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onEnterNode_ChangeWfName&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId, &quot;name&quot;),
+
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  module = sol.create(&quot;sol.common.ix.functions.ChangeWfName&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_ChangeWfName&quot;);
+}
+
+<span id='sol-common-ix-functions-ChangeWfName-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.ChangeWfName
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  var params, module;
+
+  logger.enter(&quot;onExitNode_ChangeWfName&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId, &quot;name&quot;);
+
+  params.objId = wfDiagram.objId;
+  params.wfDiagram = wfDiagram;
+  module = sol.create(&quot;sol.common.ix.functions.ChangeWfName&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_ChangeWfName&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ChangeWfName-static-method-RF_sol_function_ChangeWfName'>/**
+</span> * @member sol.common.ix.functions.ChangeWfName
+ * @method RF_sol_function_ChangeWfName
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_ChangeWfName(ec, args) {
+  var params, module;
+
+  logger.enter(&quot;RF_sol_function_ChangeWfName&quot;, args);
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;flowId&quot;, &quot;name&quot;);
+
+  module = sol.create(&quot;sol.common.ix.functions.ChangeWfName&quot;, params);
+  module.process();
+
+  ixConnect.ix().checkinWorkFlow(module.wfDiagram, WFDiagramC.mbAll, LockC.NO);
+
+  logger.exit(&quot;RF_sol_function_ChangeWfName&quot;);
+}
+
+</pre>
+</body>
+</html>

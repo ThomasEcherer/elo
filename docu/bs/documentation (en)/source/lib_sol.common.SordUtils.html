@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.Cache.js
+//@include lib_sol.common.StringUtils.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.ObjectFormatter.js
+
+/*
+ * Local definition of the class `sol.common.Cache` for backward compatibility of previous solution packages.
+ */
+if (!sol.ClassManager.getClass(&quot;sol.common.Cache&quot;)) {
+  sol.define(&quot;sol.common.Cache&quot;, {
+
+    initialize: function (config) {
+      var me = this;
+      me.cache = new java.util.concurrent.ConcurrentHashMap(8, 0.9, 1);
+    },
+
+<span id='global-method-put'>    /**
+</span>     * Inserts the specified key-value pair into the cache.
+     * @param {String} key
+     * @param {Object} value
+     * @return {Object} The previous value associated with the key, or null if there was no mapping before
+     */
+    put: function (key, value) {
+      var me = this;
+      return me.cache.put(key, value);
+    },
+
+<span id='global-method-putAll'>    /**
+</span>     * Inserts all key-value pairs specified by an object into the cache. Existing mappings will be replaced.
+     * @param {Object} data Property names will be used as keys and the associated values as values.
+     */
+    putAll: function (data) {
+      var me = this;
+      me.cache.putAll(data);
+    },
+
+<span id='global-method-containsKey'>    /**
+</span>     * Tests if the specified object is a key in the cache.
+     * @param {String} key
+     * @return {Boolean}
+     */
+    containsKey: function (key) {
+      var me = this;
+      return me.cache.containsKey(key);
+    },
+
+<span id='global-method-get'>    /**
+</span>     * Returns the value for the specified key from the cache, or null if the chache contains no mapping for the key.
+     * @param {String} key
+     * @return {Object}
+     */
+    get: function (key) {
+      var me = this;
+      return me.cache.get(key);
+    },
+
+<span id='global-method-keys'>    /**
+</span>     * Returns an enumeration of all keys in the cache.
+     * @return {Object} An `java.util.Enumeration` of all keys
+     */
+    keys: function () {
+      var me = this;
+      return me.cache.keys();
+    },
+
+<span id='global-method-values'>    /**
+</span>     * Returns a collection view of the values contained in the cache.
+     * @return {Object} An `java.util.Collection` of all values
+     */
+    values: function () {
+      var me = this;
+      return me.cache.values();
+    },
+
+<span id='global-method-elements'>    /**
+</span>     * Returns an enumeration of the values in the cache.
+     * @return {Object} An `java.util.Enumeration` of all values
+     */
+    elements: function () {
+      var me = this;
+      return me.cache.elements();
+    },
+
+<span id='global-method-remove'>    /**
+</span>     * Removes the key (and its corresponding value) from the cache.
+     * @param {String} key
+     * @return {Object} The previous value associated with the key, or null if there was no value for the key
+     */
+    remove: function (key) {
+      var me = this;
+      return me.cache.remove(key);
+    },
+
+<span id='global-method-size'>    /**
+</span>     * Returns the number of key-value pairs in the cache.
+     * @return {Number}
+     */
+    size: function () {
+      var me = this;
+      return me.cache.size();
+    },
+
+<span id='global-method-isEmpty'>    /**
+</span>     * Returns `true` if the chache contains no key-value pairs.
+     * @return {Boolean}
+     */
+    isEmpty: function () {
+      var me = this;
+      return me.cache.isEmpty();
+    },
+
+<span id='global-method-clear'>    /**
+</span>     * Removes all of the mappings from the cache.
+     */
+    clear: function () {
+      var me = this;
+      me.cache.clear();
+    }
+  });
+}
+
+<span id='sol-common-SordUtils'>/**
+</span> * This class contains convenience methods for working with Sord objects in server scripts.
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.03.000
+ *
+ * @eloix
+ * @eloas
+ * @elojc
+ *
+ * @requires sol.common.Cache
+ * @requires sol.common.StringUtils
+ * @requires sol.common.ObjectFormatter
+ */
+sol.define(&quot;sol.common.SordUtils&quot;, {
+  singleton: true,
+  requires: [&quot;sol.common.Cache&quot;],
+
+<span id='sol-common-SordUtils-property-pilcrow'>  pilcrow: &quot;\u00b6&quot;,
+</span>
+<span id='sol-common-SordUtils-property-docMaskCache'>  /**
+</span>   * @private
+   * @property {sol.common.Cache} docMaskCache Cache for `de.elo.ix.client.DocMask`
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+    me.docMaskCache = sol.create(&quot;sol.common.Cache&quot;);
+  },
+
+<span id='sol-common-SordUtils-method-isSord'>  /**
+</span>   * Checks, if an object is a de.elo.ix.client.Sord
+   * @param {Object} sord
+   * @return {Boolean}
+   */
+  isSord: function (sord) {
+    return (sord instanceof Sord);
+  },
+
+<span id='sol-common-SordUtils-method-isIndexdataLoaded'>  /**
+</span>   * Checks, if the index data (objKeys) is loaded
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Boolean}
+   */
+  isIndexdataLoaded: function (sord) {
+    return sord &amp;&amp; sord.objKeys &amp;&amp; (sord.objKeys.length &gt; 0);
+  },
+
+<span id='sol-common-SordUtils-method-isFolder'>  /**
+</span>   * Checks, if a de.elo.ix.client.Sord is from type folder
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Boolean}
+   */
+  isFolder: function (sord) {
+    return (sord.type &lt; SordC.LBT_DOCUMENT);
+  },
+
+<span id='sol-common-SordUtils-method-isDynamicFolder'>  /**
+</span>   * Checks, if a de.elo.ix.client.Sord is a dynamic folder.
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Boolean}
+   */
+  isDynamicFolder: function (sord) {
+    var me = this,
+        desc;
+    if (!me.isFolder(sord)) {
+      return false;
+    }
+    desc = sord.desc;
+    return !sol.common.StringUtils.isBlank(desc) &amp;&amp; (desc.matches(&quot;^![\+|\?|!].*&quot;));
+  },
+
+<span id='sol-common-SordUtils-method-isDocument'>  /**
+</span>   * Checks, if a de.elo.ix.client.Sord is from type document
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Boolean}
+   */
+  isDocument: function (sord) {
+    return (sord.type &gt;= SordC.LBT_DOCUMENT) &amp;&amp; (sord.type &lt;= SordC.LBT_DOCUMENT_MAX);
+  },
+
+<span id='sol-common-SordUtils-method-updateSord'>  /**
+</span>   * Updates all of Sord attributes and ObjKeys.
+   * Map Keys are not updated immediately, instead the function returns an Array with KeyValues, which can be checked in later.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object[]} data
+   *
+   *     {
+   *       key: &quot;name&quot;,
+   *       type: &quot;GRP&quot;, // SORD|GRP|MAP
+   *       value: &quot;hallo welt&quot;
+   *     }
+   *
+   * @returns {de.elo.ix.client.KeyValue[]}
+   */
+  updateSord: function (sord, data) {
+    var me = this,
+        mapEntries, _result;
+
+    me.logger.enter(&quot;updateSord&quot;, arguments);
+    mapEntries = [];
+    if (!me.isSord(sord) || !data) {
+      me.logger.exit(&quot;updateSord&quot;);
+      return;
+    }
+
+    if (!Array.isArray(data)) {
+      throw &quot;data has to be an Array&quot;;
+    }
+
+    data.forEach(function (entry) {
+      if (!entry || !entry.type || !entry.key || entry.value === undefined || entry.value === null) {
+        throw &quot;illegal object: &quot; + JSON.stringify(data);
+      }
+      switch (entry.type) {
+        case &quot;SORD&quot;:
+          sord[entry.key] = entry.value;
+          break;
+        case &quot;GRP&quot;:
+          me.setObjKeyValue(sord, entry.key, entry.value);
+          break;
+        case &quot;MAP&quot;:
+          mapEntries.push(new KeyValue(entry.key, entry.value));
+          break;
+        default:
+          throw &quot;unsupported type: &quot; + entry.type;
+      }
+    });
+    _result = (mapEntries.length &gt; 0) ? mapEntries : null;
+    me.logger.exit(&quot;updateSord&quot;, _result + &quot;&quot;);
+    return _result;
+  },
+
+<span id='sol-common-SordUtils-method-updateKeywording'>  /**
+</span>   * Updates a bunch of index data at once.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} indexData Key-value-pairs with key=field and value=new value
+   */
+  updateKeywording: function (sord, indexData) {
+    var me = this,
+        property;
+
+    me.logger.enter(&quot;updateKeywording&quot;, arguments);
+    for (property in indexData) {
+      if (indexData.hasOwnProperty(property)) {
+        this.setObjKeyValue(sord, property, indexData[property]);
+      }
+    }
+    me.logger.exit(&quot;updateKeywording&quot;);
+  },
+
+<span id='sol-common-SordUtils-method-objKeyExists'>  /**
+</span>   * Checks if an ObjKey exists
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName
+   * @returns {Boolean}
+   */
+  objKeyExists: function (sord, keyName) {
+    return this.getObjKey(sord, keyName) !== null;
+  },
+
+<span id='sol-common-SordUtils-method-getValues'>  /**
+</span>   * Retrieves values from a Sord.
+   * This could be a Sord property, an objKey, a map field or a form blob field.
+   *
+   * This can retrieve lists from `ObjKeys` and multiple map values.
+   *
+   *     {
+   *       key: &quot;FIELD_NAME&quot;,
+   *       type: &quot;GRP&quot;, // SORD|GRP|MAP
+   *     }
+   *
+   *     {
+   *       key: &quot;INDEXED_MAP_FIELD*&quot;,
+   *       type: &quot;MAP&quot;, // SORD|GRP|MAP
+   *     }
+   *
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} params
+   * @return {String[]} Can be null
+   */
+  getValues: function (sord, params) {
+    var me = this,
+        values = null,
+        tmpValues, i, fieldDefString, fileData;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+    if (!params || !params.type || !params.key) {
+      fieldDefString = JSON.stringify(params);
+      throw &quot;Field definition is incomplete: fieldDef=&quot; + fieldDefString;
+    }
+
+    switch (params.type) {
+      case &quot;SORD&quot;:
+        if (sord[params.key]) {
+          values = [sord[params.key]];
+        }
+        break;
+      case &quot;GRP&quot;:
+        tmpValues = me.getObjKeyValues(sord, params.key);
+        if (tmpValues &amp;&amp; (tmpValues.length &gt; 0)) {
+          values = tmpValues;
+        }
+        break;
+      case &quot;MAP&quot;:
+        tmpValues = ixConnect.ix().checkoutMap(MapDomainC.DOMAIN_SORD, sord.id, [params.key], LockC.NO).items;
+        if (tmpValues &amp;&amp; (tmpValues.length &gt; 0)) {
+          values = [];
+          for (i = 0; i &lt; tmpValues.length; i++) {
+            values.push(tmpValues[i].value);
+          }
+        }
+        break;
+      case &quot;FORMBLOB&quot;:
+        tmpValues = ixConnect.ix().checkoutMap(&quot;formdata&quot;, sord.id, [params.key], LockC.NO).items;
+        if (tmpValues &amp;&amp; (tmpValues.length == 1)) {
+          fileData = tmpValues[0].blobValue;
+          if (fileData &amp;&amp; fileData.stream) {
+            values = [Packages.org.apache.commons.io.IOUtils.toString(fileData.stream, &quot;UTF-8&quot;)];
+            fileData.stream.close();
+          }
+        }
+        break;
+      default:
+        throw &quot;unsupported type: &quot; + params.type;
+    }
+
+    return values;
+  },
+
+<span id='sol-common-SordUtils-method-getValue'>  /**
+</span>   * Retrieves a value from a Sord.
+   * This could be a Sord property, an objKey or a map field.
+   *
+   * Map values will only be returned, if there is one result. If there are more results, all will be ignored.
+   *
+   * Uses {@link #getValues}.
+   *
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} params
+   *
+   *     {
+   *       key: &quot;name&quot;,
+   *       type: &quot;GRP&quot;, // SORD|GRP|MAP|FORMBLOB
+   *     }
+   *
+   * @return {String}
+   */
+  getValue: function (sord, params) {
+    var me = this,
+        value = null,
+        values;
+
+    values = me.getValues(sord, params);
+
+    if (values &amp;&amp; (values.length &gt; 0)) {
+
+      // type &#39;map&#39; ignores completelly if there is more than one result
+      if ((params.type === &quot;MAP&quot;) &amp;&amp; (values.length === 1)) {
+        return values[0];
+      }
+
+      // other types simply return the first value
+      value = values[0];
+    }
+
+    return value;
+  },
+
+<span id='sol-common-SordUtils-method-getObjKey'>  /**
+</span>   * Returns the ObjKey for a field
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {string} keyName Name of the index field
+   * @return {de.elo.ix.client.ObjKey} The ObjKey, or null if none was found
+   */
+  getObjKey: function (sord, keyName) {
+    var keys, key, i;
+    if (this.isSord(sord) &amp;&amp; this.isIndexdataLoaded(sord) &amp;&amp; keyName) {
+      keys = sord.objKeys;
+      for (i = 0; i &lt; keys.length; i++) {
+        key = keys[i];
+        if (key.name == keyName) {
+          return key;
+        }
+      }
+    }
+    return null;
+  },
+
+<span id='sol-common-SordUtils-method-getObjKeyValue'>  /**
+</span>   * Returns the value of an ObjKey for a field
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @return {String} The field value
+   */
+  getObjKeyValue: function (sord, keyName) {
+    var values = this.getObjKeyValues(sord, keyName);
+    if (values) {
+      return values[0];
+    }
+    return null;
+  },
+
+<span id='sol-common-SordUtils-method-getObjKeyValueAsNumber'>  /**
+</span>   * Returns the value of an ObjKey for a field as number.
+   * The method takes care of wrong decimal separators.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @return {Number} The field value as number
+   */
+  getObjKeyValueAsNumber: function (sord, keyName) {
+    var value = this.getObjKeyValue(sord, keyName);
+    if (value) {
+      value = value.replace(&quot;,&quot;, &quot;.&quot;);
+      return parseFloat(value);
+    }
+    return null;
+  },
+
+<span id='sol-common-SordUtils-method-setObjKeyValueAsNumber'>  /**
+</span>   * Sets the value of an ObjKey for a field as number.
+   * The method takes care of the decimal separator.
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @param {String} value Value
+   */
+  setObjKeyValueAsNumber: function (sord, keyName, value) {
+    var me = this;
+    value = me.normalizeNumber(value);
+    me.setObjKeyValue(sord, keyName, value);
+  },
+
+<span id='sol-common-SordUtils-method-incObjKeyValue'>  /**
+</span>   * Increments the value of an ObjKey
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @return {Number} The field value as number
+   */
+  incObjKeyValue: function (sord, keyName) {
+    var me = this,
+        value;
+
+    value = me.getObjKeyValueAsNumber(sord, keyName);
+    value++;
+    me.setObjKeyValueAsNumber(sord, keyName, value);
+
+    return value;
+  },
+
+<span id='sol-common-SordUtils-method-normalizeNumber'>  /**
+</span>   * Adjusts the decimal separator of a number
+   * @param {String} value Value
+   * @return {String}
+   */
+  normalizeNumber: function (value) {
+    var me = this,
+        groups;
+
+    value = String(value || &quot;&quot;);
+
+    groups = value.match(/(^-?\d+)[\.|,](\d+$)/);
+
+    if (groups &amp;&amp; (groups.length == 3)) {
+      value = groups[1] + me.getDecimalSeparatorForIx() + groups[2];
+    }
+
+    return value;
+  },
+
+<span id='sol-common-SordUtils-method-getDecimalSeparatorForIx'>  /**
+</span>   * Returns the decimal separator for the ELO index server
+   * @returns {String}
+   */
+  getDecimalSeparatorForIx: function () {
+    var language, decimalSeparatorChar, decimalSeparator;
+    language = ixConnect.loginResult.clientInfo.language;
+    decimalSeparatorChar = new java.text.DecimalFormatSymbols(new java.util.Locale(language)).decimalSeparator;
+    decimalSeparator = String(java.lang.Character.toString(decimalSeparatorChar));
+    return decimalSeparator;
+  },
+
+<span id='sol-common-SordUtils-method-getObjKeyValues'>  /**
+</span>   * Returns the values of an ObjKey for a field as array
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @return {String[]} The field values
+   */
+  getObjKeyValues: function (sord, keyName) {
+    var key = this.getObjKey(sord, keyName);
+    if (key &amp;&amp; (key.data.length &gt; 0)) {
+      return key.data;
+    }
+    return null;
+  },
+
+<span id='sol-common-SordUtils-method-setObjKeyValue'>  /**
+</span>   * Sets the value of an ObjKey for a field
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @param {String|String[]} value
+   * @param {Object} params Parameters
+   * @param {Boolean} params.silent Silent
+   * @return {de.elo.ix.client.ObjKey} The changed ObjKey
+   */
+  setObjKeyValue: function (sord, keyName, value, params) {
+    if (!Array.isArray(value)) {
+      value = [value];
+    }
+    return this.setObjKeyValues(sord, keyName, value, params);
+  },
+
+<span id='sol-common-SordUtils-method-setObjKeyValues'>  /**
+</span>   * Sets the values of an ObjKey for a field
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} keyName Name of the index field
+   * @param {String[]} values
+   * @param {Object} params Parameters
+   * @param {Boolean} params.silent Silent
+   * @return {de.elo.ix.client.ObjKey} The changed ObjKey
+   */
+  setObjKeyValues: function (sord, keyName, values, params) {
+    var me = this,
+        newObjKey, objKeys, line, key;
+
+    params = params || {};
+
+    if (!sord) {
+      throw &quot;Sord is missing&quot;;
+    }
+
+    if (!keyName) {
+      throw &quot;Object key name is empty&quot;;
+    }
+
+    key = this.getObjKey(sord, keyName);
+    if (key) {
+      key.data = values;
+    } else {
+      // in some cases objKey array doesn&#39;t match mask definition.
+      line = me.getDocMaskLine(sord.mask, keyName);
+      if (line) {
+        me.logger.debug(&quot;ObjKey &#39;&quot; + keyName + &quot;&#39; does not exist. Adding ObjKey to list.&quot;);
+        newObjKey = new ObjKey();
+        newObjKey.id = line.id;
+        newObjKey.name = keyName;
+        newObjKey.data = values;
+        objKeys = Array.prototype.slice.call(sord.objKeys);
+        objKeys.push(newObjKey);
+        sord.objKeys = objKeys;
+        key = newObjKey;
+      } else {
+        if (!params.silent) {
+          throw &quot;ObjKey &#39;&quot; + keyName + &quot;&#39; not found.&quot;;
+        }
+      }
+    }
+    return key;
+  },
+
+<span id='sol-common-SordUtils-method-getDocMask'>  /**
+</span>   * Retrieves (and caches) the definition of document masks by their name
+   * @param {String} name
+   * @param {String} language
+   * @returns {de.elo.ix.client.DocMask} mask
+   */
+  getDocMask: function (name, language) {
+    var me = this,
+        languageCache, _result;
+
+    me.logger.enter(&quot;getDocMask&quot;, { name: name, language: language });
+
+    if (!name) {
+      throw &quot;Document mask name is empty&quot;;
+    }
+
+    language = language || ixConnect.loginResult.clientInfo.language;
+
+    if (!me.docMaskCache.containsKey(language)) {
+      me.docMaskCache.put(language, sol.create(&quot;sol.common.Cache&quot;));
+    }
+
+    languageCache = me.docMaskCache.get(language);
+
+    if (!languageCache.containsKey(name)) {
+      languageCache.put(name, ixConnect.ix().checkoutDocMask(name, DocMaskC.mbAll, LockC.NO));
+    }
+
+    _result = languageCache.get(name);
+    me.logger.exit(&quot;getDocMask&quot;, _result + &quot;&quot;);
+    return _result;
+  },
+
+<span id='sol-common-SordUtils-method-getDocMaskNames'>  /**
+</span>   * Reads document mask names
+   * @param {Object} params Parameters
+   * @param {Object} params.filter Filters
+   * @param {String} params.filter.nameTranslationKeyPrefix Name translation key prefix filter
+   * @return {de.elo.ix.client.MaskName[]}
+   */
+  getDocMaskNames: function (params) {
+    var maskNames = [],
+        editInfoZ, editInfo, i, maskName;
+
+    params = params || {};
+
+    editInfoZ = new EditInfoZ(EditInfoC.mbMaskNames, new SordZ());
+    editInfo = ixConnect.ix().createSord(&quot;1&quot;, &quot;&quot;, editInfoZ);
+    for (i = 0; i &lt; editInfo.maskNames.length; i++) {
+      maskName = editInfo.maskNames[i];
+      if (params.filters) {
+        if (params.filters.nameTranslationKeyPrefix) {
+          if (String(maskName.nameTranslationKey).indexOf(params.filters.nameTranslationKeyPrefix) == 0) {
+            maskNames.push(maskName);
+          }
+        }
+      } else {
+        maskNames.push(maskName);
+      }
+    }
+    return maskNames;
+  },
+
+<span id='sol-common-SordUtils-method-getDocMaskGuid'>  /**
+</span>   * Returns the GUID of a doc mask
+   * @param {String} name Doc mask name
+   * @returns {String} GUID
+   */
+  getDocMaskGuid: function (name) {
+    var me = this,
+        docMask;
+    docMask = me.getDocMask(name);
+    return docMask ? String(docMask.guid) : &quot;&quot;;
+  },
+
+<span id='sol-common-SordUtils-method-hasDocMask'>  /**
+</span>   * Checks, if a sord has the specified mask
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {String} maskName The original mask name
+   * @return {Boolean}
+   */
+  hasDocMask: function (sord, maskName) {
+    var me = this,
+        docMask;
+    if (!me.isSord(sord) || !maskName) {
+      return false;
+    }
+    docMask = me.getDocMask(maskName);
+    return sord &amp;&amp; (sord.mask === docMask.id);
+  },
+
+<span id='sol-common-SordUtils-method-getDocMaskLine'>  /**
+</span>   * Gets the field information of a specific mask field
+   * @param {String} maskName Name of the mask
+   * @param {String} fieldName Name of the field
+   * @return {de.elo.ix.client.DocMaskLine}
+   */
+  getDocMaskLine: function (maskName, fieldName) {
+    var me = this,
+        docMask, i, line;
+
+    docMask = me.getDocMask(maskName);
+
+    for (i = 0; i &lt; docMask.lines.length; i++) {
+      line = docMask.lines[i];
+      if (line.key == fieldName) {
+        return line;
+      }
+    }
+  },
+
+<span id='sol-common-SordUtils-method-docMaskExists'>  /**
+</span>   * Checks wether a mask exists
+   * @param {String} maskName
+   * @return {Boolean}
+   */
+  docMaskExists: function (maskName) {
+    if (!maskName) {
+      throw &quot;Mask name is empty&quot;;
+    }
+    try {
+      ixConnect.ix().checkoutDocMask(maskName, DocMaskC.mbAll, LockC.NO);
+      return true;
+    } catch (ex) {
+      return false;
+    }
+  },
+
+<span id='sol-common-SordUtils-method-getDynamicKeywordlistValue'>  /**
+</span>   * Retrieves values from a dynamic keyword list.
+   *
+   * Returns the values from the KWL associated with the REMINDER_PERIOD_UNIT field
+   *
+   *     sol.common.SordUtils.getDynamicKeywordlistValue(&quot;Contract&quot;, &quot;REMINDER_PERIOD_UNIT&quot;);
+   *
+   * Returns the values from the KWL associated with the REMINDER_PERIOD_UNIT field and containing the string &#39;month&#39;
+   *
+   *     sol.common.SordUtils.getDynamicKeywordlistValue(&quot;Contract&quot;, &quot;REMINDER_PERIOD_UNIT&quot;, { data: &quot;month&quot; });
+   *
+   * Returns the values from the KWL associated with the REMINDER_PERIOD_UNIT field and the data from column 2
+   *
+   *     sol.common.SordUtils.getDynamicKeywordlistValue(&quot;Contract&quot;, &quot;REMINDER_PERIOD_UNIT&quot;, { returnColumn: 2 });
+   *
+   * Returns the values from the KWL associated with the REMINDER_PERIOD_UNIT field and the data from column 2 filtering only thoase containing &#39;M&#39; in column 1
+   *
+   *     sol.common.SordUtils.getDynamicKeywordlistValue(&quot;Contract&quot;, &quot;REMINDER_PERIOD_UNIT&quot;, { data: &quot;M&quot;, filterColumn: 0, returnColumn: 2 });
+   *
+   * @param {String} maskName The mask name used to determine the dynamic keyword list
+   * @param {String} key The field which has the dynamic keyword list
+   * @param {Object} params (optional)
+   * @param {String} params.data (optional) lookup data (used to filter the result on the serverside, if supported by the KWL, or on clientside, if `returnColumn` and `filterColumn` are defined)
+   * @param {Number} params.returnColumn (optional) If set, the content of this column will be returned
+   * @param {Number} params.filterColumn (optional) If set (in addition to a return column), the result will be filtered on the clientside on the KWL column with this index (using `params.data`)
+   * @return {String[]}
+   */
+  getDynamicKeywordlistValue: function (maskName, key, params) {
+    var me = this,
+        keywordsDynamicInfo = new KeywordsDynamicInfo(),
+        sord = new Sord(),
+        objKey = new ObjKey(),
+        result = [],
+        columnMode = (params &amp;&amp; (typeof params.returnColumn === &quot;number&quot;)),
+        docMaskLine, keywordsResult, i, max, keyIndex;
+
+    key = new java.lang.String(key);
+
+    objKey.name = key;
+    objKey.data = (params &amp;&amp; params.data &amp;&amp; (typeof params.filterColumn !== &quot;number&quot;)) ? [params.data] : [];
+    sord.objKeys = [objKey];
+
+    docMaskLine = me.getDocMaskLine(maskName, key);
+
+    if (!docMaskLine) {
+      throw &quot;Can&#39;t find document mask line: maskName=&quot; + maskName + &quot;, key=&quot; + key;
+    }
+
+    keywordsDynamicInfo.sord = sord;
+    keywordsDynamicInfo.maskLineFocus = docMaskLine;
+
+    keywordsResult = ixConnect.ix().checkoutKeywordsDynamic(keywordsDynamicInfo);
+
+    if (columnMode) {
+      keyIndex = params.returnColumn;
+    } else {
+      for (i = 0, max = keywordsResult.keyNames.size(); i &lt; max; i++) {
+        if (keywordsResult.keyNames.get(i).equals(key)) {
+          keyIndex = i;
+          break;
+        }
+      }
+    }
+
+    for (i = 0, max = keywordsResult.table.size(); i &lt; max; i++) {
+      if (!columnMode || !params.data || (typeof params.filterColumn !== &quot;number&quot;) || (sol.common.StringUtils.startsWith(keywordsResult.table.get(i).get(params.filterColumn) + &quot;&quot;, params.data))) {
+        result.push(keywordsResult.table.get(i).get(keyIndex) + &quot;&quot;);
+      }
+    }
+
+    return result;
+  },
+
+<span id='sol-common-SordUtils-method-getLocalizedKwlKey'>  /**
+</span>   * Returns the key of a localized keyword list entry
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} fieldDef Field definition
+   * @param {Object} config Configuration
+   * @param {String} config.localizedKwlSeparator Localized keyword list separator
+   * @return {String}
+   */
+  getLocalizedKwlKey: function (sord, fieldDef, config) {
+    var me = this,
+        value, separator, separatorPos;
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+    if (!fieldDef) {
+      throw &quot;Field definition is empty&quot;;
+    }
+
+    config = config || {};
+    separator = config.localizedKwlSeparator || &quot;-&quot;;
+
+    value = String(me.getValue(sord, fieldDef));
+
+    separatorPos = value.indexOf(separator);
+    if (separatorPos &lt; 0) {
+      return value;
+    }
+    return value.substring(0, separatorPos).trim();
+  },
+
+<span id='sol-common-SordUtils-method-getLocalizedKwlEntry'>  /**
+</span>   * Returns the localized kwl entry
+   * @param {String} key Key
+   * @param {Object} config Configuration
+   * @param {String} config.scriptName Script name
+   * @return {String}
+   */
+  getLocalizedKwlEntry: function (key, config) {
+    var keywordsDynamicInfo, keywordsResult, entry;
+
+    if (!key) {
+      throw &quot;Key is empty&quot;;
+    }
+
+    config = config || {};
+
+    if (!config.localizedKwlScript) {
+      throw &quot;Localized keyword list script name is emtpy&quot;;
+    }
+
+    keywordsDynamicInfo = new KeywordsDynamicInfo();
+    keywordsDynamicInfo.mapData = { $KEY: key };
+    keywordsDynamicInfo.mapLineFocus = &quot;$KEY&quot;;
+    keywordsDynamicInfo.mapScriptName = config.localizedKwlScript;
+
+    keywordsResult = ixConnect.ix().checkoutKeywordsDynamic(keywordsDynamicInfo);
+
+    if (keywordsResult.table.size() != 1) {
+      return &quot;&quot;;
+    }
+
+    entry = String(keywordsResult.table.get(0).get(2));
+
+    return entry;
+  },
+
+<span id='sol-common-SordUtils-method-getTemplateSord'>  /**
+</span>   * Creates a template sord from a Sord (see {@link sol.common.ObjectFormatter.TemplateSord TemplateSord}).
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Object}
+   */
+  getTemplateSord: function (sord) {
+    var me = this,
+        templateSord;
+
+    me.logger.enter(&quot;getTemplateSord&quot;, arguments);
+    templateSord = sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: &quot;sol.common.ObjectFormatter.TemplateSord&quot;,
+        data: sord,
+        config: {
+          sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;maskName&quot;, &quot;name&quot;, &quot;desc&quot;, &quot;IDateIso&quot;, &quot;XDateIso&quot;, &quot;ownerName&quot;],
+          allMapFields: true
+        }
+      }
+    });
+    me.logger.exit(&quot;getTemplateSord&quot;);
+    return templateSord;
+  },
+
+<span id='sol-common-SordUtils-method-getStatisticSord'>  /**
+</span>   * Creates a statistic sord from a Sord (see {@link sol.common.ObjectFormatter.StatisticSord StatisticSord}).
+   * @param {de.elo.ix.client.Sord} sord
+   * @return {Object}
+   */
+  getStatisticSord: function (sord) {
+    var me = this,
+        statisticSord;
+
+    me.logger.enter(&quot;getStatisticSord&quot;, arguments);
+    statisticSord = sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: &quot;sol.common.ObjectFormatter.StatisticSord&quot;,
+        data: sord,
+        config: {
+          sordKeys: [&quot;id&quot;, &quot;guid&quot;, &quot;maskName&quot;, &quot;name&quot;, &quot;desc&quot;, &quot;IDateIso&quot;, &quot;XDateIso&quot;, &quot;ownerName&quot;],
+          objKeys: [&quot;VENDOR_NAME&quot;, &quot;INVOICE_DATE&quot;, &quot;INVOICE_CASH_DISCOUNT_AMOUNT&quot;]
+        }
+      }
+    });
+    me.logger.exit(&quot;getStatisticSord&quot;);
+    return statisticSord;
+  },
+
+<span id='sol-common-SordUtils-method-getDisplayRepoPath'>  /**
+</span>   * Returns the display repository path
+   * @param {de.elo.ix.client.Sord} sord
+   * @param {Object} params Parameters
+   * @param {String} [params.separator=&quot;/&quot;] Separator
+   * @param {Boolean} [params.withName=true] If true the name of the Sord will be appended
+   * @return {String}
+   */
+  getDisplayRepoPath: function (sord, params) {
+    var me = this,
+        displayRepoPath;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+    if (!sord.refPaths) {
+      throw &quot;Property &#39;sord.refPaths is empty&#39;&quot;;
+    }
+
+    params = params || {};
+    params.separator = params.separator || &quot;/&quot;;
+    params.withName = (typeof params.withName == &quot;undefined&quot;) ? true : params.withName;
+
+    displayRepoPath = sord.refPaths[0].pathAsString;
+    displayRepoPath = sol.common.StringUtils.replaceAll(displayRepoPath, me.pilcrow, params.separator);
+    if (params.withName) {
+      displayRepoPath += params.separator + sord.name;
+    }
+
+    return displayRepoPath;
+  },
+
+<span id='sol-common-SordUtils-method-createSord'>  /**
+</span>   * Creates a Sord
+   *
+   * Backward-comptabilility added for createSord(maskId, params)
+   *
+   * @param {Object} params Parameters
+   * @param {String} params.mask Mask
+   * @param {String} params.name Name
+   * @param {String} [params.parentId=&quot;1&quot;] Parent ID
+   * @param {String} params.sortOrder Sort order
+   * @param {String} params.containerDocument Container document
+   * @return {de.elo.ix.client.Sord} Sord
+   */
+  createSord: function (params) {
+    var sord;
+    params = params || {};
+
+    // backward-compatibility
+    if (arguments.length == 2) {
+      params = arguments[1];
+      params.mask = {
+        mask: arguments[0]
+      };
+    }
+
+    if (!params.mask) {
+      throw &quot;Mask ID is empty&quot;;
+    }
+    params.parentId = params.parentId || &quot;1&quot;;
+    sord = ixConnect.ix().createSord(params.parentId, params.mask, EditInfoC.mbSord).sord;
+
+    if (typeof params.name != &quot;undefined&quot;) {
+      sord.name = params.name;
+    }
+
+    if (typeof params.sortOrder != &quot;undefined&quot;) {
+      sord.details.sortOrder = params.sortOrder;
+    }
+
+    if (typeof params.documentContainer != &quot;undefined&quot;) {
+      sord.details.documentContainer = params.documentContainer;
+    }
+
+    return sord;
+  },
+
+<span id='sol-common-SordUtils-method-cloneSord'>  /**
+</span>   * Clones a sord
+   * @param {de.elo.ix.client.Sord} srcSord Source sord
+   * @param {Object} params Parameters
+   * @param {de.elo.ix.client.Sord} params.dstSord Destination sord
+   * @param {String} params.dstMask Destination mask
+   * @param {de.elo.ix.client.Sord} params.dstParentId Destination parent ID
+   * @param {String} params.objKeyNames Object key names
+   * @param {Array} [params.memberNames=[&quot;name&quot;, &quot;objKeys&quot;]] Member names to copy
+   * @return {de.elo.ix.client.Sord} Sord
+   */
+  cloneSord: function (srcSord, params) {
+    var me = this,
+        dstSord, dstMask, memberName, now, parentSord, i, objKey, objKeyName, values, conn;
+
+    if (!srcSord) {
+      throw &quot;Source Sord is emtpy&quot;;
+    }
+
+    params = params || {};
+    params.memberNames = params.memberNames || [&quot;name&quot;];
+    conn = params.conn || ixConnect;
+
+    if (params.dstSord) {
+      dstSord = new Sord(params.dstSord);
+      dstSord.id = -1;
+      dstSord.guid = &quot;&quot;;
+      dstSord.ownerId = ixConnect.loginResult.user.id;
+      dstSord.ownerName = &quot;&quot;;
+      now = me.nowIsoForConnection(conn);
+      dstSord.IDateIso = now;
+      dstSord.XDateIso = now;
+    } else {
+      dstMask = params.dstMask || srcSord.mask;
+      dstSord = me.createSord({ mask: dstMask, parentId: params.dstParentId });
+    }
+
+    for (i = 0; i &lt; params.memberNames.length; i++) {
+      memberName = params.memberNames[i];
+      dstSord[memberName] = srcSord[memberName];
+    }
+
+    if (params.dstParentId) {
+      parentSord = ixConnect.ix().checkoutSord(params.dstParentId, SordC.mbOnlyId, LockC.NO);
+      dstSord.parentId = parentSord.id;
+    }
+
+    for (i = 0; i &lt; dstSord.objKeys.length; i++) {
+      objKey = dstSord.objKeys[i];
+      objKeyName = String(objKey.name);
+      if (params.objKeyNames &amp;&amp; (params.objKeyNames.indexOf(objKeyName) &lt; 0)) {
+        continue;
+      }
+      values = me.getObjKeyValues(srcSord, objKeyName);
+      me.setObjKeyValues(dstSord, objKeyName, values);
+    }
+
+    return dstSord;
+  },
+
+<span id='sol-common-SordUtils-method-addRights'>  /**
+</span>   * Adds rights
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @param {Object} params Parameters
+   * @param {Array} params.users Users
+   * @param {Object} params.rigths Rights, e.g. { r: true, w: true, d: true, e: true, l: true }
+   */
+  addRights: function (sord, params) {
+    var accessCode, users, userAcls, newAclItems;
+
+    if (!params) {
+      throw &quot;Rights configuration is empty&quot;;
+    }
+    if (!params.users) {
+      throw &quot;Users are empty&quot;;
+    }
+
+    params = params || {};
+
+    users = params.users.map(function (userName) {
+      if (userName == &quot;$CURRENTUSER&quot;) {
+        return String(ixConnect.loginResult.user.name);
+      }
+      return userName;
+    });
+
+    params.rights = params.rights || { r: true, w: true, d: true, e: true, l: true };
+
+    accessCode = sol.common.AclUtils.createAccessCode(params.rights);
+    userAcls = sol.common.AclUtils.retrieveUserAcl(users, accessCode);
+    if (userAcls) {
+      newAclItems = Array.prototype.slice.call(sord.aclItems);
+      userAcls.forEach(function (userAcl) {
+        newAclItems.push(userAcl);
+      });
+    }
+    sord.aclItems = newAclItems;
+  },
+
+<span id='sol-common-SordUtils-method-changeMask'>  /**
+</span>   * Changes the sord mask
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @param {Number|String} newMask New mask ID or name
+   * @return {de.elo.ix.client.Sord}
+   */
+  changeMask: function (sord, newMask) {
+    var changedSord;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+
+    if (typeof newMask == &quot;undefined&quot;) {
+      throw &quot;New mask is empty&quot;;
+    }
+
+    changedSord = ixConnect.ix().changeSordMask(sord, newMask, EditInfoC.mbSord).sord;
+
+    return changedSord;
+  },
+
+<span id='sol-common-SordUtils-method-getLinks'>  /**
+</span>   * Get links
+   * @param {de.elo.ix.client.Sord} sord Sord
+   * @return {Array} Object IDs
+   */
+  getLinks: function (sord) {
+    var i,
+        linksObj = {},
+        links = [],
+        objId;
+
+    if (!sord) {
+      throw &quot;Sord is empty&quot;;
+    }
+
+    for (i = 0; i &lt; sord.linksComeIn.length; i++) {
+      linksObj[sord.linksComeIn[i].id + &quot;&quot;] = 1;
+    }
+
+    for (i = 0; i &lt; sord.linksGoOut.length; i++) {
+      linksObj[sord.linksGoOut[i].id + &quot;&quot;] = 1;
+    }
+
+    for (objId in linksObj) {
+      links.push(objId);
+    }
+
+    return links;
+  },
+
+<span id='sol-common-SordUtils-method-nowIsoForConnection'>  /**
+</span>   * Returns now as ISO date considering the time zone
+   * @param {de.elo.ix.client.IXConnection} [conn=ixConnect]
+   * @param {Object} params Parameters
+   * @param {Boolean} [params.startOfDay=false] (optional) Start of day
+   * @return {String} ISO date
+   */
+  nowIsoForConnection: function (conn, params) {
+    var me = this,
+        nowIso, timeZone;
+    conn = conn || ixConnect;
+    params = params || {};
+    timeZone = conn.loginResult.clientInfo.timeZone + &quot;&quot;;
+    params.utcOffset = me.getTimeZoneOffset(timeZone);
+    nowIso = sol.common.DateUtils.nowIso(params);
+    return nowIso;
+  },
+
+<span id='sol-common-SordUtils-method-getTimeZoneOffset'>  /**
+</span>   * @private
+   * Gets the time zone offset
+   * @param {String} timeZoneString Time zone string
+   * @return {String} Offset
+   */
+  getTimeZoneOffset: function (timeZoneString) {
+    var timeZone, utcOffset, now;
+    timeZone = java.util.TimeZone.getTimeZone(timeZoneString);
+    now = new java.util.Date();
+    utcOffset = timeZone.getOffset(now.time) / 1000 / 60;
+    return utcOffset;
+  },
+
+<span id='sol-common-SordUtils-method-getFieldNameIndex'>  /**
+</span>   * Returns the field name index
+   * @param {String} fieldName Field name
+   * @returns {String}
+   */
+  getFieldNameIndex: function (fieldName) {
+    if (!fieldName) {
+      return &quot;&quot;;
+    }
+    var pos = fieldName.search(/\d+$/);
+    if (pos &gt; 0) {
+      return parseInt(fieldName.substring(pos), 10);
+    }
+    return &quot;&quot;;
+  }
+});
+</pre>
+</body>
+</html>

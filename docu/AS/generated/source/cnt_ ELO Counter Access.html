@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">// start of namespace cnt
+
+<span id='cnt'>/**
+</span> * @class cnt
+ * @singleton
+ */
+var cnt = new Object();
+cnt = {
+
+<span id='cnt-method-getCounterValue'> /**
+</span>  * Liefert den Wert des angegebenen Counter-Objekts zurück.
+  * 
+  * @param {String} counterName Counter-Name
+  * @param {Boolean} autoIncrement Counter erhöhen
+  * @return {String} Counter-Wert
+  */
+  getCounterValue: function (counterName, autoIncrement) {
+    var counterNames = new Array(1);
+    counterNames[0] = counterName;
+    var counterInfo = ixConnect.ix().checkoutCounters(counterNames, autoIncrement, LockC.NO);
+    return counterInfo[0].getValue();
+  },
+
+<span id='cnt-method-createCounter'> /**
+</span>  * Erzeugt ein Counter mit dem angegebenen initialen Wert.
+  * 
+  * @param {String} counterName Counter-Name
+  * @param {String} initialValue Initialer Wert
+  */
+  createCounter: function (counterName, initialValue) {
+    var counterInfo = new CounterInfo();
+    counterInfo.setName(counterName);
+    counterInfo.setValue(initialValue);
+
+    var info = new Array(1);
+    info[0] = counterInfo;
+
+    ixConnect.ix().checkinCounters(info, LockC.NO);
+  },
+
+<span id='cnt-method-getTrackId'> /**
+</span>  * Liefert eine neue Track-ID aus den angegebene Daten zurück.
+  * 
+  * @param {String} counterName CounterName
+  * @param {String} prefix Präfix
+  * @return {String} Track-ID
+  */
+  getTrackId: function (counterName, prefix) {
+    var tid = cnt.getCounterValue(counterName, true);
+    return cnt.calcTrackId(tid, prefix);
+  },
+
+<span id='cnt-method-calcTrackId'> /**
+</span>  * Liefert eine neue Track-ID aus den angegebenen Daten zurück.
+  * 
+  * @param {String} trackId Track-ID
+  * @param {String} prefix Präfix
+  * @return {String} Track-ID
+  */
+  calcTrackId: function (trackId, prefix) {
+    var chk = 0;
+    var tmp = trackId;
+
+    while (tmp &gt; 0) {
+      chk = chk + (tmp % 10);
+      tmp = Math.floor(tmp / 10);
+    }
+
+    return prefix + &quot;&quot; + trackId + &quot;C&quot; + (chk % 10);
+  },
+
+<span id='cnt-method-checkId'> /**
+</span>  * Überprüft den angegebenen Wert.
+  * 
+  * @param {Number} value Wert
+  * @param {Number} checksum Checksumme
+  * @return {Boolean} Der Wert is gültig
+  */
+  checkId: function (value, checksum) {
+    var chk = 0;
+
+    while (value &gt; 0) {
+      chk = chk + (value % 10);
+      value = Math.floor(value / 10);
+    }
+
+    return (chk % 10) == checksum;
+  },
+
+<span id='cnt-method-findTrackId'> /**
+</span>  * Liefert die Track-ID aus den angegebenen Daten zurück.
+  * 
+  * @param {String} text Text
+  * @param {String} prefix Präfix
+  * @param {Number} length Länge
+  * @return {Number} Track-ID oder -1
+  */
+  findTrackId: function (text, prefix, length) {
+    text = &quot; &quot; + text + &quot; &quot;;
+
+    var pattern = &quot;\\s&quot; + prefix + &quot;\\d+C\\d\\s&quot;;
+    if (length &gt; 0) {
+      pattern = &quot;\\s&quot; + prefix + &quot;\\d{&quot; + length + &quot;}C\\d\\s&quot;;
+    }
+
+    var val = text.match(new RegExp(pattern, &quot;g&quot;));
+    if (!val) {
+      return -1;
+    }
+
+    for (var i = 0; i &lt; val.length; i++) {
+      var found = val[i];
+      var number = found.substr(prefix.length + 1, found.length - prefix.length - 4);
+      var checksum = found.substr(found.length - 2, 1);
+      if (checkId(number, checksum)) {
+        return number;
+      }
+    }
+
+    return -1;
+  }
+
+};
+// end of namespace cnt</pre>
+</body>
+</html>

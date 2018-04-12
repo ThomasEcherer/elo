@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.AclUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.RemoveAcl&quot; });
+
+<span id='sol-common-ix-functions-RemoveAcl'>/**
+</span> * Removes ACL from a folder.
+ *
+ * The function can be configured which access rights of which users should be removed.
+ * The default would be, that all access rights (except read) will be removed for all existing ACL entries.
+ *
+ * In addition the original ACL entries can be stored (backed up) to a map field.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following configuration would remove all access right (except read) for all existing ACL entries on the element and all sub elements.
+ * The previous ACL entries will be saved to a map field (on each processed object).
+ *
+ *     {
+ *       &quot;mapKey&quot;: &quot;ACL_BACKUP&quot;,
+ *       &quot;recursive&quot;: true
+ *     }
+ *
+ * # As IX function call
+ *
+ * The following call would remove all access right for the two users Paul and George just for the object itself. The previous ACL entries will be saved to a map field.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_function_RemoveAcl&#39;, {
+ *       objId: &quot;4711&quot;,
+ *       mapKey: &#39;PREVIOUS_ACL&#39;,     //optional
+ *       users: [&quot;paul&quot;, &quot;george&quot;],  //optional
+ *       recursive: false,           //optional
+ *       removeRead: true,           //optional
+ *       removeWrite: true,          //optional
+ *       removeDelete: true,         //optional
+ *       removeEdit: true,           //optional
+ *       removeList: true,           //optional
+ *       asAdmin: true               //optional
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.AclUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.RemoveAcl&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-RemoveAcl-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   * ObjectId of folder structure
+   */
+
+<span id='sol-common-ix-functions-RemoveAcl-cfg-mapKey'>  /**
+</span>   * @cfg {String} mapKey (optional)
+   * Name of Mapfield to store removed ACL when set
+   */
+
+<span id='sol-common-ix-functions-RemoveAcl-cfg-users'>  /**
+</span>   * @cfg {String[]} users (optional)
+   * Group and/or user names of which the ACL should be removed. If empty, all existing ACL items will be processed.
+   */
+
+<span id='sol-common-ix-functions-RemoveAcl-cfg-recursive'>  /** @cfg {Boolean} [recursive=false] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-removeRead'>  /** @cfg {Boolean} [removeRead=false] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-removeWrite'>  /** @cfg {Boolean} [removeWrite=true] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-removeDelete'>  /** @cfg {Boolean} [removeDelete=true] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-removeEdit'>  /** @cfg {Boolean} [removeEdit=true] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-removeList'>  /** @cfg {Boolean} [removeList=true] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-cfg-asAdmin'>  /** @cfg {Boolean} [asAdmin=false] (optional) */
+</span>
+<span id='sol-common-ix-functions-RemoveAcl-property-rights'>  /**
+</span>   * @private
+   * @property {Object} rights
+   */
+
+  requiredConfig: [&quot;objId&quot;],
+
+<span id='sol-common-ix-functions-RemoveAcl-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.users = config.users || [];
+    me.rights = me.initRights(config);
+    me.recursive = config.recursive || false;
+  },
+
+<span id='sol-common-ix-functions-RemoveAcl-method-process'>  /**
+</span>   * Removes ACL from whole folder structure.
+   */
+  process: function () {
+    var me = this,
+        params;
+
+    params = {
+      recursive: me.recursive,
+      asAdmin: me.asAdmin
+    };
+
+    if (me.mapKey) {
+      params.storeAcl = { type: &quot;MAP&quot;, key: me.mapKey };
+    }
+
+    sol.common.AclUtils.removeRights(
+      me.objId,
+      me.users,
+      me.rights,
+      params
+    );
+  },
+
+<span id='sol-common-ix-functions-RemoveAcl-method-initRights'>  /**
+</span>   * @private
+   * @param {Object} config
+   * @return {Object} rights
+   */
+  initRights: function (config) {
+    var rights = {
+      r: (config.removeRead === true) ? true : false,
+      w: (config.removeWrite === false) ? false : true,
+      d: (config.removeDelete === false) ? false : true,
+      e: (config.removeEdit === false) ? false : true,
+      l: (config.removeList === false) ? false : true
+    };
+    return rights;
+  }
+});
+
+<span id='sol-common-ix-functions-RemoveAcl-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.RemoveAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_RemoveAcl&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId),
+      module;
+
+  params.objId = wfDiagram.objId;
+  if (params.asAdmin) {
+    sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RemoveAcl&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_RemoveAcl&quot;);
+}
+
+<span id='sol-common-ix-functions-RemoveAcl-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.RemoveAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_RemoveAcl&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId),
+      module;
+
+  params.objId = wfDiagram.objId;
+  if (params.asAdmin) {
+    sol.common.WfUtils.checkMainAdminWf(wfDiagram);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RemoveAcl&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_RemoveAcl&quot;);
+}
+
+<span id='sol-common-ix-functions-RemoveAcl-static-method-RF_sol_function_RemoveAcl'>/**
+</span> * @member sol.common.ix.functions.RemoveAcl
+ * @method RF_sol_function_RemoveAcl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_RemoveAcl(ec, args) {
+  logger.enter(&quot;RF_sol_function_RemoveAcl&quot;, args);
+  var params, module;
+
+  params = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, args, &quot;objId&quot;);
+
+  if (params.asAdmin) {
+    sol.common.ix.RfUtils.checkMainAdminRights(ec.user, params);
+  }
+
+  module = sol.create(&quot;sol.common.ix.functions.RemoveAcl&quot;, params);
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_RemoveAcl&quot;);
+}
+</pre>
+</body>
+</html>

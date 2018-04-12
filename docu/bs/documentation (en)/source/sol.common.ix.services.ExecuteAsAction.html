@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.ix.RfUtils.js
+//@include lib_sol.common.ix.ServiceBase.js
+//@include lib_sol.common.HttpUtils.js
+//@include lib_sol.common.Config.js
+//@include lib_sol.common.Template.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.services.ExecuteAsAction&quot; });
+
+<span id='sol-common-ix-services-ExecuteAsAction'>/**
+</span> * Executes an ELO AS Business Solution action without the need of running an ELO AS instance in the DMZ.
+ *
+ * This service is useful if AS actions should be executed from web applications (e.g. ELO Web Client).
+ *
+ * # Configuration
+ *
+ * requires the solution name and rule name. A configuration object can be passed
+ * as defined by the action. e.g.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_sol_common_service_ExecuteAsAction&#39;, {
+ *       solution: &#39;pubsec&#39;,
+ *       action: &#39;sol.pubsec.as.actions.CreateFilesReport&#39;,
+ *       config: {
+ *         templateId: templateId,
+ *         fileId: fileId,
+ *         targetId: targetId
+ *       },
+ *       connParams: {
+ *         language: &#39;de&#39;
+ *       }
+ *     }, function(data) {
+ *        // process result
+ *     }, function (err) {
+ *        // error handling
+ *     });
+ *
+ * In addition the client language should be passed. (connParams) This is required if localization information is processed by ELO AS.
+ *
+ * @author NM, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ServiceBase
+ */
+sol.define(&quot;sol.common.ix.services.ExecuteAsAction&quot;, {
+  extend: &quot;sol.common.ix.ServiceBase&quot;,
+
+<span id='sol-common-ix-services-ExecuteAsAction-cfg-requiredConfig'>  requiredConfig: [&quot;action&quot;, &quot;config&quot;],
+</span>
+<span id='sol-common-ix-services-ExecuteAsAction-cfg-solution'>  /**
+</span>   * @cfg {String} solution
+   * Name of the solution, which the as rule is part of.
+   * This is used for handling several elo as configurations.
+   */
+  solution: &quot;common&quot;,
+
+<span id='sol-common-ix-services-ExecuteAsAction-cfg-action'>   /**
+</span>    * @cfg {String} action
+    * Name of the action that should be called. Usually the name of the ELO AS rule.
+    */
+
+<span id='sol-common-ix-services-ExecuteAsAction-cfg-config'>    /**
+</span>     * @cfg {Object} config
+     * Configuration for the action as defined by the action.
+     */
+
+<span id='sol-common-ix-services-ExecuteAsAction-cfg-connParams'>    /**
+</span>     * @cfg {Object} connParams (optional)
+     * Configuration of the current connection. This includes localization information.
+     *
+     *     {
+     *	     language: &#39;en&#39;
+     *     }
+     */
+
+<span id='sol-common-ix-services-ExecuteAsAction-property-eloAsUrlTemplate'>  /**
+</span>   * @private
+   * @property {String} eloAsUrlTemplate
+   */
+  eloAsUrlTemplate: &quot;{{asCfg.protocol}}://{{asCfg.serverName}}:{{asCfg.port}}/{{asCfg.serviceName}}/as?cmd=get&amp;name={{action.rule}}&amp;param2={{action.config}}&amp;param3={{connParams}}&amp;ticket={{ticket}}&quot;,
+
+<span id='sol-common-ix-services-ExecuteAsAction-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+    me.$super(&quot;sol.common.ix.ServiceBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-services-ExecuteAsAction-method-process'>  /**
+</span>   * Executes an ELO AS Business Solution action without the need of running an ELO AS instance in the DMZ
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        asCfg, asUrlTpl, asUrl, result;
+
+    asCfg = sol.create(&quot;sol.common.Config&quot;).loadEloAsConfig(me.solution || &quot;common&quot;);
+
+    if (!me.connParams) {
+      me.connParams = {};
+    }
+
+    asUrlTpl = sol.create(&quot;sol.common.Template&quot;, { source: me.eloAsUrlTemplate });
+    asUrl = asUrlTpl.apply({
+      ticket: me.ci.ticket,
+      asCfg: asCfg,
+      action: {
+        rule: encodeURIComponent(me.action),
+        config: encodeURIComponent(sol.common.JsonUtils.stringifyAll(me.config))
+      },
+      connParams: encodeURIComponent(sol.common.JsonUtils.stringifyAll(me.connParams))
+    });
+
+    logger.info(&quot;Executing ELO AS action.&quot;, asUrl);
+
+    result = sol.common.HttpUtils.sendGet(asUrl, {
+      connectTimeout: 30000,
+      readTimeout: 30000,
+      contentType: &quot;application/json;charset=UTF-8&quot;
+    });
+
+    if (result.responseOk === false) {
+      throw result.errorMessage;
+    }
+
+    return result;
+  }
+
+});
+
+<span id='sol-common-ix-services-ExecuteAsAction-static-method-RF_sol_common_service_ExecuteAsAction'>/**
+</span> * @member sol.common.ix.services.ExecuteAsAction
+ * @method RF_sol_common_service_ExecuteAsAction
+ * @static
+ * @inheritdoc sol.common.ix.ServiceBase#RF_ServiceBaseName
+ */
+function RF_sol_common_service_ExecuteAsAction(ec, configAny) {
+  var config, module, result;
+
+  logger.enter(&quot;RF_sol_common_service_ExecuteAsAction&quot;, configAny);
+
+  config = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny, &quot;action&quot;, &quot;config&quot;);
+  config.ci = ec.ci;
+
+  module = sol.create(&quot;sol.common.ix.services.ExecuteAsAction&quot;, config);
+  result = sol.common.JsonUtils.stringifyAll(module.process());
+
+  logger.exit(&quot;RF_sol_common_service_ExecuteAsAction&quot;, result);
+  return result;
+}
+</pre>
+</body>
+</html>

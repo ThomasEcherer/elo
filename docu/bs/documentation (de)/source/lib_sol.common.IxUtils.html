@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+
+//@include lib_Class.js
+
+<span id='sol-common-IxUtils'>/**
+</span> * @class sol.common.IxUtils
+ * @extends sol.Base
+ * @singleton
+ *
+ * This class provides basic functionality for ix operations.
+ *
+ * @author NM, ELO Digital Office GmbH
+ * @version 1.2
+ *
+ * @eloall
+ */
+sol.define(&quot;sol.common.IxUtils&quot;, {
+  singleton: true,
+
+<span id='sol-common-IxUtils-property-CONST'>  CONST: {
+</span>    EVENT_TYPES: {
+      ACTION: &quot;ACTION&quot;,
+      REFRESH: &quot;REFRESH&quot;,
+      GOTO: &quot;GOTO&quot;,
+      SELECT: &quot;SELECT&quot;,
+      VIEW: &quot;VIEW&quot;,
+      DIALOG: &quot;DIALOG&quot;,
+      ERROR: &quot;ERROR&quot;,
+      FEEDBACK: &quot;FEEDBACK&quot;
+    },
+    COMPONENTS: {
+      IX: &quot;IX&quot;,
+      AS: &quot;AS&quot;
+    }
+  },
+
+<span id='sol-common-IxUtils-method-execute'>  /**
+</span>   * Executes an ix registered function thanks to its name.
+   * Handles the transformation of ix Any-Objects.
+   *
+   * Please note that executing Index Server calls in Web Applications must be done asynchronously doe to performance
+   * reasons.
+   *
+   * Example for Rhino engine scripts (sync) (IX, AS, Java Client)
+   *
+   *     var result = sol.common.IxUtils.execute(&#39;RF_FunctionName&#39;, {
+   *       objId: &#39;1&#39;
+   *     });
+   *
+   * Example for ELO Web Client &amp; ELO Apps (async)
+   *
+   *     var result = sol.common.IxUtils.execute(&#39;RF_FunctionName&#39;, {
+   *       objId: &#39;1&#39;
+   *     }, function (result) {
+   *       // success
+   *     }, function () {
+   *       // error
+   *     };
+   *
+   * # Performance optimizatios in ELO Apps (since ELOwf 10.01.002)
+   *
+   * ELO Apps allow establishing IX connections without loading the IXClient.js file.
+   * This is handled by the module elo.module.session.light` and will lead to a performance
+   * boost at startup time. Keep in mind that only Registered Function calls are supported.
+   *
+   * @param {String} funcName
+   * @param {Object} paramObj
+   * @param {Function} successFct success handler. required if executing scripts in the Web Client
+   * @param {Function} failureFct error handler. required if executing scripts in the Web Client
+   * @return {Object} jsonResult only returned if call is sync.
+   */
+  execute: function (funcName, paramObj, successFct, failureFct) {
+    var me = this,
+        isWebApp = false,
+        isWebAppLight = false,
+        any, anyResult, jsonResult, ixConnectWeb;
+
+    if (typeof ixConnectAdmin != &quot;undefined&quot; &amp;&amp; ixConnectAdmin.loginResult &amp;&amp; ixConnectAdmin.loginResult.clientInfo) {
+      // pass admin ticket if called in rhino environments that have administration privileges.
+      paramObj.adminTicket = String(ixConnectAdmin.loginResult.clientInfo.ticket);
+    }
+
+    if (typeof api !== &quot;undefined&quot; &amp;&amp; api.Webclient &amp;&amp; api.Webclient.getIXConnection) {
+      isWebApp = true;
+      ixConnectWeb = api.Webclient.getIXConnection();
+    } else if (typeof api !== &quot;undefined&quot; &amp;&amp; api.webapps &amp;&amp; api.webapps.WebApp
+        &amp;&amp; !api.IX) {
+      isWebAppLight = true;
+    } else if (typeof api !== &quot;undefined&quot; &amp;&amp; api.webapps &amp;&amp; api.webapps.WebApp) {
+      isWebApp = true;
+      ixConnectWeb = api.IX;
+    } else if (typeof elo !== &quot;undefined&quot; &amp;&amp; elo.appInfo &amp;&amp; elo.appInfo.application &amp;&amp; elo.appInfo.application.name === &quot;ELOwf&quot;) {
+      if (!elo || !elo.IX) {
+        throw this.$className + &quot;: IX session not available. Use sol.common.forms.Utils.initializeIxSession.&quot;;
+      }
+      isWebApp = true;
+      ixConnectWeb = elo.IX;
+    }
+
+    if (!isWebAppLight) {
+      any = (typeof Any !== &quot;undefined&quot;) ? new Any() : new de.elo.ix.client.Any();
+
+      //TODO correct, as soon as ELOas gets CONST variable
+      any.type = (typeof CONST !== &quot;undefined&quot;) ? CONST.ANY.TYPE_STRING : ((typeof ixConnect !== &quot;undefined&quot;) ? ixConnect.CONST.ANY.TYPE_STRING : elo.CONST.ANY.TYPE_STRING);
+      any.stringValue = sol.common.JsonUtils ? sol.common.JsonUtils.stringifyAll(paramObj) : JSON.stringify(paramObj);
+    }
+
+    if (isWebApp) {
+      // web client
+      if (!successFct) {
+        console.warn(this.$className + &quot;: synchronous ix functions calls should be used with care due to performance reasons. It is recommended to use function handlers instead.&quot;);
+        anyResult = ixConnectWeb.ix().executeRegisteredFunction(funcName, any);
+        jsonResult = (anyResult &amp;&amp; anyResult.stringValue) ? String(anyResult.stringValue) : &quot;{}&quot;;
+        return JSON.parse(jsonResult);
+      }
+      anyResult = ixConnectWeb.ix().executeRegisteredFunction(funcName, any, new de.elo.ix.client.AsyncCallback(function (anyResult) {
+        // sucess
+        jsonResult = (anyResult &amp;&amp; anyResult.stringValue) ? String(anyResult.stringValue) : &quot;{}&quot;;
+        successFct.call(me, JSON.parse(jsonResult));
+      }, function (ex) {
+        // failure
+        if (failureFct) {
+          failureFct.call(me, ex);
+        }
+      }));
+    } else if (isWebAppLight) {
+      // web client
+      if (!successFct) {
+        console.error(this.$className + &quot;: synchronous ix functions calls are unsupported of running web apps in session light mode.&quot;);
+        return;
+      }
+      api.rest.RestUtils.callRegisteredFunction(funcName, paramObj, successFct, function (errorObj) {
+        // failure
+        var ex = {};
+        if (!!errorObj) {
+          if (errorObj.constructor === String) {
+            try {
+              var error  = JSON.parse(errorObj);
+              ex.msg = error.error.message;
+              ex.code = error.error.code;
+            }
+            catch (e) {
+              ex.msg = errorObj;
+            }
+          }
+          else {
+            ex.msg = errorObj.error.message;
+            ex.code = errorObj.error.code;
+          }
+        }
+        if (failureFct) {
+          failureFct.call(me, ex);
+        }
+      });
+    } else {
+      // rhino
+      if (successFct) {
+        throw this.$className + &quot;: async ix functions calls are currently not supported.&quot;;
+      }
+      anyResult = ixConnect.ix().executeRegisteredFunction(funcName, any);
+      jsonResult = (anyResult &amp;&amp; anyResult.stringValue) ? String(anyResult.stringValue) : &quot;{}&quot;;
+      return JSON.parse(jsonResult);
+    }
+  }
+});
+
+</pre>
+</body>
+</html>

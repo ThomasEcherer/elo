@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+//@include lib_sol.common.ActionBase.js
+
+<span id='sol-common-ix-ActionBase'>/**
+</span> * @abstract
+ *
+ * Base class for IX actions.
+ *
+ * # Implementation example
+ *
+ * Actions must be provided as registered functions.
+ *
+ *     sol.define(&quot;sol.my.ix.actions.MyAction&quot;, {
+ *       extend: &quot;sol.common.ix.ActionBase&quot;,
+ *
+ *       requiredConfig: [&quot;objId&quot;],
+ *
+ *       initialize: function (config) {
+ *         var me = this;
+ *         me.$super(&quot;sol.common.ix.ActionBase&quot;, &quot;initialize&quot;, [config]);
+ *         // some other initialization
+ *       },
+ *
+ *       getName: function () {
+ *         return &quot;MyAction&quot;;
+ *       },
+ *
+ *       process: function () {
+ *         // do your stuff
+ *         // add some events / data
+ *       }
+ *     });
+ *
+ *     function RF_sol_my_actions_MyAction(ec, configAny) {
+ *       var rfUtils = sol.common.ix.RfUtils,
+ *       config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny, &quot;objId&quot;),
+ *       closeFile;
+ *
+ *       config.ci = ec.ci;
+ *       config.user = ec.user;
+ *
+ *       closeFile = sol.create(&quot;sol.my.ix.actions.MyAction&quot;, config);
+ *       return closeFile.execute();
+ *     }
+ *
+ * # Executing IX actions from clients
+ *
+ * Actions can be executed thanks to handler implementations in the Java Client and Web Client. Refer to
+ * sol.common.jc.ActionHandler#execute and sol.common.web.ActionHandler#execute for more information.
+ *
+ *     sol.common.jc.ActionHandler.execute(&#39;RF_sol_my_actions_MyAction&#39; {
+ *       objId: &#39;234&#39;
+ *     });
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.WfUtils
+ */
+sol.define(&quot;sol.common.ix.ActionBase&quot;, {
+  extend: &quot;sol.common.ActionBase&quot;,
+
+<span id='sol-common-ix-ActionBase-method-initialize'>  initialize: function (config) {
+</span>    var me = this;
+
+    if (me.$className === &quot;sol.common.ix.ActionBase&quot;) {
+      throw &quot;can not create instance of abstract class &#39;sol.common.ix.ActionBase&#39;&quot;;
+    }
+
+    me.$super(&quot;sol.common.ActionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-ActionBase-method-getName'>  /**
+</span>   * @abstract
+   * Name of the action. Has to be implemented by subclass.
+   */
+  getName: function () {
+    throw &quot;cannot call &#39;name&#39; of abstract class &#39;sol.common.ix.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-ix-ActionBase-method-process'>  /**
+</span>   * @abstract
+   * Implementation of the action. Has to be implemented by subclass.
+   */
+  process: function () {
+    throw &quot;cannot call &#39;process&#39; of abstract class &#39;sol.common.ix.ActionBase&#39;&quot;;
+  },
+
+<span id='sol-common-ix-ActionBase-method-addActionEvent'>  /**
+</span>   * @protected
+   * @inheritdoc sol.common.ActionBase#addActionEvent
+   */
+  addActionEvent: function (registeredFunction, params, on) {
+    var me = this,
+        eventCfg = { registeredFunction: registeredFunction, params: params };
+
+    me._registeredEvents.push(me.createEvent(sol.common.IxUtils.CONST.EVENT_TYPES.ACTION, eventCfg, on));
+  },
+
+<span id='sol-common-ix-ActionBase-method-createEvent'>  /**
+</span>   * @private
+   * @inheritdoc sol.common.ActionBase#createEvent
+   */
+  createEvent: function (type, params, on) {
+    var event = { ID: type, COMPONENT: sol.common.IxUtils.CONST.COMPONENTS.IX, obj: {} },
+        param;
+
+    if (on) {
+      event.ON = on;
+    }
+
+    for (param in params) {
+      if (params.hasOwnProperty(param)) {
+        event.obj[param] = params[param];
+      }
+    }
+
+    return event;
+  }
+
+});
+
+<span id='sol-common-ix-ActionBase-static-method-RF_FunctionName'>/**
+</span> * @member sol.common.ix.ActionBase
+ * @method RF_FunctionName
+ * @static
+ * @abstract
+ *
+ * This function can be called from an application by invoking the API function &quot;executeRegisteredFunction&quot; or by using
+ * sol.common.IxUtils.execute which internally handles the Any-Object conversion.
+ *
+ * All configuration params should be passed as a configuration object to the args param.
+ *
+ *     sol.common.IxUtils.execute(&#39;RF_FunctionName&#39;, {
+ *       configParam1: &#39;myParam&#39;
+ *     });
+ *
+ * @param {de.elo.ix.client.IXServerEventsContext} Execution context
+ * @param {Object} args Argument array sent by the client application.
+ */
+</pre>
+</body>
+</html>

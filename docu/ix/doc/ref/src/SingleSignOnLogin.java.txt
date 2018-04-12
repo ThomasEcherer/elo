@@ -1,0 +1,69 @@
+package de.elo.ix.examples;
+
+import de.elo.ix.client.IXConnFactory;
+import de.elo.ix.client.IXConnection;
+import de.elo.ix.client.LoginResult;
+import de.elo.ix.client.UserInfo;
+import java.rmi.RemoteException;
+import java.util.Properties;
+
+/**
+ * This example shows how to login/logout with a Single-sign-on user
+ * 
+ */
+public class SingleSignOnLogin {
+
+    private final static String IX_URL = "http://localhost:8080/ix-elotest1/ix";
+    private final static String LOGIN_NAME = "Administrator";
+    private final static String LOGIN_PWD = "elo";
+    private final static String CNN_NAME = "IX-Workshop";
+  
+    public static void main(String[] args) {
+        
+        LoginResult loginResult = null;
+        IXConnection ix = null;
+        UserInfo ui = null;
+        
+        // Account to authenticate
+        String userName = LOGIN_NAME;
+        String password = LOGIN_PWD;
+        
+        // Account for authorisation
+        String runAs = "yourname";
+        
+        try {
+            Properties connProps = IXConnFactory.createConnProps(IX_URL);
+            Properties sessOpts = IXConnFactory.createSessionOptions("IX-Example", "1.0");
+            IXConnFactory connFact = new IXConnFactory(connProps, sessOpts);
+            ix = connFact.create(userName, password, CNN_NAME, runAs);
+
+            // LOGIN as Administrator with password elo.
+            loginResult = ix.getLogin().lr();
+            
+            // Print some information returned from ix.login.
+            System.out.println("Login OK. The session ticket is: " + 
+                               loginResult.getClientInfo().getTicket() + ".");
+            System.out.println("It's valid for " + 
+                                loginResult.getTicketLifetime() + 
+                                " seconds.");    
+            System.out.println("The user id is: " + 
+                               loginResult.getUser().getId() + " with name " + loginResult.getUser().getName());
+            
+            // An exception is thrown if the login is not successful!
+
+            // The login function returns a copy of the ClientInfo 
+            // object that contains a session ticket. Use this 
+            // ClientInfo in all subsequent functions.
+            ui = loginResult.getUser();
+        }
+        catch (RemoteException e) {
+            System.out.println(e.toString());
+        }
+        finally {
+
+          if (ix != null) {
+               ix.logout();
+          }
+        }
+    }
+}

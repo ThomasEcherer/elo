@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.ix.DynKwlUtils.js
+//@include lib_sol.common.ix.FunctionBase.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;sol.common.ix.functions.ApplyDynKwl&quot; });
+
+<span id='sol-common-ix-functions-ApplyDynKwl'>/**
+</span> * Applies data from a dynamic keywordlist using a lookup field.
+ *
+ * # As workflow node
+ *
+ * ObjId is set based on the element that the workflow is attached to.
+ * Following additional configuration can be applied to the comments field.
+ *
+ *     {
+ *       &quot;lookupFields&quot;: [ &quot;MY_INDEX_FIELD&quot; ]
+ *     }
+ *
+ * # As IX function call
+ *
+ * In addition to the workflow node configuration the objId must be passed.
+ *
+ *     sol.common.IxUtils.execute(&quot;RF_sol_function_ApplyDynKwl&quot;, {
+ *       objId: &quot;4712&quot;,
+ *       lookupFields: [ &quot;MY_INDEX_FIELD&quot; ]
+ *     });
+ *
+ *
+ * @author PZ, ELO Digital Office GmbH
+ * @version 1.0
+ *
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.DynKwlUtils
+ * @requires sol.common.ix.FunctionBase
+ *
+ */
+sol.define(&quot;sol.common.ix.functions.ApplyDynKwl&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+<span id='sol-common-ix-functions-ApplyDynKwl-cfg-requiredConfig'>  requiredConfig: [&quot;objId&quot;, &quot;lookupFields&quot;],
+</span>
+<span id='sol-common-ix-functions-ApplyDynKwl-cfg-objId'>  /**
+</span>   * @cfg {String} objId (required)
+   */
+
+<span id='sol-common-ix-functions-ApplyDynKwl-cfg-lookupFields'>  /**
+</span>   * @cfg {String} lookupFields (required)
+   * Field from which the keywordlist will be user and which contains the lookup value
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='sol-common-ix-functions-ApplyDynKwl-method-process'>  /**
+</span>   * Performes the lookup.
+   */
+  process: function () {
+    var me = this,
+        dirty = false,
+        sord, name;
+    try {
+      me.logger.info([&quot;apply dynamic keywordlist to sord: objId={0}; lookupFields={1}&quot;, me.objId, me.lookupFields]);
+      sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+
+      me.lookupFields.forEach(function (lookupField) {
+        dirty = sol.common.ix.DynKwlUtils.fillSord(sord, lookupField, { ignoreMissingFields: true }) || dirty;
+      });
+
+      if (dirty === true) {
+        ixConnect.ix().checkinSord(sord, SordC.mbAllIndex, LockC.NO);
+      } else {
+        me.logger.debug(&quot;no changes applied&quot;);
+      }
+    } catch (ex) {
+      name = (sord) ? sord.name : &quot;--no_sord--&quot;;
+      me.logger.error([&quot;error applying values from dynamic keywordlist to sord: objId={0}; name={1}; lookupFields={2}&quot;, me.objId, name, me.lookupFields], ex);
+    }
+  }
+});
+
+
+<span id='sol-common-ix-functions-ApplyDynKwl-static-method-onEnterNode'>/**
+</span> * @member sol.common.ix.functions.ApplyDynKwl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onEnterNode
+ */
+function onEnterNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_ApplyDynKwl&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.ApplyDynKwl&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_ApplyDynKwl&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ApplyDynKwl-static-method-onExitNode'>/**
+</span> * @member sol.common.ix.functions.ApplyDynKwl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#onExitNode
+ */
+function onExitNode(clInfo, userId, wFDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_ApplyDynKwl&quot;, { flowId: wFDiagram.id, nodeId: nodeId });
+  var params = sol.common.WfUtils.parseAndCheckParams(wFDiagram, nodeId),
+      module;
+
+  params.objId = wFDiagram.objId;
+  module = sol.create(&quot;sol.common.ix.functions.ApplyDynKwl&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_ApplyDynKwl&quot;);
+}
+
+
+<span id='sol-common-ix-functions-ApplyDynKwl-static-method-RF_sol_function_ApplyDynKwl'>/**
+</span> * @member sol.common.ix.functions.ApplyDynKwl
+ * @method RF_sol_function_ApplyDynKwl
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase#RF_FunctionName
+ */
+function RF_sol_function_ApplyDynKwl(iXSEContext, args) {
+  logger.enter(&quot;RF_sol_function_ApplyDynKwl&quot;, args);
+  var params = sol.common.ix.RfUtils.parseAndCheckParams(iXSEContext, arguments.callee.name, args, &quot;objId&quot;, &quot;lookupFields&quot;),
+      module = sol.create(&quot;sol.common.ix.functions.ApplyDynKwl&quot;, params);
+
+  module.process();
+
+  logger.exit(&quot;RF_sol_function_ApplyDynKwl&quot;);
+}
+
+</pre>
+</body>
+</html>

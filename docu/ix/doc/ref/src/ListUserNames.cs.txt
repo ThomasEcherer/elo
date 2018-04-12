@@ -1,0 +1,93 @@
+using System;
+
+namespace Examples
+{
+	/// <summary>
+	/// Lists the names of ELO users.
+	/// </summary>
+	public class ListUserNames
+	{
+		// URL to IndexServer
+		public String url;
+
+		// [X] Account to authenticate 
+		public String userName = "Administrator"; 
+		public String userPwd = "";					
+
+		public void run()
+		{
+			// IndexServer stub
+			IXClient ix = null;
+			try 
+			{
+				// Create IndexServer object
+				Logger.instance().log("create IX...");
+				ix = new IXClient(url);
+				Logger.instance().log("create IX OK");
+
+				// Prepare ClientInfo object with language and country
+				IndexServer.ClientInfo ci = new IndexServer.ClientInfo();
+				ci.language = "de";
+				ci.country = "DE";
+
+				// LOGIN
+				Logger.instance().log("login...");
+				IndexServer.LoginResult loginResult = ix.login2(ci, userName, userPwd, "myComputer", null);
+				ci = loginResult.clientInfo;
+				Logger.instance().log("login OK");
+
+				// get constants
+				Logger.instance().log("get const...");
+				IndexServer.IXServicePortC CONST = ix.getCONST(ci);
+				Logger.instance().log("get const OK");
+
+				// List all users and groups
+				Logger.instance().log("all users and groups:");
+				IndexServer.UserName[] allNames = ix.getUserNames(ci, null, CONST.CHECKOUT_USERS.ALL_USERS_AND_GROUPS);
+				dumpUserNames("  ", CONST, allNames);
+
+				// List all groups
+				Logger.instance().log("all groups:");
+				IndexServer.UserName[] groupNames = ix.getUserNames(ci, null, CONST.CHECKOUT_USERS.ALL_GROUPS);
+				dumpUserNames("  ", CONST, groupNames);
+
+				// List members of groups
+				for (int i = 0; i < groupNames.Length; i++)
+				{
+					String name = groupNames[i].name;
+					Logger.instance().log("users of group " + name + ":");
+					IndexServer.UserName[] memberNames = ix.getUserNames(ci, new String[] {name}, CONST.CHECKOUT_USERS.MEMBERS_OF_GROUP);
+					dumpUserNames("    ", CONST, memberNames);
+				}
+
+				// LOGOUT
+				ix.logout2(ci);
+
+			} 
+			catch (Exception e) 
+			{
+				throw e;
+			} 
+			finally 
+			{
+				// Always release IXClient object to make sure 
+				// that all all open sessions are closed on exit
+				if (ix != null) 
+				{
+					Logger.instance().log("IX done...");
+					ix.done();
+					Logger.instance().log("IX done OK");
+				}
+			}
+		}
+
+		private void dumpUserNames(String indent, IndexServer.IXServicePortC CONST, IndexServer.UserName[] uns) 
+		{
+			for (int i = 0; i < uns.Length; i++) 
+			{
+				String type = (uns[i].type == CONST.USER_INFO.TYPE_GROUP) ? "group" : "user";
+				Logger.instance().log(indent + type + ": name=" + uns[i].name + ", id=" + uns[i].id);
+			}
+		}
+	}
+}

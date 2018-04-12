@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.WfUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.CompareKeywording&quot; });
+
+<span id='global-property-'>/**
+</span> * Compares the keywording of 2 Objects and writes the result (TRUE/FALSE) into the workflow-status
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.FunctionBase
+ */
+sol.define(&quot;holme.common.ix.functions.CompareKeywording&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  requiredConfig: [&quot;source&quot;, &quot;target&quot;],
+  
+<span id='global-cfg-source'>  /** 
+</span>   * @cfg {String} source ObjId from the source-Object to compare from
+   */
+
+<span id='global-cfg-target'>  /** 
+</span>   * @cfg {String} target ObjId from the target-Object to compare to
+   */
+
+<span id='global-cfg-compareObjKeys'>  /** 
+</span>   * @cfg {String[]} compareObjKeys (optional) List of ObjKey-Names to compare. If not set, all objKeys from source will be compared
+   */
+
+<span id='global-cfg-wfDiagram'>  /**
+</span>   * @cfg {de.elo.ix.client.wfDiagram} wfDiagram (optional)
+   * Required by onExitNode. The workflow which should be checked. If Set it writes into its status
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Compares the keywording of 2 Objects and writes the result (TRUE/FALSE) into the workflow-status
+   * @returns {boolean} Returns TRUE if the Keywording is the same, returns FALSE otherwise
+   */
+  process: function () {
+    var me = this,
+        statusValue, sordSource, sordTarget, sordz;
+
+    sordz = new SordZ(SordC.mbObjKeys);
+
+    sordSource = ixConnectAdmin.checkoutSord(me.source, sordz, LockC.NO);
+    sordTarget = ixConnectAdmin.checkoutSord(me.target, sordz, LockC.NO);
+
+    statusValue = me.compareSords(sordSource, sordTarget);
+
+    if (me.wfDiagram) {
+      sol.common.WfUtils.setWorkflowStatus(me.wfDiagram, statusValue);
+    }       
+    return statusValue;    
+  },
+
+<span id='global-method-compareSords'>  /**
+</span>   * Compares if the keywording informations of 2 objects are the same.
+   * 
+   * @param {Sord} sordSource The ELO-Object to compare from
+   * @param {Sord} sordTarget The ELO-Object to compare to
+   * @returns {boolean} Returns TRUE if the keywording is the same, returns FALSE otherwise
+   */
+  compareSords: function (sordSource, sordTarget) {
+    var me = this, 
+        i, j, k,
+        maxs, maxt, maxk, isObjKeyAllowed = false;
+
+    maxs = sordSource.objKeys.length;
+    maxt = sordTarget.objKeys.length;
+    if (me.compareObjKeys) {
+      maxk = me.compareObjKeys.length;
+    }
+
+    for (i = 0; i &lt; maxs; i++) {
+      if (me.compareObjKeys) {
+        isObjKeyAllowed = false;
+        for (k = 0; k &lt; maxk; k++) {
+          if (sordSource.objKeys[i].name == me.compareObjKeys[k]) {
+            isObjKeyAllowed = true;
+            break;
+          }
+        }
+        if (!isObjKeyAllowed) {
+          continue;
+        }
+      }
+      
+      for (j = 0; j &lt; maxt; j++) {
+        if (sordSource.objKeys[i].data.length != sordTarget.objKeys[j].data.length) {
+          logger.info([&quot;Length of ObjKey '{0}' is different between ({1}) and ({2})&quot;, sordSource.objKeys[i].name, sordSource, sordTarget]);
+          return false;
+        }
+
+        if (sordSource.objKeys[i].data.length &gt; 0) {
+          if (sordSource.objKeys[i].data[0] == sordTarget.objKeys[j].data[0]) {
+            logger.info([&quot;Content of ObjKey '{0} is differnet between Object ({1} and ({2})&quot;, sordSource.objKeys[i].name, sordSource, sordTarget]);
+            return false;
+          }
+        }
+        
+      }
+    }
+
+    return true;
+  }
+
+});
+
+<span id='holme-common-ix-functions-CompareKeywording-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.CompareKeywording
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_CompareKeywording&quot;, { 
+    flowId: wfDiagram.id, 
+    nodeId: nodeId 
+  });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+
+  config.source = wfDiagram.objId;
+  config.wfDiagram = wfDiagram;
+
+  module = sol.create(&quot;holme.common.ix.functions.CompareKeywording&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_CompareKeywording&quot;);
+}
+
+<span id='holme-common-ix-functions-CompareKeywording-static-method-RF_holme_common_function_CompareKeywording'>/**
+</span> * @member holme.common.ix.functions.CompareKeywording
+ * @method RF_holme_common_function_CompareKeywording
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_CompareKeywording(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_CompareKeywording&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module,
+      ret;
+
+  module = sol.create(&quot;holme.common.ix.functions.CompareKeywording&quot;, config);
+  ret = module.process();
+
+  logger.exit(&quot;RF_holme_common_function_CompareKeywording&quot;);
+  return ret;
+}</pre>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+//@include lib_Class.js
+
+<span id='global-property-'>/**
+</span> * Common Utilities for ELO
+ *
+ * @author TE, HOLME Consulting &amp; Solutions GmbH
+ * @version 1.00.000
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;holme.common.RepoUtils&quot;, {
+  singleton: true,
+
+<span id='global-method-getInputStreamFromSord'>  /**
+</span>   * Downloads the ELO-Document as InputStream
+   * 
+   * @param {String} objId - The ObjId of the Document to download
+   * @returns {InputStream}  The Document as InputStream
+   */
+  getInputStreamFromSord: function (objId) {
+    var sord = ixConnect.ix().checkoutSord(objId, SordC.mbAll, LockC.NO);
+    return ixConnect.download(sord.docVersion.url, 0, sord.docVersion.size);
+  },
+
+<span id='global-method-outputStreamToInputStream'>  /**
+</span>   * Converts a Output-Stream to a InputStream (ByeArrayInputStream)
+   * 
+   * @param {ByteArrayOutputStream} outputStream The Outputstream to convert
+   * @returns {InputStream} The converted Outputstream as ByteArrayInputStream
+   */
+  outputStreamToInputStream: function (outputStream) {
+    return new ByteArrayInputStream(outputStream.toByteArray());
+  },
+
+<span id='global-method-copyAcl'>  /**
+</span>   * Copies the ACL from one object to another
+   * 
+   * @param {Object} config The Configuration what todo
+   * @param {String} config.targetId The ObjectId of the object to paste the acl to
+   * @param {String} config.soruceId The ObjectId of the object to copy the acl from
+   * @param {boolean} config.asAdmin (optional) Default = false. If Set to true the Admin-Connnection will be used
+   */
+  copyAcl: function (config) {
+    var target, source, removeLock = true, con;
+    con = config.asAdmin ? ixConnectAdmin : ixConnect;
+    try {
+      target = con.ix().checkoutSord(config.targetId, SordC.mbLean, LockC.YES);
+      source = con.ix().checkoutSord(config.sourceId, SordC.mbLean, LockC.NO);
+      target.aclItems = source.aclItems;
+      con.ix().checkinSord(target, SordC.mbLean, LockC.YES);
+    } finally {
+      if (removeLock) {
+        try {
+          if (target) {
+            con.ix().checkinSord(target, SordC.mbOnlyUnlock, LockC.YES);
+          }
+        } catch (ex) {
+          //ignore
+        }
+      }
+    }    
+  },
+
+<span id='global-method-findFirst'>  /**
+</span>   * Initiate a simple keywording search for one key-attribute.
+   * 
+   * @param {String} mask The name or ID of the mask to search for
+   * @param {String} key The groupname of the indexline to search for
+   * @param {String} value the value of the indexline (keyattribute) to search for
+   * 
+   * @returns {int} The ObjectId of the found Object. Returs '-1' if nothing found
+   * 
+   */
+  findFirst: function (mask, key, value) {
+    var fi, fr;
+
+    fi = new FindInfo();
+    fi.findByIndex = new FindByIndex();
+    fi.findByIndex.maskNo = mask;
+    fi.findByIndex.objKeys = [new ObjKey([value], 0, key, 0)];
+    fi.findOptions = new FindOptions();
+
+    try {
+      fr = ixConnect.ix().findFirstSords(fi, 2, SordC.mbMin);
+      if (fr.sords.length &gt; 0) {
+        return fr.sords[0].id;
+      }
+      return -1;
+    } finally {
+      if (fr) {
+        try {
+          ixConnect.ix().findClose(fr.searchId);
+        } catch (e) { 
+          /* ignored */ 
+        }
+      }
+    }
+
+  }
+
+
+});</pre>
+</body>
+</html>

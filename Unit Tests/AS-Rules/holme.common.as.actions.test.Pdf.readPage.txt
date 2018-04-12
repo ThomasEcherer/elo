@@ -1,0 +1,108 @@
+<ruleset>
+  <base>
+    <name>holme.common.as.actions.test.Pdf.readPage</name>
+    <search>
+      <name>"DIRECT"</name>
+      <value>"1"</value>
+      <mask>(E10E1000-E100-E100-E100-E10E10E10E30)</mask>
+      <max>200</max>
+    </search>
+    <interval>0H</interval>
+    <includes>
+<name>lib_Class</name>
+<name>lib_sol.common.Config</name>
+<name>lib_holme.common.as.Pdf</name>
+<name>lib_holme.common.HolmeUtils</name>
+</includes>
+  </base>
+<rule>
+  <name>Rule1</name>
+  <condition></condition>
+  <script>
+        var tag, cfg, msg, inputStream, pdf, ret, pathToObjId, holmeUtils;
+        tag = "[holme.common.as.actions.test.Pdf.readPage]";
+
+        log.info(tag + " Aufruf von 'holme.common.as.actions.test.Pdf'");
+        log.info(tag + " P1=" + EM_PARAM1);
+        log.info(tag + " P2=" + EM_PARAM2);
+        log.info(tag + " P3=" + EM_PARAM3);  
+       
+
+        try {
+            cfg = JSON.parse(EM_PARAM2); 
+            holmeUtils = sol.create("holme.common.HolmeUtils", {});
+        } catch (e) {
+            msg = "Error on loading config !";
+            log.error(tag + " " + msg );
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+
+        // Is Configuration given at all? 
+        if (!cfg) {
+            msg = "No Configuration found !";
+            log.error(tag + " " + msg );
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+
+        //  Are the required parameters given?
+        if (!cfg.objId) {
+            msg = "no 'objId' Field found in Configuration !";
+            log.error(tag + msg);
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+
+        if (!cfg.fromPage || !cfg.toPage) {
+            msg = "no 'fromPage' or 'toPage' Field found in Configuration !";
+            log.error(tag + msg);
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+
+        //  Load Document
+        try {
+            inputStream = holme.common.HolmeUtils.getInputStreamFromSord(cfg.objId);
+        } catch (e) {
+            msg = "Error at trying to load Testdocument";
+            log.error(tag + msg);
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+
+        //  Start the test itself
+        try {
+            pdf = sol.create("holme.common.as.Pdf", {});
+            pdf.loadDocument(inputStream);
+            ret = pdf.readPages(cfg.fromPage, cfg.toPage);
+            log.info(tag + " Ergebnis: " + ret);
+            pdf.closeDocument();
+            ruleset.setStatusMessage(ret);            
+        }   catch (e) {
+            msg = "Error at run the test itself";
+            log.error(tag + msg);
+            log.error(e);
+            ruleset.setStatusMessage(msg + "\\n" + e);
+            ruleset.setToErrorState();
+            return;
+        }
+        
+        </script>
+</rule>
+<rule>
+  <name>Global Error Rule</name>
+  <condition>OnError</condition>
+  <script></script>
+</rule>
+</ruleset>

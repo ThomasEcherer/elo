@@ -1,0 +1,56 @@
+﻿<ruleset>
+
+  <base>
+    <name>holme.common.as.actions.SendMail</name>
+    <search>
+      <name>"DIRECT"</name>
+      <value>"1"</value>
+      <mask>(E10E1000-E100-E100-E100-E10E10E10E30)</mask>
+      <max>200</max>
+    </search>
+    <interval>0H</interval>
+    <includes>
+      <name>lib_Class</name>
+      <name>lib_handlebars</name>
+      <name>lib_moment</name>
+      <name>lib_sol.common.as.FunctionBase</name>
+      <name>lib_sol.common.Config</name>
+      <name>lib_sol.common.IxUtils</name>
+      <name>lib_sol.common.JsonUtils</name>
+      <name>lib_sol.common.StringUtils</name>
+      <name>lib_sol.common.ObjectUtils</name>
+      <name>lib_sol.common.RepoUtils</name>
+      <name>lib_sol.common.Template</name>
+      <name>lib_sol.common.ObjectFormatter</name>
+      <name>lib_sol.common.ActionBase</name>
+      <name>lib_sol.common.as.ActionBase</name>
+      <name>lib_holme.common.as.Ews</name>
+    </includes>
+  </base>
+
+  <rule>
+    <name>Rule1</name>
+    <condition></condition>
+    <script>
+      var params, ews;
+      log.info("Starte holme.common.as.actions.SendMail");
+
+      params = JSON.parse(EM_PARAM2);
+      params.user = EM_USERID;
+
+      log.info("Erstelle Objekt");
+      ews = sol.create("holme.common.as.Ews", params);
+      log.info("Rufe execute auf ");
+      ruleset.setStatusMessage(ews.send());
+    </script>
+  </rule>
+
+  <rule>
+    <name>Global Error Rule</name>
+    <condition>OnError</condition>
+    <script>
+      sol.common.ExceptionUtils.logAsException(EM_ERROR);
+    </script>
+  </rule>
+  
+</ruleset>

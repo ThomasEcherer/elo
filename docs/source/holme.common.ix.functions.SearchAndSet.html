@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.Template.js
+
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.SearchAndSet&quot; });
+
+<span id='global-property-'>/**
+</span> * Starts a FindByIndex Search and set its return (objId) into a indexfield
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.Template
+ */
+sol.define(&quot;holme.common.ix.functions.SearchAndSet&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  //requiredConfig: [ objId, mask, searchKey, searchValue, writeKey, defaultValue],
+
+  // configuration section //
+<span id='global-cfg-objId'>  /** 
+</span>   * @cfg {int} objId The ObjectId of the object to edit. Will be checkedout (mbLean) and checkin after processed
+   */
+  
+<span id='global-cfg-mask'>  /**
+</span>   * @cfg {String} mask The keywording-Mask for the findByIndex-Search
+   */
+
+<span id='global-cfg-searchKey'>  /**
+</span>   * @cfg {String} searchKey The Groupname of the Indexfield, used as filter for findByIndex-Search
+   */
+
+<span id='global-cfg-searchValue'>  /**
+</span>   * @cfg {String} searchValue The content of the indexfield to sarch after by the findByIndex search
+   */
+
+<span id='global-cfg-writeKey'>  /**
+</span>   * @cfg {String} writeKey The Groupname of the indexfield to write the result of the findByIndex-search
+   */
+
+<span id='global-cfg-defaultValue'>  /**
+</span>   * @cfg {String} defaultValue The Value to set into the indexfield if the findByIndex Search finds no unique or no result
+   */
+
+  // property section //
+<span id='global-property-sord'>  /**
+</span>   * @private
+   * @property {Sord} sord The Object to edit
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbLean, LockC.YES);
+    logger.info(&quot;befor templateing searchvalue ...&quot;, { searchValue: me.searchValue, sord: me.sord });
+    me.searchValue = sol.create(&quot;sol.common.Template&quot;, { source: me.searchValue }).apply(sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: &quot;sol.common.ObjectFormatter.TemplateSord&quot;,
+        data: me.sord
+      }
+    }));
+    logger.info(&quot;after templateing searchvalue ...&quot;, { searchValue: me.searchValue, sord: me.sord });
+    if (!me.searchValue || me.searchValue == &quot;&quot;) {
+      me.searchValue = sol.common.SordUtils.getObjKeyValue(me.sord, me.searchKey);
+    }
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Starts a FindByIndex Search and set its return (objId) into a indexfield
+   */
+  process: function () {
+    var me = this,
+        value;
+    try {
+      value = me.findByIndex();
+      logger.info(&quot;Object found...&quot;, { value: value });
+    } catch (e) {
+      logger.error(e);
+      logger.info(&quot; Take Defaultvalue ...'&quot;, { value: me.defaultValue });
+      value = me.defaultValue;
+    }
+
+    if (sol.common.SordUtils.objKeyExists(me.sord, me.writeKey)) {
+      sol.common.SordUtils.setObjKeyValue(me.sord, me.writeKey, value);
+      ixConnectAdmin.ix().checkinSord(me.sord, SordC.mbLean, LockC.YES);
+    } else {
+      logger.error(&quot;Objkey does not exist ... &quot;, { key: me.writeKey });            
+    }
+  },
+
+<span id='global-method-findByIndex'>  /**
+</span>   * Starts a findByIndex Search with settings of the given config. 
+   * Filter are: mask = cfg.mask. And the Indexfield (me.searchKey) with the value me.searchValue.
+   * 
+   * @returns {String} ObjectId of the found Object.
+   * @throws {Object} Throws an exception, if result is not unique
+   * @throws {Object} Throws an exception, if there is no result
+   */
+  findByIndex: function () {
+    var me = this;
+    logger.info(&quot;Searching PErsonalakte...&quot;, { value: me.searchValue, key: me.searchKey });        
+    return sol.common.RepoUtils.getObjIdByIndex( 
+      { 
+        mask: me.mask, 
+        objKeyData: [ 
+          { 
+            key: me.searchKey, 
+            value: me.searchValue 
+          } 
+        ] 
+      } 
+    );
+  }
+
+});
+
+<span id='holme-common-ix-functions-SearchAndSet-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.SearchAndSet
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_SearchAndSet&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.SearchAndSet&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_SearchAndSet&quot;);
+}
+
+<span id='holme-common-ix-functions-SearchAndSet-static-method-RF_holme_common_function_SearchAndSet'>/**
+</span> * @member holme.common.ix.functions.SearchAndSet
+ * @method RF_holme_common_function_SearchAndSet
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_SearchAndSet(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_SearchAndSet&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.SearchAndSet&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_SearchAndSet&quot;);
+}</pre>
+</body>
+</html>

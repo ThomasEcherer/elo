@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='global-property-'>/**
+</span> * Inserts Text into a Bookmark of a word-document
+ * 
+ * Requieres
+ *  -   ooxml-schemas-1.3.jar
+ * RF_sol_common_service_ExecuteAsAction
+ * 
+ *
+ * @author TE, Holme Consulting &amp; Solutions
+ * @version 1.00
+ *  
+ * @eloas
+ * @requires sol.common.as.ActionBase
+ * @requires holme.common.as.FileUtils
+ * @requires holme.common.as.Word
+ */
+sol.define(&quot;holme.common.as.actions.WordInsertTextIntoBookmark&quot;, {
+  extend: &quot;sol.common.as.ActionBase&quot;,
+
+  requieredProperty: [&quot;objectId, bookmarkName, bookmarkValue&quot;],
+
+  initialize: function (config) {
+    var me = this;
+    log.info(&quot;Start init&quot;);
+    me.$super(&quot;sol.common.as.ActionBase&quot;, &quot;initialize&quot;, [config]);        
+    log.info(&quot;Finnished init&quot;);
+  },
+
+  getName: function () {
+    return &quot;WordInsertTextIntoBookmark&quot;;
+  },
+
+  process: function () {
+    var me = this,
+        inputStream, workbook, sord, hasToUnlock = false, newWordFile,
+        wordUtils, holmeUtils;
+
+    try {    
+      holmeUtils = sol.create(&quot;holme.common.HolmeUtils&quot;, {});
+      wordUtils = sol.create(&quot;holme.common.as.Word&quot;, {});
+      sord = ixConnect.ix().checkoutSord(me.objectId, SordC.mbAll, LockC.YES);
+      hasToUnlock = true;
+      inputStream = ixConnect.download(sord.docVersion.url, 0, sord.docVersion.size);            
+      workbook = wordUtils.loadDocument(inputStream);
+      wordUtils.insertTextAtBookmark(workbook, me.bookmarkName, me.bookmarkValue);
+      newWordFile = wordUtils.saveAsInputStream(workbook);
+      holmeUtils.archiveNewVersion(sord, newWordFile);
+    } catch (e) {
+      log.error(e);
+    } finally {
+      if (sord) {
+        if (hasToUnlock) {
+          try {
+            ixConnect.ix().checkinSord(sord, SordC.mbOnlyUnlock, LockC.YES);
+          } catch (ex) {
+            // ignore
+          }
+        }   
+      }
+      if (inputStream) {
+        try {
+          inputStream.close();
+        } catch (ex) { 
+          //ignore
+        }
+      }
+      if (workbook) {
+        try {
+          workbook.close();
+        } catch (ex) {
+          //ignore
+        }
+      }
+      if (newWordFile) {
+        try {
+          newWordFile.close();                    
+        } catch (ex) {
+          //ignore
+        }
+      }
+    }
+  }
+});</pre>
+</body>
+</html>

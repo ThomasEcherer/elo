@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.SordUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.InheritToChildren&quot; });
+
+<span id='global-property-'>/**
+</span> * Inherits Keywording and Mapping Information from 
+ * one Object to its children
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.SordUtils
+ */
+sol.define(&quot;holme.common.ix.functions.InheritToChildren&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+
+  requiredConfig: [&quot;objId&quot;, &quot;fields&quot;],
+      
+<span id='global-cfg-objId'>  /** 
+</span>   * @cfg {int} objId The Object to inherit from
+   */
+  objId: undefined,
+
+<span id='global-cfg-fields'>  /** 
+</span>   * @cfg {Object[]} fields (required)
+   * Object containing the configuration for the inherited fields:
+   *
+   *     [ 
+   *       { type: &quot;SORD&quot;, key: &quot;name&quot; },
+   *       { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, &quot;override&quot;: true }
+   *     ]
+   *
+   * Currently only &quot;SORD&quot; and &quot;GRP&quot; are supported as `type`.
+   */
+  fields: [],
+
+<span id='global-cfg-mask'>  /**   
+</span>   * @cfg {String} mask (optional) The mask to filter the chlidren after
+   */
+  mask: undefined,
+
+<span id='global-property-sord'>  /**
+</span>   * The Object defined with 'objId'
+   * @property {Sord} sord
+   */
+  sord: undefined, 
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbAllIndex, LockC.NO);
+  },
+
+  process: function () {
+    var me = this,
+        fi, fr, idx = 0, i, max;
+    
+    fi = new FindInfo();
+    fi.findChildren = new FindChildren();
+    fi.findChildren.parentId = me.objId;
+    fi.findChildren.endLevel = -1;
+    fi.findOptions = new FindOptions();
+    if (me.mask) {
+      fi.findByIndex = new FindByIndex();
+      fi.findByIndex.maskId = me.mask;
+    }    
+
+    try {
+      fr = ixConnectAdmin.ix().findFirstSords(fi, 100, SordC.mbLean);
+      do {
+        if (!fr.sords) {
+          logger.error(&quot;No Results at all...&quot;);
+          break;
+        }
+
+        if (fr.sords.length &gt; 0) {
+          max = fr.sords.length;
+          for (i = 0; i &lt; max; i++) {
+            me.inheritToChild(fr.sords[i]);
+          }
+        }
+        if (!fr.isMoreResults()) {
+          break;
+        }
+        idx += fr.sords.length;
+        fr = ixConnectAdmin.ix().findNextSords(fr.searchId, idx, 100, SordC.mbLean);
+      } while (fr.isMoreResults());
+    } finally {
+      if (fr) {
+        try {
+          ixConnectAdmin.ix().findClose(fr.searchId);
+        } catch (e) { /* ignored */ }
+      }
+    }    
+    
+  },
+
+<span id='global-method-inheritToChild'>  /**
+</span>   * Inherits from the Object to its child
+   * @param {Sord} child The Child to inherit to
+   */
+  inheritToChild: function (child) {
+    var me = this,
+        parentValue, targetValue, max, i, updates = [], childSord, mapitems, override;
+    
+    try {      
+      max = me.fields.length;
+      for (i = 0; i &lt; max; i++) {
+        override = (me.fields[i].override === true) ? true : false;
+        parentValue = sol.common.SordUtils.getValue(me.sord, me.fields[i]);
+        targetValue = sol.common.SordUtils.getValue(child, me.fields[i]);
+        if ((targetValue !== parentValue) &amp;&amp; override) {          
+          me.fields[i].value = parentValue;
+          updates.push(me.fields[i]);          
+        }
+      } 
+      
+      if (updates.length &gt; 0) {
+        childSord = ixConnectAdmin.ix().checkoutSord(child.id, SordC.mbAllIndex, LockC.FORCE);
+        mapitems = sol.common.SordUtils.updateSord(childSord, updates);
+        ixConnectAdmin.ix().checkinSord(childSord, SordC.mbAllIndex, LockC.YES);
+        if (mapitems &amp;&amp; (mapitems.length &gt; 0)) {
+          ixConnectAdmin.ix().checkinMap(MapDomainC.DOMAIN_SORD, childSord.id, childSord.id, mapitems, LockC.NO);
+        }
+      } 
+      
+    } catch (e) {
+      logger.error(&quot;Error on inherting&quot;, e);
+    }
+  }
+ 
+});
+
+<span id='holme-common-ix-functions-Inherit-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_InheritToChildren&quot;, { 
+    flowId: wfDiagram.id, 
+    nodeId: nodeId 
+  });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId),
+      module;
+
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.InheritToChildren&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_InheritToChildren&quot;);
+}
+
+<span id='holme-common-ix-functions-InheritToChildren-static-method-RF_holme_common_function_InheritToChildren'>/**
+</span> * @member holme.common.ix.functions.InheritToChildren
+ * @method RF_holme_common_function_InheritToChildren
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_InheritToChildren(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_InheritToChildren&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny),
+      module;
+  
+  module = sol.create(&quot;holme.common.ix.functions.InheritToChildren&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_InheritToChildren&quot;);
+}</pre>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.Template.js
+//@include lib_sol.common.ObjectFormatter.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.Move&quot; });
+
+<span id='global-property-'>/**
+</span> * Same as sol.common.ix.functions.Move, 
+ * but accepts an startpoint, option to set the icons correctly,
+ * and a
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.RepoUtils
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.Template
+ * @requires sol.common.ObjectFormatter.TemplateSord
+ */
+sol.define(&quot;holme.common.ix.functions.Move&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  requiredConfig: [&quot;objId&quot;],    
+  
+<span id='global-cfg-path'>  /** 
+</span>   * @cfg {String} path The Path to add after starting point
+   */
+
+
+<span id='global-cfg-objId'>  /** 
+</span>   * @cfg {String} objId the Object to move
+   */
+
+<span id='global-method-initialize'>  /**
+</span>   * cfg {String} targetId The destination to move the object to. Has higher Prio as path
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    logger.info([&quot;Start Function with (ObjId={0}) (targetId={1}) (path={2})&quot;, me.objId, me.targetId, me.path]);
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Moves an Entry. 
+   */
+  process: function () {
+    var me = this,
+        destFolderId, sord, tpl, data, path;
+
+    sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbLean, LockC.NO);
+    data = sol.common.ObjectFormatter.format({
+      sord: {
+        formatter: &quot;sol.common.ObjectFormatter.TemplateSord&quot;,              
+        data: sord
+      }
+    });
+    if (me.targetId) {
+      tpl = sol.create(&quot;sol.common.Template&quot;, { source: me.targetId });
+      destFolderId = tpl.applySord(sord);       
+    } else {
+      tpl = sol.create(&quot;sol.common.Template&quot;, { source: me.path });
+      path = tpl.apply(data); 
+      logger.info([&quot;Prepare path {0} for Object {1}&quot;, path, me.objId]);
+      destFolderId = sol.common.RepoUtils.preparePath(path, {});
+      logger.info(&quot;prepare path: &quot;, { dest: destFolderId });
+    }
+
+    logger.info([&quot;Check if objid (destFoldeR={0})&quot;, destFolderId]);
+    if (sol.common.RepoUtils.isObjId(destFolderId)) {
+      sol.common.RepoUtils.moveSords([me.objId], destFolderId);
+    } else {
+      logger.error(&quot;DestFolderId couldn't be resolved&quot;);
+    }
+    
+  }   
+
+});
+
+<span id='holme-common-ix-functions-Move-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.Move
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_Move&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.Move&quot;, config);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_Move&quot;);
+}
+
+<span id='holme-common-ix-functions-Move-static-method-RF_holme_common_function_Move'>/**
+</span> * @member holme.common.ix.functions.Move
+ * @method RF_holme_common_function_Move
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_Move(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_Move&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.Move&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_Move&quot;);
+}</pre>
+</body>
+</html>

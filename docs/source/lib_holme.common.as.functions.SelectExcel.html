@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+// Java includes -&gt; important: leave first line empty
+
+<span id='global-property-'>/**
+</span> * Code documentation
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 0.01.001
+ *
+ * @requires sol.common.as.FunctionBase
+ * @requires sol.common.RepoUtils
+ */
+sol.define(&quot;holme.common.as.functions.SelectExcel&quot;, {
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+  requiredConfig: [&quot;from&quot;],
+
+<span id='global-cfg-source'>  /**
+</span>   * @cfg {File|InputStream} source
+   * The Excel-File to read from. Either this or 'sourceId' has to be set
+   */
+  source: undefined,
+
+<span id='global-cfg-sourceId'>  /**
+</span>   * @cfg {String} sourceId
+   * ObjectId or GUID of the Excel-File to read from. Either this or 'source' has to be set.
+   */
+  sourceId: undefined,
+  
+<span id='global-cfg-select'>  /**
+</span>   * @cfg {String[]} select A List of Columns to return. If not set the whole rows will be returned
+   */
+  select: undefined,
+
+<span id='global-cfg-from'>  /**
+</span>   * @cfg {Int} from
+   * The SheetNr to read from
+   */
+  from: undefined,
+  
+<span id='global-cfg-where'>  /**
+</span>   * @cfg {Object[]} where
+   * Filter conditions. If not set, all will be returned
+   * 
+   * @cfg {String} where.column
+   * The Column to filter against
+   * 
+   * @cfg {String} where.value
+   * The Value to search for
+   * 
+   * @cfg {String} where.operation
+   * Which comparison should be used. Allowed are:
+   *  - 'contains', 
+   *  - 'equal', 
+   *  - '&lt;' (cast to number will be used)
+   *  - '&gt;' (cast to number will be used)
+   * 
+   */
+  where: undefined,
+
+<span id='global-property-headers'>  /**
+</span>   * The first line of the excel-File. 
+   * Will be used to do the where and select part
+   * @property {String[]} headers A List of the header-Names
+   */
+  headers: undefined,
+  
+  // optional
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+
+    if (!me.source &amp;&amp; !me.sourceId) {
+      throw (&quot;Either 'source' or 'sourceId' has to be set&quot;);
+    }
+  },
+
+  
+  process: function () {
+    var me = this,
+        inputStream, wb, sheet, row, rowIterator, result = [];
+
+    try {
+      // load excel file
+      inputStream = me.loadFile();
+      wb = new Packages.org.apache.poi.xssf.usermodel.XSSFWorkbook(inputStream);
+
+      // get Header Informations
+      sheet = me.workbook.getSheetAt(me.from);
+      rowIterator = sheet.rowIterator();
+      
+      while (rowIterator.hasNext()) {
+        row = rowIterator.next();
+
+        // read header information on first row
+        if (row.getRowNum() == 0) {
+          me.readHeaders(row);
+          continue;
+        }
+
+        // skip row if it is not valid
+        if (!me.isRowValid(row)) {
+          continue;
+        }
+        
+        // add row to result if its valid
+        result.push(me.getValuesForResult(row));
+      }   
+    } finally {
+      if (wb) {
+        try {
+          wb.close();
+        } catch (ex) {
+          //ignore
+        }
+      }
+      if (inputStream) {
+        try {
+          inputStream.close();
+        } catch (ex) {
+          //ingore
+        }
+      }
+    }
+
+    return result;    
+  },
+
+<span id='global-method-loadFile'>  /**
+</span>   * Gets the Inputstream out of the given paramters
+   * @returns {InputStream} The Excel-File as InputStream
+   */
+  loadFile: function () {
+    var me = this,
+        sord;
+    if (me.source) {
+      if (me.source instanceof File) {
+        return new FileInputStream(me.source);
+      }
+      return me.source;      
+    }
+
+    if (me.sourceId) {
+      if (sol.common.RepoUtils.isObjId(me.sourceId) || sol.common.RepoUtils.isGuid(me.sourceId) ) {
+        sord = sol.common.RepoUtils.getSord(me.sourceId, {
+          sordZ: SordC.mbAll,
+          lockZ: LockC.NO
+        });
+
+        return new ByteArrayInputStream(sol.common.RepoUtils.downloadToByteArray(sord.id, config));        
+      }
+      throw (&quot;Parameter for 'sourceId' (&quot; + me.sourceId + &quot;) is not an ObjId or Guid&quot;);
+    }
+  },
+
+<span id='global-method-readHeaders'>  /**
+</span>   * Reads the first Row of the Excel-File as Headers
+   * @param {org.apache.poi.ss.usermodel.Row} row the first Row in the Excel-File
+   */
+  readHeaders: function (row) {
+    var me = this,
+        cellIterator, cell;
+
+    me.headers = [];
+    cellIterator = row.cellIterator();
+    while (cellIterator.hasNext()) {
+      cell = cellIterator.next();
+      me.headers.push(cell.getStringCellValue());
+    }    
+  },
+
+<span id='global-method-isRowValid'>  /**
+</span>   * Checks if the Row is valid due to the where-clause
+   * @private
+   * @param {org.apache.poi.ss.usermodel.Row} row The row to check
+   * @returns {boolean} Returns TRUE if the row is valid, returns false otherwise
+   */
+  isRowValid: function (row) {
+    var me = this,
+        cellValue, i, maxi, j, maxj;
+
+    if (!me.where) {
+      return true;
+    }
+
+    maxi = me.headers.length;    
+    maxj = me.where.length;
+    
+    for (i = 0; i &lt; maxi; i++) {
+      for (j = 0; j &lt; maxj; j++) {
+        if (me.headers[i] == me.where[j].column) {
+          cellValue = holme.common.as.Excel.getValueOfCell(row.getCell(i));
+          if (me.where[j].operation == &quot;contains&quot;) {
+            if (!cellValue.contains(me.where[j].value)) {
+              return false;
+            }            
+          }
+          if (me.where[j].operation == &quot;equals&quot;) {
+            if (!cellValue == me.where[j].value) {
+              return false;
+            }            
+          }
+          if (me.where[j].operation == &quot;&gt;&quot;) {
+            if (!cellValue &gt; me.where[j].value) {
+              return false;
+            }
+          }
+          if (me.where[j].operation == &quot;&lt;&quot;) {
+            if (!cellValue &lt; me.where[j].value) {
+              return false;
+            }
+          }
+        }
+      }
+    }
+    
+    return true;
+  },
+
+<span id='global-method-getValuesForResult'>  /**
+</span>   * Graps the data out of the row defined in 'select'.
+   * If 'select' is not defined the whole row will be returned.
+   * @param {org.apache.poi.ss.usermodel.Row} row The row to pick the data from
+   * @returns {String[]} The selected data
+   */
+  getValuesForResult: function (row) {
+    var me = this,
+        result = [], i, maxi, j, maxj, cellValue;
+        
+    maxi = me.headers.length;    
+    maxj = me.select.length;
+
+    if (!me.select) {
+      for (i = 0; i &lt; maxi; i++) {
+        cellValue = holme.common.as.Excel.getValueOfCell(row.getCell(i));
+        result.push(cellValue);
+      }
+      return result;
+    }
+
+    for (i = 0; i &lt; maxi; i++) {
+      for (j = 0; j &lt; maxj; j++) {
+        if (me.select[j] == me.headers[i]) {
+          cellValue = holme.common.as.Excel.getValueOfCell(row.getCell(i));
+          result.push(cellValue);
+        }
+      }
+    }
+    return result;
+  }
+
+
+});</pre>
+</body>
+</html>

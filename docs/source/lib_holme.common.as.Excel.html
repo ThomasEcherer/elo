@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.org.apache.poi.hssf.usermodel);
+importPackage(Packages.org.apache.poi.ss.usermodel);
+importPackage(Packages.org.apache.poi.xssf.usermodel);
+
+//@include lib_Class.js
+//@include lib_sol.common.ExceptionUtils.js
+//@include lib_sol.common.RepoUtils.js
+//@include sol.common.ix.functions.Set.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.as.Excel&quot; });
+
+<span id='global-property-'>/**
+</span> * # Short Description
+ * 
+ * Utilities for ExcelFiles (xlsx only).
+ * 
+ * # Must known
+ * 
+ * &quot;loadDocument&quot; or &quot;prepareNewDocument&quot; has to be called at first.
+ * and &quot;closeDocument&quot; has to be called at last.
+ * 
+ * # Example
+ *  try {
+ *      var excel = sol.create(&quot;holme.common.as.Excel&quot;, {});
+ *      excel.loadDocument(inputStream);
+ *      // do fancy excel stuff
+ *  } finally {
+ *      if (excel) {
+ *          try {
+ *              excel.closeDocument();
+ *          } catch(e) {}
+ *      }
+ *  }
+ * 
+ * # Requirments
+ * - AS 10.02
+ *
+ * @author TE, Holme Consulting &amp; Solutions
+ * @version 1.01.001
+ * 
+ * @eloas
+ */
+sol.define(&quot;holme.common.as.Excel&quot;, {
+
+<span id='global-property-workbook'>  /**
+</span>   * @property {XSSFWorkbook} workbook The loaded Excel-File
+   */
+  workbook: undefined,
+
+
+<span id='global-method-prepareNewDocument'>  /**
+</span>   * Creates a new Excel-File (without saving it)
+   */
+  prepareNewDocument: function () {
+    var me = this;
+    me.workbook = new Packages.org.apache.poi.xssf.usermodel.XSSFWorkbook();                        
+  },
+
+<span id='global-method-addSheet'>  /**
+</span>   * Adds a new sheet to the excel file
+   * 
+   * @param {String} name Name of the Sheet
+   */
+  addSheet: function (name) {
+    var me = this;
+    me.workbook.createSheet(name);
+  },
+
+<span id='global-method-loadDocument'>  /**
+</span>   * Loads an Excel-File.
+   * The Inputstream for Excelfile will be closed after loading.
+   * 
+   * The method &quot;close&quot; have to be called when the work is done
+   * 
+   * @param {inputStream} inputStream The Excel-File to load. Will be closed afterwards
+   */
+  loadDocument: function (inputStream) {       
+    var me = this;
+    me.workbook = new Packages.org.apache.poi.xssf.usermodel.XSSFWorkbook(inputStream);                        
+    inputStream.close();
+  },
+
+<span id='global-method-setFooter'>  /**
+</span>   * Writes an Footer.
+   * The method 'loadDocument' has to be called before.
+   *      
+   * @param {int} sheetNr The Number of Sheet to set the footer
+   * @param {String} text The Text that should be written into the footer
+   * @param {Object} cfg (optional) Configuration for Footer-Settings (font, fontsize, fontstyle)
+   */
+  setFooter: function (sheetNr, text, cfg) {
+    var me = this,
+        footer;
+    footer = me.workbook.getSheetAt(sheetNr).getFooter();
+
+    if (!cfg) {
+      cfg = {};
+      cfg.font = &quot;Arial&quot;;
+      cfg.fontStyle = &quot;regular&quot;;
+      cfg.fontSize = 8;
+    }
+
+    footer.setLeft(Packages.org.apache.poi.hssf.usermodel.HSSFFooter.font(cfg.font, cfg.fontStyle) 
+        + Packages.org.apache.poi.hssf.usermodel.HSSFFooter.fontSize(cfg.fontSize) 
+        + &quot; &quot; + text);        
+  },
+
+<span id='global-method-getFooter'>  /**
+</span>   * Read the Content of a footer
+   * 
+   * @param {int} sheetNr The number of the Sheet to read from
+   * @param {String} whichFooter Which footer to read. Possible Options are (&quot;LEFT&quot;, &quot;CENTER&quot;, RIGHT&quot;)
+   * @returns {String} The Content of the footer
+   */
+  getFooter: function (sheetNr, whichFooter) {
+    var me = this;
+
+    if (whichFooter == &quot;LEFT&quot;) {
+      return me.workbook.getSheetAt(sheetNr).getFooter().getLeft();
+    } 
+
+    if (whichFooter == &quot;CENTER&quot;) {
+      return me.workbook.getSheetAt(sheetNr).getFooter().getCenter();
+    } 
+
+    if (whichFooter == &quot;RIGHT&quot;) {
+      return me.workbook.getSheetAt(sheetNr).getFooter().getRight();
+    } 
+
+    throw (&quot;The Parameter 'whichFooter' (&quot; + whichFooter + &quot;) is wrong! Choose on of 'LEFT', 'CENTER', 'RIGHT'&quot;);
+  },
+
+<span id='global-method-getFooters'>  /**
+</span>   * Reads all Footers of a sheet.
+   * Returns an JavaScript Objects with 3 Parameters:
+   *  -   left
+   *  -   center
+   *  -   right
+   * 
+   * @param {int} sheetNr The number of the sheet to read the footer from
+   * @return {Object} All Footers. Field 'left', 'center' and 'right'
+   */
+  getFooters: function (sheetNr) {
+    var me = this,
+        footer, ret = {};
+
+    footer = me.workbook.getSheetAt(sheetNr);
+    ret.left = footer.getLeft();
+    ret.center = footer.getCenter();
+    ret.right = footer.getRight();
+    return ret;
+  },
+
+<span id='global-method-getValueOfCell'>  /**
+</span>   * @private
+   * Reads the Value of a Cell type-wise.
+   * Means that its differs between
+   *  -   String
+   *  -   Numeric
+   *  -   Boolean
+   *  -   Formula
+   *  -   Blank
+   * @param {Cell} cell The Cell to read from
+   * @returns {Object} Returns the value of the cell in its given type (String, Numeric, ...)     
+   */
+  getValueOfCell: function (cell) {
+    var type = cell.getCellType();
+    if (type == Packages.org.apache.poi.ss.usermodel.CellType.STRING) {
+      return cell.getStringCellValue();
+    }
+
+    if (type == Packages.org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+      return cell.getNumericCellValue();
+    }
+
+    if (type == Packages.org.apache.poi.ss.usermodel.CellType.BOOLEAN) {
+      return cell.getBooleanCellValue();
+    }
+
+    if (type == Packages.org.apache.poi.ss.usermodel.CellType.ERROR) {
+      return cell.getErrorCellString();
+    }
+
+    if (type == Packages.org.apache.poi.ss.usermodel.CellType.FORMULA) {
+      return cell.getCellFormula();
+    }
+
+    return cell.toString();
+  },
+
+<span id='global-method-getRawValueOfCell'>  /**
+</span>   * @private
+   * Returns the raw, underlying ooxml value for the cell
+   * If the cell contains a string, then this value is an index into the shared string table, 
+   * pointing to the actual string value. Otherwise, the value of the cell is expressed directly 
+   * in this element. Cells containing formulas express the last calculated result of the 
+   * formula in this element.
+   * 
+   * @param {Cell} cell The Cell to read from
+   * @returns {String} Returns the raw cell value as contained in the underlying CTCell bean, null for blank cells.
+   */
+  getRawValueOfCell: function (cell) {
+    var me = this;
+    return cell.getRawValue();
+  },
+
+<span id='global-method-getValueAt'>  /**
+</span>   * Reads the value of a specific cell.
+   * 
+   * @param {int} sheetNr - The number of the Sheet to read from 
+   * @param {int} row - The row to read from
+   * @param {int} column - The column to read from
+   * @returns {Object} The Value of the cell. (In its configured type. String, Numeric , ...)
+   */
+  getValueAt: function (sheetNr, row, column) {
+    var me = this,
+        cell;        
+    cell = me.workbook.getSheetAt(sheetNr).getRow(row).getCell(column);        
+    return me.getValueOfCell(cell);
+  },
+
+<span id='global-method-getRawValueAt'>  /**
+</span>   * Returns the raw, underlying ooxml value for the cell
+   * If the cell contains a string, then this value is an index into the shared string table, 
+   * pointing to the actual string value. Otherwise, the value of the cell is expressed directly 
+   * in this element. Cells containing formulas express the last calculated result of the 
+   * formula in this element.
+   * 
+   * @param {int} sheetNr - The number of the Sheet to read from 
+   * @param {int} row - The row to read from
+   * @param {int} column - The column to read from
+   * @returns {Object} The Value of the cell. (In its configured type. String, Numeric , ...)
+   */
+  getRawValueAt: function (sheetNr, row, column) {
+    var me = this,
+        cell;        
+    cell = me.workbook.getSheetAt(sheetNr).getRow(row).getCell(column);        
+    return me.getRawValueOfCell(cell);
+  },
+
+<span id='global-method-saveAsInputStream'>  /**
+</span>   * Saves the Excel-File as &quot;new&quot; InputStream
+   * 
+   * @returns {ByteArrayInputStream} ByteArrayInputStream of the saved Excel-File
+   */
+  saveAsInputStream: function () {
+    var me = this,
+        baos;
+    baos = new ByteArrayOutputStream();
+    me.workbook.write(baos);
+    baos.close();
+    return new ByteArrayInputStream(baos.toByteArray());
+  },
+
+<span id='global-method-saveAsOutputStream'>  /**
+</span>   * Saves the Exel-File as ByteArrayOutputStream
+   * 
+   * @returns {ByteArrayOutputStream} The saved Excel-Files
+   */
+  saveAsOutputStream: function () {
+    var me = this,
+        baos;
+    baos = new ByteArrayOutputStream();
+    me.workbook.write(baos);
+    baos.close();        
+    return baos;
+  },
+
+<span id='global-method-saveAs'>  /**
+</span>   * Saves the Excel-File into the given outputStream
+   *
+   * @param {OutputStream} outputStream The outputstream to write the excel-File to
+   */
+  saveAs: function (outputStream) {
+    var me = this;
+    me.workbook.write(outputStream);
+    outputStream.close();
+  },
+
+<span id='global-method-saveAsNewFile'>  /**
+</span>   * Saves the Excel-File into a File
+   * 
+   * @param {String|File} newFile The new Excel-File to write to
+   */
+  saveAsNewFile: function (newFile) {        
+    var me = this,
+        out;
+    out = new FileOutputStream(newFile);
+    me.workbook.write(out);
+    out.close();        
+  },
+
+<span id='global-method-setValueAt'>  /**
+</span>   * Writes an Cell
+   * 
+   * @param {int} sheetNr On which sheet to write
+   * @param {int} rowNr On which row to write
+   * @param {int} column On with column to write
+   * @param {String} value The Value to write into the cell
+   */
+  setValueAt: function (sheetNr, rowNr, column, value) {
+    var me = this;
+    me.workbook.getSheetAt(sheetNr).getRow(rowNr).getCell(column).setCellValue(value);
+  },
+  
+<span id='global-method-addRow'>  /**
+</span>   * Adds a new Row into the excel File
+   * 
+   * @param {Object} cfg The Configuration to set    
+   * @param {int} cfg.sheetNr The Sheet-nr to add the row. This is redundant to sheetName
+   * @param {String} cfg.sheetName The Sheet-name to add the row. this is redundant to sheetnr
+   * @param {String[]} cfg.values List of values to write into the row
+   */
+  addRow: function (cfg) {
+    var me = this,
+        row, cell, i, max, sheet;
+
+    if (cfg.sheetNr) {
+      sheet = me.workbook.getSheetAt(cfg.sheetNr);
+    } else if (cfg.sheetName) {
+      sheet = me.workbook.getSheet(cfg.sheetName);
+    } else {
+      throw &quot;Either 'sheetNr' or 'sheetName' has to be set!&quot;;
+    }
+    row = sheet.createRow(sheet.getLastRowNum() + 1);
+    max = cfg.values.length;
+    for (i = 0; i &lt; max; i++) {
+      cell = row.createCell(i);
+      cell.setCellValue(cfg.values[i]);
+    }    
+  },
+
+<span id='global-method-selectColumnsWhere'>  /**
+</span>   * not tested yet
+   * 
+   * @param {int} sheetNr Sheet-NR to read from
+   * @param {Object[]} filters List of Filters to 
+   * @param {Object} filters.filter Configuration of one filter
+   * @param {Int} filters.filter.cell CellNumber this filter should after at
+   * @param {String} filters.filter.value The value the cell should have
+   * @param {String} filters.filter.comparison The kind of comparison the filter with the cell value (Valid values ar 'EQUAL' 'GREATER' 'LESS')
+   * @param {Int[]} columnSelects the column to read
+   * @param {boolean} onlyOneResult Determines if only the first result should be returned
+   * @returns {Object[]} The Content of the cells
+   */
+  selectColumnsWhere: function (sheetNr, filters, columnSelects) {
+    var me = this,
+        sheet, rowIterator, row, cellValue, cell, singleResult, result = [], i, max, j, maxj;        
+              
+    sheet = me.workbook.getSheetAt(sheetNr);
+    rowIterator = sheet.rowIterator();
+    
+    //  Go through the whole Excel Sheet
+    rows: while (rowIterator.hasNext()) {
+      row = rowIterator.next();
+
+      //  Check if the where-clauses hits
+      max = filters.length;
+      for (i = 0; i &lt; max; i++) {
+        cell = row.getCell(filters[i].cell);
+        cellValue = me.getValueOfCell(cell);
+
+        if (filters[i].comparison == &quot;EQUAL&quot;) {
+          if (cellValue != filters[i].value) {
+            continue rows;
+          }
+        }
+
+        if (filters[i].comparison == &quot;GREATER&quot;) {
+          if (cellValue &lt; filters[i].value) {
+            continue rows;
+          }
+        }
+
+        if (filters[i].comparison == &quot;LESS&quot;) {
+          if (cellValue &gt; filters[i].value) {
+            continue rows;
+          }
+        }
+
+      }
+
+      //  Add the Cells to the result
+      maxj = columnSelects.length;
+      for (j = 0; j &lt; maxj; j++) {
+        singleResult = {};
+        singleResult[j] = me.getValueOfCell(columnSelects[j]);
+        result.push(singleResult);
+      }
+      
+      if (me.onlyOneResult) {
+        break;
+      }
+    }                   
+    return result;
+  },
+
+<span id='global-method-closeDocument'>  /**
+</span>   * Closes the Excel-File. 
+   * This Method has to be called after work with excel is done.
+   * Best practice &gt;&gt; Put this in finally
+   */
+  closeDocument: function () {
+    var me = this;
+    me.workbook.close();
+  }
+
+});
+
+<span id='global-property-'>/**
+</span> * NOT TESTED
+ * 
+ * # Short Description 
+ * Reads an Excel-Value and writes it into map|sord|wfmap...
+ *  
+ * # Sample Configuration
+ * {
+ *   TODO
+ * }
+ *
+ * @author TE, Holme Consulting &amp; Solutions
+ * @version 1.00.000
+ * 
+ * @eloas
+ */
+sol.define(&quot;holme.common.as.functions.SetFromCell&quot;, {
+  extends: &quot;sol.common.as.FunctionBase&quot;,
+
+  requiredConfig: [&quot;objId&quot;, &quot;setConfig&quot;, &quot;readConfig&quot;],
+
+<span id='global-cfg-setConfig'>  /**
+</span>   * @cfg setConfig {Object} Configuration for Setting the read value
+   * @cfg setConfig.entries {Object[]} [requiered] Entries that contains the values to set. (Value will be set with the read value from excel)
+   * @cfg setConfig.defaultValue {String} Value to write if nothing found in Excel
+   */
+  setConfig: undefined,
+
+<span id='global-cfg-readConfig'>  /**
+</span>   * @cfg readConfig {Object} Configuration what to read in the Excel-File
+   * @cfg readConfig.source {String} ID or GUID of the Excel-File to read
+   * @cfg readConfig.sheetNr {Int} The Sheet to read
+   * @cfg readConfig.filter {Object[]} List of Filters 
+   * @see holme.common.as.Excel.selectColumnsWhere
+   */
+  readConfig: undefined,
+
+<span id='global-cfg-objId'>  /**
+</span>   * @cfg {String|Int} objId the ObjectId of the ELO-Object to write
+   */
+  objId: undefined,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);    
+  },
+
+
+  process: function () {    
+    var me = this,
+        readValues, inputStream, excel, value, sord;
+    
+    try {        
+      //  Prepare Excel-File
+      sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbAll, LockC.NO);
+      inputStream = new ByteArrayInputStream(sol.common.RepoUtils.downloadToByteArray(sord.id, sord.docVersion.id));
+      
+      //  Read from Excel File
+      excel = sol.create(&quot;holme.common.as.Excel&quot;, {});
+      excel.loadDocument(inputStream);
+      me.readConfig.onlyOneResult = true;
+      readValues = excel.selectColumnsWhere(me.readConfig);
+
+      //  Write read Excel-Value
+      value = (readValues &amp;&amp; readValues.length &gt; 0) ? me.readValues[0][0] : me.setConfig.defaultValue;
+      me.writeValue(value);
+
+    } catch (e) {      
+      logger.error(e);
+      sol.common.ExceptionUtils.logAsException(e, { numberOfLinesBefore: 5, numberOfLinesAfter: 5, logger: logger });
+    } finally {
+      if (excel) {
+        try {
+          excel.closeDocument();
+        } catch (ex) {
+          /* ignored */
+        }
+      }
+    }    
+    
+  },
+
+<span id='global-method-writeValue'>  /**
+</span>   * Prepares the setconfig.
+   * Sets the Param 'objId' with me.objId 
+   * and the Param 'value' with the read excel-Value and calls sol.common.ix.function.Set to write the vlues
+   * 
+   * @param {String} value the value to write
+   */
+  writeValue: function (value) {
+    var me = this, 
+        cfg, m;
+    
+    me.setConfig.objId = me.objId;
+    me.setConfig.value = value;
+
+    cfg = {
+      entries: [me.setConfig]
+    };
+    
+    m = sol.create(&quot;sol.common.ix.functions.Set&quot;, cfg);
+    m.process();
+  }
+
+});</pre>
+</body>
+</html>

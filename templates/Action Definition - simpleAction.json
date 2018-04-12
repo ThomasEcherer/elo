@@ -1,0 +1,41 @@
+{
+    "type": "SIMPLE_ACTION",
+    "ribbon": {
+        "ribbonTab": {
+            "name": "TAB_SOL_CONTRACT",
+            "text": "sol.contract.client.ribbon.tabContract",
+            "position": 95
+        },
+        "buttongroup": {
+            "name": "GRP_SOL_EDITCONTRACTS",
+            "mode": "big",
+            "text": "sol.contract.client.ribbon.bandEdit",
+            "position": 20
+        },
+        "button": {
+            "name": "BTN_SOL_CONTRACTINITATEAPPROVAL",
+            "text": "sol.contract.client.ribbon.btnInitiateApproval",
+            "splitText": "sol.contract.client.ribbon.btnInitiateApprovalSplit",
+            "tooltipText": "sol.contract.client.ribbon.btnInitiateApproval.tooltip",
+            "tooltipTitle": "",
+            "access": {
+                "document": false,
+                "folder": true
+            },
+            "web": {
+                "smallIcon": "sol-contract-initateapproval16",
+                "smallIconHighRes": "sol-contract-initateapproval16-200",
+                "bigIcon": "sol-contract-initateapproval32",
+                "bigIconHighRes": "sol-contract-initateapproval32-200"
+            },
+            "jc": {
+                  "buttonId": "729"
+            },
+            "position": 10
+        }
+    },
+    "action": {
+        "fct": "RF_sol_contract_action_ApproveContract",
+        "cfgTemplate": "{\"objId\": \"{{objId}}\" }"
+    }
+}

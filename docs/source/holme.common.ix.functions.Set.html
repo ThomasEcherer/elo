@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.Template.js
+//@include sol.common.ix.functions.Set.js
+
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.Set&quot; });
+
+<span id='global-property-'>/**
+</span> * Similar to 'sol.common.ix.functions.Set' this function sets values.
+ * The difference is a search for a object will be initiated before setting the values.
+ * For setting values the original ELO-function will be used. 
+ * 
+ * Throws an error if none or more than one object is found.
+ * This Object will be used as 'sord' parameter for the setting part.
+ * 
+ * If an error happens on the Search for the object, the 'defaultValue' will be wirtten.
+ * 
+ * //TODO: Beispiel hinzufügen
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.SordUtils
+ * @requires sol.common.ix.functsion.Set
+ * @requires sol.common.Template 
+ */
+sol.define(&quot;holme.common.ix.functions.Set&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  requiredConfig: [&quot;searchConfig&quot;, &quot;setConfig&quot;, &quot;objId&quot;],
+  
+<span id='global-cfg-searchConfig'>  /** 
+</span>   * @cfg {Object} searchConfig the Search-Configuration
+   * @cfg {String} searchConfig.mask The mask to search for
+   * @cfg {Object} searchConfig.objKeysObj The ObjKeys to search for
+   * @cfg {String[]} searchConfig.objKeys The ObjKeys of the Object (deliverd by objId) to use for the search
+   */
+  searchConfig: undefined,
+
+<span id='global-cfg-setConfig'>  /**
+</span>   * @cfg {Object} setConfig The Set-_Configuration 
+   * @see sol.common.Set
+   */
+  setConfig: undefined,
+
+<span id='global-cfg-objId'>  /**
+</span>   * @cfg {String} objId The Object to set the values to
+   */
+  objId: undefined, 
+
+<span id='global-cfg-defaultValue'>  /**
+</span>   * @cfg {String} defaultValue If no Entry was found, this value will be written. Default is 'ERROR'
+   */
+  defaultValue: &quot;ERROR&quot;,
+
+<span id='global-property-errorHappend'>  /**
+</span>   * @private
+   * @property {boolean} errorHappend Indicates if an error happend by searching the object.
+   */
+  errorHappend: false,
+
+  initialize: function (config) {
+    var me = this;
+
+    // templating
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);    
+  },
+
+<span id='global-method-process'>  /**
+</span>   * @returns {boolean} Returns True if no error happend, Returns false otherwise
+   */
+  process: function () {
+    var me = this,
+        sord;
+    
+    logger.info(&quot;... search Object ...&quot;);    
+    try {
+      sord = me.searchObject();
+    } catch (e) {
+      logger.error(&quot;An error occured by searching for object&quot;, e);
+      me.errorHappend = true;
+      try {
+        me.reportError(e);
+      } catch (ex) {
+        logger.error(&quot;An error occured by reporting the error&quot;, ex);
+      }
+    }
+
+    logger.info([&quot;Object found: {0}&quot;, sord]);
+    me.setValues(sord);
+
+    return !me.errorHappend;
+  },
+
+<span id='global-method-reportError'>  /**
+</span>   * Reports an error Message by writing the message into the sordmap 'ERRORMSG'
+   * @param {Exception|String} error The Error to report
+   */
+  reportError: function (error) {
+    var me = this,
+        map;
+    
+    map = sol.create(&quot;sol.common.SordMap&quot;, {
+      objId: me.objId
+    });
+    map.read();
+    map.setValue(map.getValue(&quot;ERRORMSG&quot;) + &quot;|&quot; + error);    
+    map.write();
+  },
+
+<span id='global-method-searchObject'>  /**
+</span>   * @private
+   * Search for an Object in ELO.
+   * The Search itself is configured in searchConfig
+   * 
+   * Throws an Exception if none or more than one object was found.
+   * 
+   * @return {Sord} The Object that was found
+   */
+  searchObject: function () {
+    var me = this,
+        fi, fr, docMask, objKeys = [], prop, i, max, sord, value, j, maxj;
+
+    sord = ixConnect.ix().checkoutSord(me.objId, SordC.mbLean, LockC.NO);
+    
+    docMask = sol.common.SordUtils.getDocMask(me.searchConfig.mask);
+    max = docMask.lines.length;
+
+    if (me.searchConfig.objKeysObj) {
+      for (prop in me.searchConfig.objKeysObj) {
+        logger.info([&quot;prepareSearch with property: {0}&quot;, prop]);
+        if (me.searchConfig.objKeysObj.hasOwnProperty(prop)) {
+          for (i = 0; i &lt; max; i++) {
+            if (prop == docMask.lines[i].key) {
+              value = sol.create(&quot;sol.common.Template&quot;, { source: me.searchConfig.objKeysObj[prop] }).applySord(sord);
+              logger.info([&quot;Adding '{0}' to ObjKey {1}&quot;, value, docMask.lines[i].key]);
+              objKeys.push(new ObjKey([value], docMask.lines[i].id, docMask.lines[i].key, 0));
+            }
+          }
+        }
+      }
+    }
+
+    if (me.searchConfig.objKeys) {      
+      maxj = me.searchConfig.objKeys;
+      for (j = 0; j &lt; maxj; j++) {
+        for (i = 0; i &lt; max; i++) {
+          if (me.searchConfig.objKeys[j] == docMask.lines[i].key) {
+            objKeys.push(new objKeys(sol.common.SordUtils.getObjKeyValues(sord, me.searchConfig.objKeys[j]), docMask.lines[i].id, docMask.lines[i].key, 0));
+          }
+        }
+      }
+    }
+    
+    fi = new FindInfo();
+    fi.findByIndex = new FindByIndex();
+    fi.findByIndex.maskId = me.searchConfig.mask;
+    fi.findByIndex.objKeys = objKeys;
+
+    try {
+      fr = ixConnectAdmin.ix().findFirstSords(fi, 2, SordC.mbAll);
+
+      if (fr.sords.length &gt; 1) {
+        throw &quot;More than one object found&quot;;
+      }
+      if (fr.sords.length &lt; 1) {
+        throw &quot;No Object found&quot;;
+      }
+
+      return fr.sords[0];
+    } finally {
+      if (fr) {
+        try {
+          ixConnectAdmin.ix().findClose(fr.searchId);
+        } catch (e) {
+          // ignored
+        }
+      }
+    }
+  },
+
+<span id='global-method-setValues'>  /**
+</span>   * @private
+   * Sets the Value into the Object
+   * @param {Sord} sord The found object in the previous step. Will be used for templating to set the values
+   */
+  setValues: function (sord) {
+    var me = this,
+        mod, tpl, i, max;
+
+    logger.info(&quot;Prepare Setting Values&quot;);
+    max = me.setConfig.entries.length;
+    for (i = 0; i &lt; max; i++) {
+      if (me.errorHappend) {
+        me.setConfig.entries[i].value = me.defaultValue;
+      } else {
+        tpl = sol.create(&quot;sol.common.Template&quot;, { source: me.setConfig.entries[i].value });        
+        me.setConfig.entries[i].value = tpl.applySord(sord);
+      }
+    }
+    
+    logger.info(&quot;setting objId&quot;);
+    me.setConfig.objId = me.objId;
+    
+    logger.info(&quot;calling set Method&quot;);    
+    mod = sol.create(&quot;sol.common.ix.functions.Set&quot;, me.setConfig);
+    mod.process();
+  }
+
+});
+
+<span id='holme-common-ix-functions-Set-static-method-onEnterNode'>/**
+</span> * @member holme.common.ix.functions.Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onEnterNode
+ */
+function onEnterNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_Set&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+  
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.Set&quot;, config);
+
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Set&quot;);
+}
+
+<span id='holme-common-ix-functions-Set-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_Set&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.Set&quot;, config);
+
+  module.process();
+
+  logger.exit(&quot;onExitNode_Set&quot;);
+}
+
+<span id='holme-common-ix-functions-Set-static-method-RF_holme_common_function_Set'>/**
+</span> * @member holme.common.ix.functions.Set
+ * @method RF_holme_common_function_Set
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_Set(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_Set&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.Set&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_Set&quot;);
+}</pre>
+</body>
+</html>

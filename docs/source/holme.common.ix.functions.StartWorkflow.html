@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.WfUtils.js
+//@include lib_sol.common.Template.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.StartWorkflow&quot; });
+
+<span id='global-property-'>/**
+</span> * Starts a Workflow
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.Template
+ */
+sol.define(&quot;holme.common.ix.functions.StartWorkflow&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  requiredConfig: [&quot;objId&quot;, &quot;templFlowId&quot;, &quot;flowName&quot;],
+
+<span id='global-cfg-objId'>  /** 
+</span>   * @cfg {int} objId The Object on which the workflow should be started
+   */
+  objId: undefined,
+
+<span id='global-cfg-templFlowId'>  /** 
+</span>   * @cfg {String} templFlowId Name or ID of the template which should be started
+   */
+  templFlowId: undefined,
+
+<span id='global-cfg-flowName'>  /** 
+</span>   * @cfg {String} flowName Name of the new workflow
+   */  
+  flowName: undefined,
+  
+<span id='global-cfg-targetId'>  /**
+</span>   * @cfg {String} targetId (optional) If set the the workflow will be started to this objId. Will be templated first.
+   */
+  targetId: undefined,
+
+<span id='global-cfg-prio'>  /**
+</span>   * @cfg {Number (optional)} prio If specified, the workflow priority will be changed (0=high, 1=medium, 2=low)
+   */
+  prio: undefined,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.prio = me.prio || 1;
+    me.flowName = sol.common.WfUtils.getServiceWfPrefix() + me.flowName;
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Starts a Workflow
+   */
+  process: function () {
+    var me = this,
+        tpl, sord;
+    
+    if (me.targetId) {
+      sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbLean, LockC.NO);            
+      tpl = sol.create(&quot;sol.common.Template&quot;, {
+        source: me.targetId
+      });
+      me.targetId = tpl.applySord(sord);
+    } else {
+      me.targetId = me.objId;
+    }
+
+    logger.info([&quot;Starting Workflow (Template={0}) (Name={1}) (objid={2})&quot;, me.templFlowId, me.flowName, me.targetId]);
+    ixConnectAdmin.ix().startWorkFlow(me.templFlowId, me.flowName, me.targetId);
+  }
+
+});
+
+<span id='holme-common-ix-functions-StartWorkflow-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.StartWorkflow
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_StartWorkflow&quot;, { 
+    flowId: wfDiagram.id, 
+    nodeId: nodeId 
+  });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+  config.objId = wfDiagram.objId;
+
+  module = sol.create(&quot;holme.common.ix.functions.StartWorkflow&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_StartWorkflow&quot;);
+}
+
+<span id='holme-common-ix-functions-StartWorkflow-static-method-RF_holme_common_function_StartWorkflow'>/**
+</span> * @member holme.common.ix.functions.StartWorkflow
+ * @method RF_holme_common_function_StartWorkflow
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_StartWorkflow(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_StartWorkflow&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.StartWorkflow&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_StartWorkflow&quot;);
+}</pre>
+</body>
+</html>

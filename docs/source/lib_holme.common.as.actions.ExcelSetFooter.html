@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+importPackage(Packages.org.apache.poi.hssf.usermodel);
+importPackage(Packages.org.apache.poi.ss.usermodel);
+importPackage(Packages.org.apache.poi.xssf.usermodel);
+
+//@include lib_Class.js
+//@include sol.common.RepoUtils
+
+
+<span id='global-property-'>/**
+</span> * Checksout a ELO-Excel-File, write an Value into the Footer and saves it as new Version
+ * 
+ * # Überschrift1
+ * 
+ * ## Überschrift2
+ *  
+ *   Config Example:
+ *  {
+ *      &quot;solution&quot;: &quot;holme.common&quot;,
+ *      &quot;action&quot;: &quot;holme.common.as.actions.ExcelSetFooter&quot;,
+ *      &quot;config&quot;: {
+ *          &quot;objectId&quot;: &quot;2014&quot;,
+ *          &quot;text&quot;: &quot;foooooter&quot;
+ *      },
+ *      &quot;connParams&quot;: {
+ *          &quot;language&quot;: &quot;de&quot;
+ *      }
+ *  }
+ *
+ * @author TE, Holme Consulting &amp; Solutions
+ * @version 1.00
+ *  
+ * @eloas
+ * @requires sol.common.as.ActionBase
+ * @requires holme.common.as.FileUtils
+ * @requires holme.common.as.Excel
+ * @requires sol.common.RepoUtils
+ */
+sol.define(&quot;holme.common.as.actions.ExcelSetFooter&quot;, {
+  extend: &quot;sol.common.as.ActionBase&quot;,
+
+  requieredProperty: [&quot;objectId, text&quot;],
+
+<span id='global-cfg-The'>  /**
+</span>   * @cfg {String|int} The ObjectId of the Excel-File to set to Footer
+   */
+  objectId: undefined,
+
+<span id='global-cfg-The'>  /**
+</span>   * @cfg {String} The text to write into the footer
+   */
+  text: undefined,
+
+  initialize: function (config) {
+    var me = this;
+    log.info(&quot;Start init&quot;);
+    me.$super(&quot;sol.common.as.ActionBase&quot;, &quot;initialize&quot;, [config]);
+    if (!me.objectId &amp;&amp; !me.text) {
+      throw &quot;IllegalArgumentException: either 'objectId' or 'text' is not defined&quot;;
+    }        
+    log.info(&quot;Finnished init&quot;);
+  },
+
+  getName: function () {
+    return &quot;ExcelSetFooter&quot;;
+  },
+
+  process: function () {
+    var me = this,
+        inputStream, sord, hasToUnlock = false, newExcelFile,
+        excel;
+
+    try {          
+      excel = sol.create(&quot;holme.common.as.Excel&quot;, {});
+      sord = ixConnect.ix().checkoutSord(me.objectId, SordC.mbAll, LockC.YES);
+      hasToUnlock = true;
+      inputStream = ixConnect.download(sord.docVersion.url, 0, sord.docVersion.size);            
+      excel.loadExcelFile(inputStream);
+      excel.setFooter(1, me.text);
+      newExcelFile = excel.saveAsOutputStream();
+      sol.common.RepoUtils.saveToRepo(
+        {                    
+          objId: sord.id,
+          outputStream: newExcelFile,
+          extension: sord.docVersion.ext
+        }
+      );
+      
+    } catch (e) {
+      log.error(e);
+    } finally {
+      if (sord) {
+        if (hasToUnlock) {
+          try {
+            ixConnect.ix().checkinSord(sord, SordC.mbOnlyUnlock, LockC.YES);
+          } catch (ex) {
+            // ignore
+          }
+        }   
+      }
+      if (inputStream) {
+        try {
+          inputStream.close();
+        } catch (ex) { 
+          //ignore
+        }
+      }
+      if (newExcelFile) {
+        try {
+          newExcelFile.close();                    
+        } catch (ex) {
+          //ignore
+        }
+      }
+      if (excel) {
+        try {
+          excel.close();
+        } catch (ex) { 
+          //ignore
+        }
+      }
+
+    }
+  }
+});</pre>
+</body>
+</html>

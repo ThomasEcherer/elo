@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.Template.js
+
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.Inherit&quot; });
+
+<span id='global-property-'>/**
+</span> * Inhertis Keywording-Information from one object to another
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.ix.FunctionsBase
+ * @requires sol.common.SordUtils
+ * @requires sol.common.Template
+ */
+sol.define(&quot;holme.common.ix.functions.Inherit&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  requiredConfig: [&quot;objId&quot;, &quot;source&quot;, &quot;target&quot;],
+
+<span id='global-cfg-objId'>  /**
+</span>   * @cfg {String|Int} objId The ObjectID of the the workflow is attached to
+   */
+  objId: undefined,
+
+<span id='global-cfg-source'>  /**
+</span>   * @cfg {String} source The Object-Id of the ELO-Object to inherit (read) from
+   */
+  source: undefined,
+
+<span id='global-cfg-target'>  /**
+</span>   * @cfg {String} target The Object-Id of the ELO-Object to inherti (write) to
+   */
+  target: undefined,
+
+<span id='global-cfg-Object'>  /**
+</span>   * @cfg {Object} Object containing the configuration for the inherited fields:
+   * 
+   * [ 
+   *       { type: &quot;SORD&quot;, key: &quot;name&quot; },
+   *       { type: &quot;GRP&quot;, key: &quot;MY_FIELD&quot;, &quot;override&quot;: true }
+   * ]
+   */
+  fields: undefined,
+
+<span id='global-property-sord'>  /**
+</span>   * @property {Sord} sord The ELO-Object the workflow is attached to
+   */
+  sord: undefined,
+
+<span id='global-property-sourceSord'>  /**
+</span>   * @property {Sord} sourceSord The ELO-Object for the source to copy the keywording from
+   */
+  sourceSord: undefined,
+
+<span id='global-property-targetSord'>  /**
+</span>   * @property {Sord} targetSord The ELO-Object for the target to copy the keywording to
+   */
+  targetSord: undefined,
+
+<span id='global-property-updated'>  /**
+</span>   * @property {Array} updated A List of Field to update
+   */
+  updates: undefined,
+
+<span id='global-cfg-wfStatusOnUpdate'>  /**
+</span>   * @cfg {String} wfStatusOnUpdate (optional) Text to write into the workflowstatsu if an change happens
+   */
+  wfStatusOnUpdate: undefined,
+
+<span id='global-cfg-wfDiagram'>  /**
+</span>   * @cfg {WFDiagram} wfDiagram The active Workflow
+   */
+  wfDiagram: undefined,
+
+  initialize: function (config) {
+    var me = this;
+    logger.enter(&quot;...initialize &gt;&gt;&quot;);
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.sord = ixConnectAdmin.ix().checkoutSord(me.objId, SordC.mbLean, LockC.NO);
+    me.updates = [];
+    logger.exit(&quot;&lt;&lt; initialize...&quot;);
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Inhertis Keywording-Information from one object to another
+   */
+  process: function () {
+    var me = this,
+        updateItems;
+    
+    //  get the source-Object
+    me.source = me.getSource();
+    me.sourceSord = ixConnectAdmin.ix().checkoutSord(me.source, SordC.mbLean, LockC.NO);   
+    logger.info([&quot;Reading SourceObject (ID={0}) (Sord={1})&quot;, me.source, me.sourceSord]);
+
+    //  get the target object
+    me.target = me.getTarget();
+    me.targetSord = ixConnectAdmin.ix().checkoutSord(me.target, SordC.mbLean, LockC.YES);
+    logger.info([&quot;Reading TargetObject (ID={0}) (Sord={1})&quot;, me.target, me.targetSord]);
+    
+    //  prepare heredity
+    me.fields.forEach(me.inherit, me);
+
+    //  Update heredity if neccessary
+    if (me.updates.length &gt; 0) {
+      updateItems = sol.common.SordUtils.updateSord(me.targetSord, me.updates);
+      ixConnectAdmin.ix().checkinSord(me.targetSord, SordC.mbAllIndex, LockC.YES);
+      if (updateItems &amp;&amp; (updateItems.length &gt; 0)) {
+        ixConnectAdmin.ix().checkinMap(MapDomainC.DOMAIN_SORD, me.target, me.target, updateItems, LockC.NO);
+      }
+
+      //  Set Workflowstatus if an update happend
+      if (me.wfStatusOnUpdate) {   
+        logger.info([&quot;Write the status '{1}' into the workflow&quot;, me.wfStatusOnUpdate]);
+        sol.common.WfUtils.setWorkflowStatus(me.wfDiagram, me.wfStatusOnUpdate);
+
+      } 
+    } else {
+      logger.info(&quot;No Updates happend... unlock the object&quot;);
+      ixConnectAdmin.ix().checkinSord(me.targetSord, SordC.mbOnlyUnlock, LockC.YES);
+    }
+
+  },
+
+<span id='global-method-getSource'>  /**
+</span>   * @private
+   * Uses Handlebards to get the 'source'
+   * @returns {String} The templated Source
+   */
+  getSource: function () {
+    var me = this, 
+        tpl;
+    
+    tpl = sol.create(&quot;sol.common.Template&quot;, {
+      source: me.source
+    });
+    return tpl.applySord(me.sord);
+  },
+
+<span id='global-method-getTarget'>  /**
+</span>   * @private
+   * Uses Handlebars to get the 'target'
+   * @returns {String} The tempalted target 
+   */
+  getTarget: function () {
+    var me = this,
+        tpl;
+
+    tpl = sol.create(&quot;sol.common.Template&quot;, {
+      source: me.target
+    });
+    return tpl.applySord(me.sord);
+  },
+
+<span id='global-method-inherit'>  /**
+</span>   * @private
+   * Inherits the given Fields from 'source' and writes it to 'target'
+   * @param {Object} cfg Configuration
+   */
+  inherit: function (cfg) {
+    var me = this,
+        parentValue, targetValue, override, test;
+
+    logger.info([&quot;inherting with cfg {0}&quot;, cfg]);
+    for (test in cfg) {
+      logger.info([&quot;Test - Prop (Name={0}) (Value={1})&quot;, test, cfg[test]]);
+    }
+
+    try {
+      parentValue = sol.common.SordUtils.getValue(me.sourceSord, cfg);
+      targetValue = sol.common.SordUtils.getValue(me.targetSord, cfg);
+      override = cfg.override ? true : false;
+      logger.info([&quot;CheckUpdate on (pValue={0}) (tValue={1}) (override?{2}&quot;, parentValue, targetValue, override]);
+      if (me.checkUpdate(parentValue, targetValue, override)) {
+        cfg.value = parentValue;
+        logger.info(&quot;Adding Field {0} with value={1} to updateFields&quot;, cfg, cfg.value);
+        me.updates.push(cfg);
+      }
+    } catch (ex) {
+      me.logger.error(&quot;error inheriting&quot;, ex);
+    }
+
+  },
+
+<span id='global-method-checkUpdate'>  /**   
+</span>   * @private
+   * 
+   * Checks if an Field should be updated
+   * 
+   * @param {String} parentValue Parent value
+   * @param {String} targetValue Target value
+   * @param {Boolean} override Override value
+   * @return {String}
+   */
+  checkUpdate: function (parentValue, targetValue, override) {
+    if (parentValue) {
+      parentValue += &quot;&quot;;
+    }
+    if (targetValue) {
+      targetValue += &quot;&quot;;
+    }
+    logger.info([&quot;CheckinonUpdate (pVAlue={0}) (tValue={1}) (override={2}) (first={3}) (second={4})&quot;, parentValue, targetValue, override, (!targetValue || override),  (parentValue !== targetValue)]);
+    return (!targetValue || override) &amp;&amp; (parentValue !== targetValue);
+  }
+
+});
+
+<span id='holme-common-ix-functions-Inherit-static-method-onEnterNode'>/**
+</span> * @member holme.common.ix.functions.Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onEnterNode
+ */
+function onEnterNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onEnterNode_Inherit&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), 
+      module;
+  
+  config.objId = wfDiagram.objId;
+  config.wfDiagram = wfDiagram;
+  module = sol.create(&quot;holme.common.ix.functions.Inherit&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onEnterNode_Inherit&quot;);
+}
+
+<span id='holme-common-ix-functions-Inherit-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_Inherit&quot;, { flowId: wfDiagram.id, nodeId: nodeId });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId),
+      module;
+
+  config.objId = wfDiagram.objId;
+  config.wfDiagram = wfDiagram;
+  module = sol.create(&quot;holme.common.ix.functions.Inherit&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_Inherit&quot;);
+}
+
+<span id='holme-common-ix-functions-Inherit-static-method-RF_holme_common_function_Inherit'>/**
+</span> * @member holme.common.ix.functions.Inherit
+ * @method RF_holme_common_function_Inherit
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_Inherit(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_Inherit&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), 
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.Inherit&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_Inherit&quot;);
+}</pre>
+</body>
+</html>

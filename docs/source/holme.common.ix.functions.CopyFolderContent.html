@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.FunctionBase.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.RepoUtils.js
+
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.functions.CopyFolderContent&quot; });
+
+<span id='global-property-'>/**
+</span> * Copies whole folder recursively
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ *
+ * @eloix
+ * @requires sol.common.Config
+ * @requires sol.common.IxUtils.js
+ * @requires sol.common.ix.FunctionBase
+ * @requires sol.common.RepoUtils.js
+ */
+sol.define(&quot;holme.common.ix.functions.CopyFolderContent&quot;, {
+  extend: &quot;sol.common.ix.FunctionBase&quot;,
+  
+  //requiredConfig: [path],
+    
+<span id='global-cfg-path'>  /**
+</span>   * @cfg {String} path Path to Source to copy from
+   */
+
+<span id='global-property-src'>  /**
+</span>   * @property {int} src ObjectID of the Folder of 'path'
+   */
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.src = sol.common.RepoUtils.getObjId(me.path);
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Copies whole folder recursively
+   */
+  process: function () {
+    var me = this;
+    sol.common.IxUtils.execute(&quot;RF_sol_function_CopyFolderContents&quot;, {
+      objId: me.objId,
+      source: me.src,
+      copySourceAcl: false,
+      inheritDestinationAcl: true,
+      asAdmin: true
+    });
+  }
+});
+
+<span id='holme-common-ix-functions-CopyFolderContent-static-method-onExitNode'>/**
+</span> * @member holme.common.ix.functions.CopyFolderContent
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.onExitNode
+ */
+function onExitNode(ci, userId, wfDiagram, nodeId) {
+  logger.enter(&quot;onExitNode_CopyFolderContent&quot;, { 
+    flowId: wfDiagram.id, 
+    nodeId: nodeId 
+  });
+  var config = sol.common.WfUtils.parseAndCheckParams(wfDiagram, nodeId), // you might add required properties here
+      module;
+
+  config.objId = wfDiagram.objId;
+  module = sol.create(&quot;holme.common.ix.functions.CopyFolderContent&quot;, config);
+  module.process();
+
+  logger.exit(&quot;onExitNode_CopyFolderContent&quot;);
+}
+
+<span id='holme-common-ix-functions-CopyFolderContent-static-method-RF_holme_common_function_CopyFolderContent'>/**
+</span> * @member holme.common.ix.functions.CopyFolderContent
+ * @method RF_holme_common_function_CopyFolderContent
+ * @static
+ * @inheritdoc sol.common.ix.FunctionBase.RF_FunctionName
+ */
+function RF_holme_common_function_CopyFolderContent(ec, configAny) {
+  logger.enter(&quot;RF_holme_common_function_CopyFolderContent&quot;, configAny);
+  var rfUtils = sol.common.ix.RfUtils,
+      config = rfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), // you might add required properties here
+      module;
+
+  module = sol.create(&quot;holme.common.ix.functions.CopyFolderContent&quot;, config);
+  module.process();
+
+  logger.exit(&quot;RF_holme_common_function_CopyFolderContent&quot;);
+}</pre>
+</body>
+</html>

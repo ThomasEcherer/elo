@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='global-property-'>/**
+</span> * Test Utilities for ELO
+ *
+ * @author TE, HOLME Consulting &amp; Solutions GmbH
+ * @version 1.00
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;holme.common.TestUtils&quot;, {
+  singleton: true,
+
+<span id='global-method-createDummyFile'>  /**
+</span>   * Creates a DummyFile
+   *    
+   * @returns {File} Returns a dummy-file
+   */
+  createDummyFile: function () {
+    var file, writer, date;
+    try {
+      date = new Date();
+      file = File.createTempFile(&quot;TEMP&quot;, &quot;TEST&quot;, new File(sol.common.FileUtils.getTempDirPath()));
+      writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), &quot;utf-8&quot;));
+      writer.write(date.getTime());
+      writer.flush();
+      writer.close();
+      return file;
+    } finally {
+      try {
+        if (writer) {
+          writer.close();
+        } 
+      } catch (e) {
+        //ignore            
+      }
+    }    
+  }
+
+});</pre>
+</body>
+</html>

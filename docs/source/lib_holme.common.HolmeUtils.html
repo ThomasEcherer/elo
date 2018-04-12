@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+
+<span id='global-property-'>/**
+</span> * Common Utilities for ELO
+ *
+ * @author TE, HOLME Consulting &amp; Solutions GmbH
+ * @version 1.00
+ *
+ * @elojc
+ * @eloas
+ * @eloix
+ */
+sol.define(&quot;holme.common.HolmeUtils&quot;, {
+  singleton: true,
+
+<span id='global-method-getInputStreamFromSord'>  /**
+</span>   * Downloads the ELO-Document as InputStream
+   * 
+   * @param {String} objId - The ObjId of the Document to download
+   * @returns {InputStream}  The Document as InputStream
+   */
+  getInputStreamFromSord: function (objId) {
+    //var sord = ixConnect.ix().checkoutSord(objId, new SordZ(SordC.mbMinMembers|SordC.mbDocVersionMembers), LockC.IF_FREE);
+    var sord = ixConnect.ix().checkoutSord(objId, SordC.mbAll, LockC.NO);
+    log.info(&quot;[holme.common.as.FileUtils].[getInputStreamFromSord] DEBUG: (sord=&quot; + sord + &quot;)&quot;);
+    log.info(&quot;[holme.common.as.FileUtils].[getInputStreamFromSord] DEBUG: (sord.docVersion=&quot; + sord.docVersion + &quot;)&quot;);
+    return ixConnect.download(sord.docVersion.url, 0, sord.docVersion.size);
+  },
+
+<span id='global-method-archiveNewVersion'>  /**
+</span>   * Archives a new Version of a document
+   * @todo prüfe ob überhaupt benötigt --&gt; RepoUtils
+   * 
+   * @param {Sord} sord The Document to create a new Version of
+   * @param {InputStream} inputStream The new Version of the Document
+   * @returns {int} The Doc-Id of the created new Version
+   */
+  archiveNewVersion: function (sord, inputStream) {
+    var ed, doc, docVersion, sVersion;
+
+    ed = ixConnect.ix().checkoutDoc(sord.getId() + &quot;&quot;, sord.getDocVersion().getId() + &quot;&quot;, EditInfoC.mbDocument, LockC.FORCE);        
+    doc = ed.getDocument();
+
+    doc = ixConnect.ix().checkinDocBegin(doc);
+    docVersion	=	doc.getDocs()[0];
+    sVersion 	=	docVersion.getVersion();
+    if (sVersion.length() &gt; 0) {      
+      docVersion.setVersion(docVersion.getVersion() + 1);
+    } else {
+      docVersion.setVersion(&quot;2&quot;);
+    }
+    docVersion.setComment(&quot;&quot;);
+    docVersion.setCreateDateIso(ixConnect.dateToIso(ixConnect.getServerTime()));
+
+    docVersion.setUploadResult(ixConnect.upload(docVersion.getUrl(), inputStream, inputStream.available(), docVersion.getContentType()));
+    doc	=	ixConnect.ix().checkinDocEnd(null, null, doc, LockC.YES);
+    return doc.getObjId();
+  },
+
+<span id='global-method-outputStreamToInputStream'>  /**
+</span>   * Converts a Output-Stream to a InputStream (ByeArrayInputStream)
+   * 
+   * @param {ByteArrayOutputStream} outputStream The Outputstream to convert
+   * @returns {InputStream} The converted Outputstream as ByteArrayInputStream
+   */
+  outputStreamToInputStream: function (outputStream) {
+    return new ByteArrayInputStream(outputStream.toByteArray());
+  }
+
+});</pre>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+    "type": "ADVANCED_ACTION",
+    "ribbon": {
+        "ribbonTab": {
+            "name": "TAB_SOL_CONTRACT",
+            "text": "sol.contract.client.ribbon.tabContract",
+            "position": 95
+        },
+        "buttongroup": {
+            "name": "GRP_SOL_CONTRACT_CREATE",
+            "mode": "big",
+            "text": "sol.contract.client.ribbon.bandCreate",
+            "position": 10
+        },
+        "button": {
+            "name": "BTN_SOL_CONTRACT_CREATECONTRACT",
+            "text": "sol.contract.client.ribbon.btnCreateContract",
+            "splitText": "sol.contract.client.ribbon.btnCreateContractSplit",
+            "tooltipText": "sol.contract.client.ribbon.btnCreateContract.tooltip",
+            "tooltipTitle": "",
+            "access": {
+                "document": true,
+                "folder": true
+            },
+            "web": {
+                "iconName": "sol-contract-createcontract",
+                "smallIcon": "sol-contract-createcontract16",
+                "smallIconHighRes": "sol-contract-createcontract16-200",
+                "bigIcon": "sol-contract-createcontract32",
+                "bigIconHighRes": "sol-contract-createcontract32-200"
+            },
+            "jc": {
+                "buttonId": "728"
+            },
+            "position": 10,
+            "asTile": true
+        }
+    },
+    "action": {
+        "selectType": {
+            "fct": "RF_sol_contract_service_GetContractTypes"
+        },
+        "fct": "RF_sol_contract_action_CreateContract",
+        "cfgTemplate": "{\"contractType\": \"{{type.name}}\", \"templateId\": \"{{type.objId}}\" }",
+        "locale": {
+            "errorDlgTitle": "sol.pubsec.client.file.create.dialog.error.title",
+            "typesDlgTitle": "sol.contract.client.contract.create.dialog.title",
+            "typesDlgHeader": "sol.contract.client.contract.create.dialog.header",
+            "typesDlgText": "sol.contract.client.contract.create.dialog.text",
+            "typesDlgNoTypes": "sol.contract.client.contract.create.msg.notype"
+        }
+    }
+}

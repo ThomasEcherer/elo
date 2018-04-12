@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">importPackage(Packages.de.elo.ix.client);
+
+//@include lib_Class.js
+//@include lib_sol.common.ix.ActionBase.js
+//@include lib_holme.common.FileNameImporter.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.ix.actions.FileNameImport&quot; });
+
+
+<span id='global-property-'>/**
+</span> * {{description}}
+ * 
+ * @author {{author}}, {{company}}
+ * @version 1.00.000
+ * 
+ * @eloix
+ * @requires sol.common.JsonUtils
+ * @requires sol.common.SordUtils
+ * @requires sol.common.IxUtils
+ * @requires sol.common.CounterUtils
+ * @requires sol.common.TranslateTerms
+ * @requires sol.common.WfUtils
+ * @requires sol.common.ix.RfUtils
+ * @requires sol.common.ix.ActionBase
+ */
+sol.define(&quot;holme.common.ix.actions.FileNameImport&quot;, {
+  extend: &quot;sol.common.ix.ActionBase&quot;,
+
+  cfg: undefined,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.ix.ActionBase&quot;, &quot;initialize&quot;, [config]);
+    me.cfg = config;
+  },
+
+<span id='global-method-getName'>  /**
+</span>   * Returns the name of this action.
+   * @return {String}
+   */
+  getName: function () {
+    return &quot;FileNameImport&quot;;
+  },
+
+<span id='global-method-process'>  /**
+</span>   * {{description}}
+   */
+  process: function () {
+    var me = this,
+        importer;
+    
+    importer = sol.create(&quot;holme.common.FileNameImporter&quot;, me.cfg);
+    importer.process();
+  }
+
+  
+
+});
+
+
+<span id='holme-common-ix-actions-FileNameImport-static-method-RF_holme_common_action_FileNameImport'>/**
+</span> * @member holme.common.ix.actions.FileNameImport
+ * @method RF_holme_common_action_FileNameImport
+ * @static
+ * @inheritdoc sol.common.ix.ActionBase.RF_FunctionName
+ */
+function RF_holme_common_action_FileNameImport(ec, configAny) {
+  var config, action, result;
+
+  logger.enter(&quot;RF_holme_common_action_FileNameImport&quot;, configAny);
+
+  config = sol.common.ix.RfUtils.parseAndCheckParams(ec, arguments.callee.name, configAny), 
+  action = sol.create(&quot;holme.common.ix.actions.FileNameImport&quot;, config);
+  result = action.execute();
+
+  logger.exit(&quot;RF_holme_common_action_FileNameImport&quot;);
+
+  return result;
+}</pre>
+</body>
+</html>

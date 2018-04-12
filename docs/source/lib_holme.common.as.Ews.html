@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.microsoft.exchange.webservices.data);
+importPackage(Packages.microsoft.exchange.webservices.data.credential);
+importPackage(Packages.microsoft.exchange.webservices.data.core.enumeration.misc);
+importPackage(Packages.microsoft.exchange.webservices.data.core.enumeration.property);
+
+//@include lib_sol.common.RepoUtils.js
+//@include lib_sol.common.XmlUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.ActionBase.js
+//@include lib_sol.common.as.ActionBase.js
+//@include lib_sol.common.as.FunctionBase.js
+//@include lib_sol.common.JsonUtils.js
+//@include lib_sol.common.SordUtils.js
+//@include lib_sol.common.IxUtils.js
+//@include lib_sol.common.CounterUtils.js
+//@include lib_sol.common.TranslateTerms.js
+//@include lib_sol.common.WfUtils.js
+
+var logger = sol.create(&quot;sol.Logger&quot;, { scope: &quot;holme.common.as.Ews&quot; });
+
+sol.define(&quot;holme.common.as.actions.ReadFolderSent&quot;, {
+  extend: &quot;sol.common.as.ActionBase&quot;,
+
+<span id='global-property-filter'>  /**
+</span>   * Filter Options for searching Emails
+   * @property {Object} filter Filter Options for searching Emails
+   * @property {String} filter.isoDateFrom ISO-Date
+   * @property {String} filter.isoDateTo ISO-Date   
+   * @property {String} filter.recipient Recipient of the sent mail
+   */
+  filter: undefined,
+
+<span id='global-cfg-convertToSimpleObject'>  /**
+</span>   * @cfg
+   * @property {boolean} convertToSimpleObject Determines if the returned Object should be simplified objects (with Attributes 'subject', 'dateSent', 'dateReceived'
+   */
+  convertToSimpleObject: false,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.ActionBase&quot;, &quot;initialize&quot;, [config]);
+    me.config = config;
+  },
+
+  getName: function () {
+    return &quot;holme.common.as.actions.ReadFolderSent&quot;;
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Sends an email
+   * @return {Object[]}
+   */
+  process: function () {
+    var me = this,
+        mail, ret, folder;
+    
+    try {
+      mail = sol.create(&quot;holme.common.as.Ews&quot;, me.config);
+      folder = Packages.microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName.SentItems;    
+      ret = mail.readFolder(folder, me.filter);
+
+      if (me.debug) {
+        logger.info([&quot;found #{0} items&quot;, ret.length]);
+      }
+      return me.convertToSimpleObject ? me.convertMailsToSimpleObject(ret) : ret;
+    } catch (e) {
+      logger.error(e);
+      return e;
+    }
+  }
+
+});
+
+sol.define(&quot;holme.common.as.functions.SendMail&quot;, {
+    
+  extend: &quot;sol.common.as.FunctionBase&quot;,
+
+  initialize: function (config) {
+    var me = this;
+    me.$super(&quot;sol.common.as.FunctionBase&quot;, &quot;initialize&quot;, [config]);
+    me.config = config;
+  },
+
+<span id='global-method-process'>  /**
+</span>   * Sends an email
+   * @return {Object}
+   */
+  process: function () {
+    var me = this,
+        mail;
+    mail = sol.create(&quot;holme.common.as.Ews&quot;, me.config);
+    mail.send();
+
+    return { passOn: true };
+  }
+});
+
+
+<span id='global-property-'>/**
+</span> * Code documentation
+ * 
+ * The Configurationfile located in:
+ *  /Administration/Business Solutions/holme.common/Configuration/EwsMail
+ *  
+ * needs Parameter:
+ *    url | URL to Exchange Web-Service. (e.g.: https://SERVER/EWS/Exchange.asmx)
+ *
+ *    
+ * Requieres the Java-Libraries
+ *  - ews-java-api-2.0.jar (or higher)
+ *  - joda-time-2.8.jar (or higher)
+ * 
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 1.00.000
+ * 
+ * @eloas
+ */
+sol.define(&quot;holme.common.as.Ews&quot;, {
+  singleton: true,
+
+<span id='global-cfg-url'>  /**
+</span>   * @cfg {String} url
+   * SMTP host
+   */
+
+<span id='global-cfg-from'>  /**
+</span>   * @cfg {String} from
+   * Sender
+   */
+
+<span id='global-cfg-to'>  /**
+</span>   * @cfg {String} to
+   * Recipients
+   */
+
+<span id='global-cfg-subject'>  /**
+</span>   * @cfg {String} subject
+   * Subject
+   */
+
+<span id='global-cfg-body'>  /**
+</span>   * @cfg {Object} body
+   * Body configuration
+   *
+   * @cfg {Object} body.type
+   * Body type &quot;html&quot; or &quot;text&quot;. Default is &quot;text&quot;
+   *
+   * @cfg {Object} body.tplObjId
+   * Object ID of the body template
+   */
+
+<span id='global-cfg-data'>  /**
+</span>   * @cfg {Object} data
+   * This Object will be provided for the template processing.
+   */
+
+<span id='global-cfg-objId'>  /**
+</span>   * @cfg {String} objId
+   * The data of this sord object will be provided for the template processing.
+   */
+
+<span id='global-cfg-flowId'>  /**
+</span>   * @cfg {String} flowId
+   * The data of this workflow will be provided for the template processing.
+   */
+
+<span id='global-cfg-nodeId'>  /**
+</span>   * @cfg {String} nodeId
+   * The data of this workflow node will be provided for the template processing.
+   */
+
+<span id='global-cfg-user'>  /**
+</span>   * @cfg {String} user
+   * user Name
+   */
+
+<span id='global-cfg-password'>  /**
+</span>   * @cfg {String} password
+   * User password
+   */
+
+<span id='global-cfg-domain'>  /**
+</span>   * @cfg {String} domain
+   * (Optional) If set, this parameter is used for domain
+   */
+
+<span id='global-cfg-debug'>  /**
+</span>   * @cfg {Boolean} debug
+   * True if the SMTP debug information should be written into the log
+   */
+
+<span id='global-cfg-atts'>  /**
+</span>   * @cfg {Array} atts
+   * Attachments
+   *
+   * # Example:
+   *     &quot;atts&quot;: [{&quot;objId&quot;: &quot;4309&quot;},
+   *              {&quot;objId&quot;: &quot;4309&quot;, &quot;convertToPdf&quot;: true}]
+   */
+
+<span id='global-cfg-exchangeVersion'>  /**
+</span>   * @cfg {String} exchangeVersion
+   * The Version of the used Exchange-Version.
+   * 
+   * Possible Values are:
+   *  &quot;version2010_sp2&quot;
+   *  &quot;version2010_sp1&quot;
+   *  &quot;version2010&quot;
+   *  &quot;version2007_sp1&quot;
+   */
+
+<span id='global-property-saveSentMail'>  /**
+</span>   * @property {boolean} saveSentMail Determines if the sent mail should be saved in 'Sent'-Folder. Default is false.
+   */
+  saveSentMail: false,
+
+  service: null,
+
+  versionen: {
+    version2010_sp2: Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2010_SP2,
+    version2010_sp1: Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2010_SP1,
+    version2010: Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2010,
+    version2007_sp1: Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2007_SP1
+  },
+
+  initialize: function (config) {
+    var me = this;
+    log.info(&quot;Init-Class von EWS Hauptklasse (config=&quot; + config + &quot;)&quot;);
+    config = config || {};
+    me.$super(&quot;sol.Base&quot;, &quot;initialize&quot;, [config]);
+  },
+
+<span id='global-method-loadMailConfig'>  /**
+</span>   * Laods the mail configuration
+   * @param {String} repoPath Path in ELO to the mail-configuration to load
+   * @return {Object} Mail configuration
+   */
+  loadMailConfig: function (repoPath) {
+    var objId;
+    objId = sol.common.RepoUtils.getObjId(repoPath);
+    if (!objId) {
+      log.error(&quot;Config not found '&quot; + repoPath + &quot;'&quot;);
+      return;
+    }
+    return sol.create(&quot;sol.common.Config&quot;, { load: objId }).config;
+  },
+
+<span id='global-method-initSession'>  /**
+</span>   * Starts a Session.
+   * Uses the Paramiter 'auth' 'user' and 'password'
+   */
+  initSession: function () {
+    var me = this,
+        credentials, mailConfig;  
+        
+    log.info(&quot;hole mail-config&quot;);
+    mailConfig = me.loadMailConfig(&quot;ARCPATH:/Administration/Business Solutions/holme.common/Configuration/mail.config&quot;);
+    log.info(&quot;nach mailconfig&quot;);
+    if (me.version == &quot;version2010_sp2&quot;) {
+      me.exchangeVersion = Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2010_SP2;
+    } else {
+      log.warn(&quot;Exchange VErsion nicht erkannt '&quot; + me.version + &quot;'&quot;);
+    }
+
+    if (!me.exchangeVersion) {
+      me.exchangeVersion = Packages.microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion.Exchange2010_SP2;
+    }
+
+    if (!me.url) {      
+      me.url = mailConfig.url;
+    }
+
+    if (!me.user) {
+      me.user = mailConfig.user;      
+    }
+
+    if (!me.password) {
+      me.password = mailConfig.password;
+    }
+
+    if (!me.domain) {
+      me.domain = mailConfig.domain;
+    }
+    
+    me.service = new Packages.microsoft.exchange.webservices.data.core.ExchangeService(me.exchangeVersion);        
+    if (me.domain &amp;&amp; me.domain != &quot;&quot;) {
+      credentials = new Packages.microsoft.exchange.webservices.data.credential.WebCredentials(me.user, me.password, me.domain);
+    } else {
+      credentials = new Packages.microsoft.exchange.webservices.data.credential.WebCredentials(me.user, me.password);
+    }
+    me.service.setCredentials(credentials);
+    me.service.setUrl(new Packages.java.net.URI(me.url));        
+  },
+
+<span id='global-method-getData'>  /**
+</span>   * @private
+   * Retrieves the data that is provided for templating
+   */
+  getData: function () {
+    var me = this,
+        wfDiagram;
+
+    me.data = me.data || {};
+
+    if (me.objId) {
+      me.sord = ixConnect.ix().checkoutSord(me.objId, EditInfoC.mbSord, LockC.NO).sord;
+      me.data.sord = sol.common.SordUtils.getTemplateSord(me.sord).sord;
+    }
+
+    if (me.flowId &amp;&amp; me.nodeId &amp;&amp; !me.noWorkflowInfo) {
+      wfDiagram = ixConnect.ix().checkoutWorkFlow(String(me.flowId), WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+      me.data.node = sol.common.WfUtils.getTemplateWfDiagramNode(wfDiagram, String(me.nodeId)).node;
+    }
+  },
+
+<span id='global-method-getRecipient'>  /**
+</span>   * @private
+   * Retrieves the recipient of the mail
+   * @param {Object|String} to Recipient definition
+   * @return {String} recipient
+   */
+  getRecipient: function (to) {
+    var me = this,
+        recipient, wfDiagram, wfNode, successorNodes;
+
+    if (sol.common.ObjectUtils.isObject(to)) {
+      if (!to.type) {
+        throw &quot;to.type is empty&quot;;
+      }
+
+      me.logger.debug(&quot;recipientConfig=&quot; + JSON.stringify(to));
+
+      switch (String(to.type).toUpperCase()) {
+
+        case &quot;GRP&quot;:
+          me.checkKey(to);
+          recipient = sol.common.SordUtils.getValue(me.sord, to);
+          break;
+
+        case &quot;MAP&quot;:
+          me.checkKey(to);
+          recipient = sol.common.SordUtils.getValue(me.sord, to);
+          break;
+
+        case &quot;SORDOWNER&quot;:
+          recipient = me.sord.ownerName;
+          break;
+
+        case &quot;WFMAP&quot;:
+          me.checkKey(to);
+          me.checkWorkflowProps();
+          recipient = sol.common.WfUtils.getWfMapValue(me.flowId, to.key);
+          break;
+
+        case &quot;CURRENT&quot;:
+          wfDiagram = me.getWorkflow();
+          wfNode = sol.common.WfUtils.getNode(wfDiagram, me.nodeId);
+          recipient = wfNode.userName;
+          break;
+
+        case &quot;NEXT&quot;:
+          wfDiagram = me.getWorkflow();
+          successorNodes = sol.common.WfUtils.getSuccessorNodes(wfDiagram, me.nodeId, WFNodeC.TYPE_PERSONNODE);
+          if (!successorNodes || (successorNodes.length == 0)) {
+            throw &quot;No appropriate successor node found&quot;;
+          }
+          if (successorNodes.length &gt; 1) {
+            throw &quot;Successor node is ambiguous&quot;;
+          }
+          recipient = successorNodes[0].userName;
+          break;
+
+        case &quot;WFOWNER&quot;:
+          wfDiagram = me.getWorkflow();
+          recipient = wfDiagram.ownerName;
+          break;
+
+        default:
+          throw &quot;to.type=&quot; + to.type + &quot; is unsupported&quot;;
+      }
+    } else {
+      recipient = to;
+    }
+
+    if (!recipient) {
+      throw &quot;Recipient user is empty&quot;;
+    }
+
+    if (recipient.indexOf(&quot;@&quot;) == -1) {
+      recipient = sol.common.UserUtils.getMailAddress(recipient);
+    }
+
+    if (!recipient) {
+      throw &quot;Recipient is empty&quot;;
+    }
+
+    return recipient;
+  },
+
+<span id='global-method-checkKey'>  /**
+</span>   * @private
+   * @param {Object} to Recipient configuration
+   * Checks the key value
+   */
+  checkKey: function (to) {
+    if (!to.key) {
+      throw &quot;to.key is empty&quot;;
+    }
+  },
+
+<span id='global-method-getWorkflow'>  /**
+</span>   * @private
+   * Returns the workflow diagram
+   * @return {de.elo.ix.client.WFDiagram}
+   */
+  getWorkflow: function () {
+    var me = this;
+    if (!me.flowId) {
+      throw &quot;flowId is empty&quot;;
+    }
+    if (!me.nodeId) {
+      throw &quot;nodeId is empty&quot;;
+    }
+    return ixConnect.ix().checkoutWorkFlow(me.flowId, WFTypeC.ACTIVE, WFDiagramC.mbAll, LockC.NO);
+  },
+
+<span id='global-method-send'>  /**
+</span>   * @public
+   * Sends an Email    
+   */
+  send: function () {
+    var me = this,
+        msg;
+
+    
+    me.initSession();
+    me.getData();
+    me.recipient = me.getRecipient(me.to);
+
+    if (!me.recipient) {
+      throw &quot;Recipient is empty.&quot;;
+    }
+
+    try {      
+      msg = new Packages.microsoft.exchange.webservices.data.core.service.item.EmailMessage(me.service);
+      msg.subject = me.subject || &quot;&quot;;
+      me.recipient.split(&quot;;&quot;).forEach(function (toPart) {
+        msg.getToRecipients().add(toPart);
+      });
+      msg.body = me.addBody();
+
+      if (me.atts) {
+        me.atts.forEach(function (attConfig) {
+          var sord, attInputStream, dataSource, fileName;
+          sord = ixConnect.ix().checkoutSord(attConfig.objId, EditInfoC.mbSordDoc, LockC.NO).sord;
+          attConfig.extension = sord.docVersion.ext;
+          attInputStream = me.getAttAsStream(attConfig);
+          dataSource = Packages.org.apache.commons.io.IOUtils.toByteArray(attInputStream);
+          attInputStream.close();
+          fileName = sord.name + &quot;.&quot; + attConfig.extension;
+          msg.getAttachments().addFileAttachment(fileName, dataSource);
+        });
+      }      
+
+      if (me.saveSentMail) {
+        msg.sendAndSaveCopy();
+      } else {
+        msg.send();
+      }
+    } catch (ex) {
+      log.error(ex);
+    }
+  },
+
+<span id='global-method-addBody'>  /**
+</span>   * @private
+   * @returns {String} The Bodytext, given by 'body', 'body.conent' and 'body.tplObjId'
+   * 
+   */
+  addBody: function () {
+    var me = this,
+        bodyContent, template;
+    me.body = me.body || {};
+    
+    bodyContent = me.body.content || &quot;&quot;;
+    if (me.body.tplObjId) {
+      template = sol.create(&quot;sol.common.Template&quot;, {});
+      template.load(me.body.tplObjId);
+      bodyContent = template.apply(me.data);
+      return new Packages.microsoft.exchange.webservices.data.property.complex.MessageBody(bodyContent);
+    } else {
+      return Packages.microsoft.exchange.webservices.data.property.complex.MessageBody.getMessageBodyFromText(bodyContent);
+    }   
+    
+  },
+
+<span id='global-method-getAttAsStream'>  /**
+</span>   * @private
+   * @param {object} attConfig Attachment configuration
+   * @return {java.io.InputStream} Attachment input stream
+   */
+  getAttAsStream: function (attConfig) {
+    var officeConverter, inputStream;
+    if (attConfig.objId) {
+      if (attConfig.convertToPdf) {
+        officeConverter = sol.create(&quot;sol.common.as.functions.OfficeConverter&quot;, {
+          openFromRepo: {
+            objId: attConfig.objId
+          },
+          saveToStream: {
+            format: &quot;pdf&quot;
+          }
+        });
+        if (officeConverter.isSupported(attConfig.extension)) {
+          inputStream = officeConverter.execute();
+          attConfig.extension = &quot;pdf&quot;;
+          return inputStream;
+        }
+      }
+    }
+    return sol.common.RepoUtils.downloadToStream(attConfig.objId);
+  },
+
+<span id='global-method-readFolder'>  /**
+</span>   * Reads the Mails of a folder
+   * 
+   * @param {microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName} wkFolderName The folder to read
+   * @param {Object} filter The Filter for Emails
+   * @param {String} filter.year The year to filter the emails for
+   * @param {String} filter.month The month to filter the emails for
+   * @param {Stirng} filter.recipient The recipient to filter the emails for
+   * 
+   * @returns {microsoft.exchange.webservices.data.core.service.item.Item[]} the emails of the folder
+   */
+  readFolder: function (wkFolderName, filter) {
+    var me = this,
+        view, findResults, item, returnList = [], searchFilters;
+
+    // init session if neccessary    
+    me.initSession(); 
+        
+    // Prepare filter
+    if (filter) {
+      searchFilters = new Packages.microsoft.exchange.webservices.data.search.filter.SearchFilter.SearchFilterCollection();
+      if (filter.isoDateFrom) {
+        searchFilters.add(
+          new Packages.microsoft.exchange.webservices.data.search.filter.SearchFilter.IsGreaterThanOrEqualTo(
+            Packages.microsoft.exchange.webservices.data.core.service.schema.EmailMessageSchema.DateTimeSent, ixConnect.isoToDate(me.filter.isoDateFrom) 
+          ));
+      }
+      
+      if (filter.isoDateTo) {
+        searchFilters.add(
+          new Packages.microsoft.exchange.webservices.data.search.filter.SearchFilter.IsLessThanOrEqualTo(
+            Packages.microsoft.exchange.webservices.data.core.service.schema.EmailMessageSchema.DateTimeSent, ixConnect.isoToDate(me.filter.isoDateTo) 
+          ));
+      }
+
+      if (filter.recipient) {
+        searchFilters.add(
+          new Packages.microsoft.exchange.webservices.data.search.filter.SearchFilter.ContainsSubstring(
+            Packages.microsoft.exchange.webservices.data.core.service.schema.EmailMessageSchema.ToRecipients, ixConnect.isoToDate(filter.recipient) 
+          ));
+      }
+    }
+
+    // Search for Items
+    view = new Packages.microsoft.exchange.webservices.data.search.ItemView(50);    
+    do {
+      findResults = searchFilters ? 
+        me.service.findItems(wkFolderName, searchFilters, view) 
+        : me.service.findItems(wkFolderName, view);
+            
+      for (item in findResults.items) {                
+        returnList.push(findResults.items[item]);        
+      }
+      view.Offset += 50;
+
+    } while (findResults.MoreAvailable);
+    
+    return returnList;
+  },
+
+<span id='global-method-convertMailsToSimpleObject'>  /**
+</span>   * Converts the given Emails into a simplified object   
+   * 
+   * @param {Item[]|EmailMessage[]} mails to convert
+   * @returns {Object[]} An Array of the simplified emails
+   */
+  convertMailsToSimpleObject: function (mails) {
+    var me = this,
+        simpleObjects = [], i, max;
+
+    //TODO: Maybe use a simliar system like elo do with constancs 'SordC' To determines which fields to set
+
+    max = mails.length;
+    for (i = 0; i &lt; max; i++) {
+      simpleObjects.push(me.convertMailToSimpleObject(mails[i]));
+    }
+    return simpleObjects;
+  },
+
+<span id='global-method-convertMailToSimpleObject'>  /**
+</span>   * Converts a single Email into a simplified object
+   * 
+   * @param {Item|EmailMessage} mail Email to simplify
+   * @returns {Object} The simplified Email-Message
+   */
+  convertMailToSimpleObject: function (mail) {
+    var simpleObject;
+
+    simpleObject = {
+      subject: mail.getSubject(),
+      dateSent: mail.getDateTimeSent(),
+      dateReceived: mail.getDateTimeReceived()
+    };
+
+    return simpleObject;
+  }
+
+
+
+});</pre>
+</body>
+</html>

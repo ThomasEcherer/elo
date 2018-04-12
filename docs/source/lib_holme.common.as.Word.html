@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>The source code</title>
+  <link href="../resources/prettify/prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="../resources/prettify/prettify.js"></script>
+  <style type="text/css">
+    .highlight { display: block; background-color: #ddd; }
+  </style>
+  <script type="text/javascript">
+    function highlight() {
+      document.getElementById(location.hash.replace(/#/, "")).className = "highlight";
+    }
+  </script>
+</head>
+<body onload="prettyPrint(); highlight();">
+  <pre class="prettyprint lang-js">
+importPackage(Packages.org.docx4j);
+importPackage(Packages.java.util.regex);
+importPackage(Packages.java.io);
+importPackage(Packages.org.apache.poi.xwpf.usermodel);
+
+//@include lib_Class.js
+
+<span id='global-property-'>/**
+</span> * Provides Utility-Function for Word-Documents. 
+ * 
+ * Requires tha Docx4J Java-Library
+ * Requires the POI Java-Library
+ * Requieres
+ *  -   ooxml-schemas-1.3.jar
+ *
+ * @author TE, HOLME Consulting &amp; Solutions
+ * @version 0.1
+ */
+sol.define(&quot;holme.common.as.Word&quot;, {
+  singleton: true,
+
+<span id='global-method-loadDocument'>  /**
+</span>   * Loads the Word-Document
+   * 
+   * @param {InputStream} inputStream The Word-Dokument to read
+   * @returns {XWPFDocument} The read Word-Dokument
+   */
+  loadDocument: function (inputStream) {
+    var document = new Packages.org.apache.poi.xwpf.usermodel.XWPFDocument(inputStream);
+    return document;
+  },
+
+<span id='global-static-method-readDoc'>  /**
+</span>   * Read the Word-Document as Text
+   * @static
+   * @param {java.io.InputStream} inputStream - The Word-Document to read
+   * @returns {String} The Word-Document as Text
+   * @throws {Docx4JException} 
+   */
+  readDoc: function (inputStream) {
+    var me = this,
+        doc, main, jaxbElement, writer;
+    try {            
+      doc = Packages.org.docx4j.Docx4J.load(inputStream); //org.docx4j.Docx4J
+        
+      main = doc.getMainDocumentPart();
+      jaxbElement = main.getJaxbElement();
+
+      if (me.debug) {
+        log.info(&quot;[readDoc] creating string writer&quot;);
+      }
+      writer = new Packages.java.io.StringWriter(); //java.io.StringWriter
+      Packages.org.docx4j.TextUtils.extractText(jaxbElement, writer); //org.docx4j.TextUtils
+
+      if (me.debug) {
+        log.info(&quot;[readDoc] flush buffer&quot;);
+      }
+      return writer.getBuffer().toString();
+    } catch (e) {
+      log.error(e);
+      throw e;
+    } finally {
+      if (inputStream) {
+        try {
+          inputStream.close();
+        } catch (ex) { 
+          //ignore 
+        }
+      }
+    }
+  },
+
+<span id='global-method-insertTextAtBookmark'>  /**
+</span>   * Inserts Text into a bookmark
+   * 
+   * @param {XWPFDocument} document The Word-Document to edit
+   * @param {String} bookmarkName The Bookmark-Name to write to
+   * @param {String} bookmarkValue The Text to insert into the bookmark
+   */
+  insertTextAtBookmark: function (document, bookmarkName, bookmarkValue) {
+    var me = this,
+        tableList, tableIter, rowList, rowIter, cellList, cellIter,
+        table, row, cell; 
+
+    function procParaList(paraList, bmkName, bmValue) {
+      var paraIter, para, bookmarkList, bookmarkIter, bookmark, run, nextNode; 
+          
+      paraIter = paraList.iterator(); 
+      while (paraIter.hasNext()) { 
+        para = paraIter.next(); 
+        bookmarkList = para.getCTP().getBookmarkStartList(); 
+        bookmarkIter = bookmarkList.iterator();                 
+        while (bookmarkIter.hasNext()) { 
+          bookmark = bookmarkIter.next(); 
+          if (bookmark.getName().equals(bookmarkName)) { 
+            run = para.createRun(); 
+            run.setText(bookmarkValue); 
+            nextNode = bookmark.getDomNode().getNextSibling(); 
+            if (nextNode == null) {
+              continue;
+            }                        
+            while (!(nextNode.getNodeName().contains(&quot;bookmarkEnd&quot;))) { 
+              para.getCTP().getDomNode().removeChild(nextNode); 
+              nextNode = bookmark.getDomNode().getNextSibling(); 
+            } 
+            para.getCTP().getDomNode().insertBefore( 
+              run.getCTR().getDomNode(), 
+              nextNode);                         
+          } 
+        } 
+      } 
+    }
+            
+    procParaList(document.getParagraphs(), bookmarkName, bookmarkValue); 
+    
+    tableList = document.getTables(); 
+    tableIter = tableList.iterator(); 
+    while (tableIter.hasNext()) { 
+      table = tableIter.next(); 
+      rowList = table.getRows(); 
+      rowIter = rowList.iterator(); 
+      while (rowIter.hasNext()) { 
+        row = rowIter.next(); 
+        cellList = row.getTableCells(); 
+        cellIter = cellList.iterator(); 
+        while (cellIter.hasNext()) { 
+          cell = cellIter.next(); 
+          procParaList(cell.getParagraphs(), 
+            bookmarkName, 
+            bookmarkValue); 
+        } 
+      } 
+    }         
+  },
+
+<span id='global-method-saveAsInputStream'>  /**
+</span>   * Saves the given Word-Document as InputStream
+   * 
+   * @param {XWPFDocument} document The Word-document to save
+   * @returns {OutputStream} The saved Word-Document
+   */
+  saveAsInputStream: function (document) {
+    var me = this,
+        out, is;
+    out = new ByteArrayOutputStream();
+    document.write(out);
+    is = new ByteArrayInputStream(out.toByteArray());
+    return is;
+  }
+
+    
+    
+});
+</pre>
+</body>
+</html>
